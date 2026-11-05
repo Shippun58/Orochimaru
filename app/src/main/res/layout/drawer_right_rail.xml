@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rightRailContainer"
+    android:layout_width="300dp"
+    android:layout_height="match_parent"
+    android:layout_gravity="end"
+    android:background="?attr/colorSurface"
+    android:orientation="vertical"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:id="@+id/rightRailHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/rightRailAvatarCard"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:focusable="true"
+            android:nextFocusDown="@+id/rightRailMediaTracker"
+            app:cardCornerRadius="40dp"
+            app:cardElevation="4dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/rightRailAvatar"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_round_settings_24"
+                tools:ignore="ContentDescription" />
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/rightRailUserName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:fontFamily="@font/poppins_bold"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            tools:text="Username" />
+
+        <TextView
+            android:id="@+id/rightRailUserEmail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:alpha="0.6"
+            android:fontFamily="@font/poppins"
+            android:textSize="12sp"
+            android:textColor="@android:color/white"
+            tools:text="AniList ID: 12345" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/rightRailEpisodesWatched"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textSize="20sp"
+                    android:textColor="@android:color/white"
+                    tools:text="42" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.6"
+                    android:fontFamily="@font/poppins"
+                    android:textSize="11sp"
+                    android:text="Episodes"
+                    android:textColor="@android:color/white" />
+
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="32dp"
+                android:alpha="0.2"
+                android:background="@android:color/white" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/rightRailChaptersRead"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textSize="20sp"
+                    android:textColor="@android:color/white"
+                    android:visibility="gone"
+                    tools:text="0"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.6"
+                    android:fontFamily="@font/poppins"
+                    android:textSize="11sp"
+                    android:text="Watching"
+                    android:textColor="@android:color/white" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:alpha="0.15"
+        android:background="@android:color/white" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="8dp">
+
+            <TextView
+                android:id="@+id/rightRailMediaTracker"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="16dp"
+                android:fontFamily="@font/poppins_bold"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:nextFocusDown="@+id/rightRailNotifications"
+                android:nextFocusUp="@+id/rightRailAvatar"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="Media &amp; tracker"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                app:drawableStartCompat="@drawable/ic_round_movie_filter_24"
+                app:drawableTint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/rightRailNotifications"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="16dp"
+                android:fontFamily="@font/poppins_bold"
+                android:focusable="true"
+                android:gravity="center_vertical"
+            android:nextFocusDown="@+id/rightRailExtensions"
+                android:nextFocusUp="@+id/rightRailMediaTracker"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="Notifications"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                app:drawableStartCompat="@drawable/ic_round_notifications_none_24"
+                app:drawableTint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/rightRailExtensions"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="16dp"
+                android:fontFamily="@font/poppins_bold"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:nextFocusDown="@+id/rightRailSettings"
+                android:nextFocusUp="@+id/rightRailNotifications"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="Extensions"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                app:drawableStartCompat="@drawable/ic_extension"
+                app:drawableTint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/rightRailSettings"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="16dp"
+                android:fontFamily="@font/poppins_bold"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:nextFocusDown="@+id/rightRailDownloads"
+                android:nextFocusUp="@+id/rightRailExtensions"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="Settings"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                app:drawableStartCompat="@drawable/ic_settings_squircle"
+                app:drawableTint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/rightRailDownloads"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="16dp"
+                android:fontFamily="@font/poppins_bold"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:nextFocusDown="@+id/rightRailProviders"
+                android:nextFocusUp="@+id/rightRailSettings"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="Downloads"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                app:drawableStartCompat="@drawable/ic_download_24"
+                app:drawableTint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/rightRailProviders"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="16dp"
+                android:fontFamily="@font/poppins_bold"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:nextFocusDown="@+id/rightRailClearCache"
+                android:nextFocusUp="@+id/rightRailDownloads"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="Providers"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                app:drawableStartCompat="@drawable/ic_extension"
+                app:drawableTint="@android:color/white" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/rightRailClearCache"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="?attr/selectableItemBackground"
+        android:drawablePadding="16dp"
+        android:fontFamily="@font/poppins_bold"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:nextFocusUp="@+id/rightRailProviders"
+        android:nextFocusDown="@+id/rightRailLogout"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="Clear Cache"
+        android:textColor="#FFB74D"
+        android:textSize="15sp"
+        app:drawableStartCompat="@drawable/ic_round_delete_24"
+        app:drawableTint="#FFB74D" />
+
+    <TextView
+        android:id="@+id/rightRailLogout"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="?attr/selectableItemBackground"
+        android:drawablePadding="16dp"
+        android:fontFamily="@font/poppins_bold"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:nextFocusUp="@+id/rightRailMediaTracker"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="Log Out"
+        android:textColor="#FF5252"
+        android:textSize="15sp"
+        app:drawableStartCompat="@drawable/ic_round_logout_24"
+        app:drawableTint="#FF5252" />
+
+</LinearLayout>

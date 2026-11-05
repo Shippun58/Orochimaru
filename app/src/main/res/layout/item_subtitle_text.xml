@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:layout_margin="8dp"
+    android:focusable="true"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:contentPadding="8dp">
+
+    <TextView
+        android:id="@+id/subtitleFlag"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:importantForAccessibility="no"
+        android:textSize="36sp"
+        android:alpha="0.3"
+        android:visibility="gone"
+        tools:text="🇯🇵" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/subtitleTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/poppins_bold"
+            android:maxLines="1"
+            android:textSize="16sp"
+            tools:text="English" />
+
+        <ImageView
+            android:id="@+id/subtitleGlobe"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="6dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chrome_24"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <TextView
+            android:id="@+id/subtitleBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/subtitle_badge_bg"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:gravity="center"
+            android:minWidth="26dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:textSize="10sp"
+            android:visibility="gone"
+            tools:text="OP"
+            tools:visibility="visible" />
+
+        <ani.sanin.ui.components.TomoeView
+            android:id="@+id/subtitleSpinner"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="6dp"
+            android:visibility="gone"
+            tools:visibility="visible" app:lottie_rawRes="@raw/tomoe" app:lottie_autoPlay="true" app:lottie_loop="true" app:lottie_speed="1.75" />
+
+        <Switch
+            android:id="@+id/subtitleToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            tools:visibility="visible" />
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

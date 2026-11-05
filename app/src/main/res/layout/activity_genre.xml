@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/genreContainer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fadingEdge="vertical"
+    android:orientation="vertical"
+    android:requiresFadingEdge="vertical"
+    android:scrollbars="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="32dp"
+        android:fontFamily="@font/poppins_bold"
+        android:text="@string/genres"
+        android:textSize="16sp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/mediaInfoGenresRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fadingEdge="vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:requiresFadingEdge="vertical"
+        tools:itemCount="49"
+        tools:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+        tools:listitem="@layout/item_genre"
+        tools:orientation="vertical"
+        tools:spanCount="2" />
+
+    <FrameLayout
+        android:id="@+id/mediaInfoGenresProgressBar"
+        android:layout_gravity="center"
+        android:layout_width="76.5dp"
+        android:layout_height="76.5dp"
+        android:layout_margin="32dp"
+    >
+
+        <ani.sanin.ui.components.TomoeView
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_gravity="center"
+        app:lottie_rawRes="@raw/tomoe"
+        app:lottie_autoPlay="true"
+        app:lottie_loop="true"
+        app:lottie_speed="1.75" />
+
+    </FrameLayout>
+
+</LinearLayout>

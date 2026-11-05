@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/settingsContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:orientation="vertical"
+    tools:context=".settings.SettingsActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/openSettingsButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="12dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="@string/sort_by"
+            android:focusable="true"
+            android:nextFocusDown="@+id/extensionsPill"
+            android:nextFocusRight="@id/modeToggle"
+            app:srcCompat="@drawable/ic_round_menu_book_24"
+            app:tint="?attr/colorOnBackground" />
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1">
+
+            <FrameLayout
+                android:id="@+id/modeToggle"
+                android:layout_width="160dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_mode_toggle_track"
+                android:clickable="true"
+                android:focusable="true"
+                android:nextFocusDown="@+id/extensionsPill"
+                android:nextFocusLeft="@id/openSettingsButton"
+                android:nextFocusRight="@id/searchIconButton">
+
+                <View
+                    android:id="@+id/modeToggleFill"
+                    android:layout_width="160dp"
+                    android:layout_height="36dp" />
+
+                <TextView
+                    android:id="@+id/modeToggleLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:fontFamily="@font/poppins_bold"
+                    android:text="Aniyomi"
+                    android:textColor="@android:color/white"
+                    android:textSize="15sp" />
+
+                <FrameLayout
+                    android:id="@+id/modeToggleThumb"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_gravity="center_vertical">
+
+                    <ImageView
+                        android:id="@+id/modeToggleThumbIcon"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="center"
+                        android:importantForAccessibility="no"
+                        android:scaleType="fitCenter" />
+                </FrameLayout>
+            </FrameLayout>
+        </FrameLayout>
+
+        <ImageButton
+            android:id="@+id/searchIconButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="12dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="@string/search"
+            android:focusable="true"
+            android:nextFocusDown="@+id/extensionsPill"
+            android:nextFocusLeft="@id/modeToggle"
+            app:srcCompat="@drawable/ic_round_search_24"
+            app:tint="?attr/colorOnBackground" />
+    </LinearLayout>
+
+    <ani.sanin.ui.components.LibraryStatusPill
+        android:id="@+id/extensionsPill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="6dp"
+        android:focusable="true"
+        android:nextFocusUp="@id/searchIconButton"
+        android:nextFocusDown="@id/viewPager" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/searchView"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:nextFocusUp="@+id/openSettingsButton"
+        android:nextFocusDown="@+id/viewPager"
+        android:transitionName="@string/search"
+        android:visibility="gone"
+        app:boxBackgroundColor="@color/bg"
+        app:boxBackgroundMode="outline"
+        app:boxCornerRadiusBottomEnd="28dp"
+        app:boxCornerRadiusBottomStart="28dp"
+        app:boxCornerRadiusTopEnd="28dp"
+        app:boxCornerRadiusTopStart="28dp"
+        app:endIconDrawable="@drawable/ic_round_search_24"
+        app:hintAnimationEnabled="true">
+
+        <AutoCompleteTextView
+            android:id="@+id/searchViewText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_bold"
+            android:hint="@string/search"
+            android:imeOptions="actionSearch"
+            android:inputType="textPersonName"
+            android:nextFocusUp="@+id/openSettingsButton"
+            android:nextFocusDown="@+id/viewPager"
+            android:padding="8dp"
+            android:selectAllOnFocus="true"
+            android:textSize="14sp"
+            tools:ignore="LabelFor,TextContrastCheck" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:focusable="true"
+        android:nextFocusUp="@id/extensionsPill"
+        android:descendantFocusability="afterDescendants" />
+
+    <FrameLayout
+        android:id="@+id/fragmentExtensionsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="bottom"
+        android:layout_weight="1"
+        android:visibility="gone" />
+
+</LinearLayout>

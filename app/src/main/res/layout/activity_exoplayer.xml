@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/playerDrawerLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:focusable="false">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/player_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:focusable="true"
+            app:animation_enabled="false"
+            app:resize_mode="fit"
+            app:show_buffering="when_playing" />
+
+        <include layout="@layout/panel_episode_comments" />
+
+        <include layout="@layout/drawer_tracks_rail" />
+
+    </FrameLayout>
+
+    <include layout="@layout/drawer_episode_rail" />
+
+    <include layout="@layout/drawer_subtitle_rail" />
+</androidx.drawerlayout.widget.DrawerLayout>

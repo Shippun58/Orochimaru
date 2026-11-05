@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <item name="episode_enrichment_gen" type="id" />
+
+    <item name="tmdbRowInCinema" type="id" />
+    <item name="tmdbRowTrending" type="id" />
+    <item name="tmdbRowTopRated" type="id" />
+    <item name="tmdbRowLatestRelease" type="id" />
+    <item name="tmdbRowUpcoming" type="id" />
+
+    <item name="section_row_tag" type="id" />
+</resources>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ani.sanin.others.Xpandable xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/subtitleTest"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    app:isExpanded="true">
+
+    <LinearLayout
+        android:id="@+id/subtitlePreviewHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_settings_card"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="5dp">
+
+        <TextView
+            android:id="@+id/subtitlePreviewTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:drawableEnd="@drawable/ic_round_arrow_drop_down_24"
+            android:fontFamily="@font/poppins_bold"
+            android:gravity="center_vertical"
+            android:text="@string/sub_preview_label"
+            android:textColor="?attr/colorSecondary"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/subtitlePreviewDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:alpha="0.72"
+            android:fontFamily="@font/poppins"
+            android:text="@string/sub_preview_collapse"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/subtitleTestWindow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingVertical="16dp">
+
+        <TextView
+            android:id="@+id/subtitleTestText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingHorizontal="32dp"
+            android:text="@string/sub_text_sample" />
+    </LinearLayout>
+
+</ani.sanin.others.Xpandable>

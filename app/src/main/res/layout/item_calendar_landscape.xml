@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="260dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginEnd="8dp"
+    android:focusable="true">
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="4dp">
+
+        <android.widget.ImageView
+            android:id="@+id/calendarLandscapeImg"
+            android:layout_width="match_parent"
+            android:layout_height="148dp"
+            android:scaleType="centerCrop"
+            tools:ignore="ContentDescription,ImageContrastCheck" />
+
+    </androidx.cardview.widget.CardView>
+
+    <TextView
+        android:id="@+id/calendarLandscapeTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginHorizontal="4dp"
+        android:ellipsize="end"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:maxLines="1"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="12sp"
+        tools:text="Episode 10 - The Escape" />
+
+    <TextView
+        android:id="@+id/calendarLandscapeAnime"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:layout_marginHorizontal="4dp"
+        android:ellipsize="end"
+        android:fontFamily="@font/poppins"
+        android:maxLines="1"
+        android:textColor="?attr/colorPrimary"
+        android:textSize="11sp"
+        tools:text="One Piece" />
+
+</LinearLayout>

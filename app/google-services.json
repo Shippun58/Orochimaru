@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "59468467634",
+    "project_id": "sanin-ad49b",
+    "storage_bucket": "sanin-ad49b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:59468467634:android:04d23cbc8872c15a6828ab",
+        "android_client_info": {
+          "package_name": "ani.sanin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBh0czU3ngMCcW6Ah0X-ILXALHGgPpjnTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:59468467634:android:d4729b9d319199446828ab",
+        "android_client_info": {
+          "package_name": "ani.sanin.alpha"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBh0czU3ngMCcW6Ah0X-ILXALHGgPpjnTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:59468467634:android:9b6c325be9f3eaf86828ab",
+        "android_client_info": {
+          "package_name": "ani.sanin.beta"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBh0czU3ngMCcW6Ah0X-ILXALHGgPpjnTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface"
+    tools:context=".media.SearchActivity">
+
+    <include
+        android:id="@+id/searchHeader"
+        layout="@layout/item_search_header" />
+
+    <LinearLayout
+        android:id="@+id/searchSuggestionsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_suggestions_panel"
+        android:elevation="6dp"
+        android:orientation="vertical"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/searchSuggestionsList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            tools:listitem="@layout/item_search_suggestion" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/searchEmptyState"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="40dp"
+        android:paddingBottom="40dp"
+        android:alpha="0.7"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="15sp"
+        android:visibility="gone"
+        tools:text="No results for &#34;query&#34;"
+        tools:visibility="visible" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/searchRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:focusable="true"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="128dp"
+        tools:itemCount="1"
+        tools:listitem="@layout/item_title_search" />
+
+</LinearLayout>

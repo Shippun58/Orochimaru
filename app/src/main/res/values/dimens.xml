@@ -1,0 +1,87 @@
+<resources>
+
+    <dimen name="activity_horizontal_margin">16dp</dimen>
+    <dimen name="activity_vertical_margin">16dp</dimen>
+    <dimen name="rounded_image_radius">10dp</dimen>
+    <dimen name="rounded_button_radius">4dp</dimen>
+
+    <dimen name="navbar_height">0dp</dimen>
+    <dimen name="card_corner_radius">2dp</dimen>
+    <dimen name="result_padding">15dp</dimen>
+
+    <dimen name="loading_line_height">15dp</dimen>
+    <dimen name="loading_radius">3dp</dimen>
+    <dimen name="loading_margin">15dp</dimen>
+
+    <integer name="loading_time">2000</integer>
+
+    <dimen name="storage_radius">3dp</dimen>
+    <dimen name="navbar_width">0dp</dimen>
+
+    <dimen name="nav_view_height">70dp</dimen>
+    <dimen name="nav_rail_view_width">62dp</dimen>
+
+    <dimen name="download_size">50dp</dimen>
+    <dimen name="video_frame_width">1dp</dimen>
+
+    <dimen name="account_select_linear_item_size">100dp</dimen>
+    <dimen name="dialog_buttons_inset">5dp</dimen>
+
+    <dimen name="home_poster_progress_size">50dp</dimen>
+    <dimen name="episode_progress_size">40dp</dimen>
+    <dimen name="continue_watching_progress_size">25dp</dimen>
+    <dimen name="circular_progress_thickness">2dp</dimen>
+    <dimen name="download_header_progress_size">35dp</dimen>
+    <dimen name="library_top_push">0dp</dimen>
+
+    <dimen name="banner_modern_height">355dp</dimen>
+    <dimen name="banner_modern_content_start">20dp</dimen>
+    <dimen name="banner_modern_poster_width">110dp</dimen>
+    <dimen name="banner_modern_poster_height">165dp</dimen>
+    <dimen name="banner_modern_poster_margin_end">20dp</dimen>
+    <dimen name="banner_modern_watch_height">34dp</dimen>
+    <dimen name="banner_modern_watch_padding">30dp</dimen>
+    <dimen name="banner_modern_title_text">18sp</dimen>
+    <dimen name="banner_modern_synopsis_text">10sp</dimen>
+    <dimen name="banner_modern_meta_text">11sp</dimen>
+    <dimen name="banner_modern_meta_gap">6dp</dimen>
+    <integer name="banner_modern_synopsis_lines">2</integer>
+
+    <dimen name="banner_classic_height">355dp</dimen>
+    <dimen name="banner_classic_logo_width">260dp</dimen>
+    <dimen name="banner_classic_logo_height">72dp</dimen>
+    <dimen name="banner_classic_watch_height">34dp</dimen>
+    <dimen name="banner_classic_watch_padding">24dp</dimen>
+    <dimen name="banner_classic_watch_text">14sp</dimen>
+    <dimen name="banner_classic_chip_text">11sp</dimen>
+    <dimen name="banner_classic_chip_height">22dp</dimen>
+    <dimen name="banner_classic_chip_gap">6dp</dimen>
+    <dimen name="banner_classic_chip_pad">10dp</dimen>
+    <dimen name="banner_classic_logo_top">0dp</dimen>
+    <dimen name="banner_classic_gradient">96dp</dimen>
+    <dimen name="banner_classic_title_text">17sp</dimen>
+    <dimen name="banner_modern_meta_top">14dp</dimen>
+    <dimen name="banner_modern_watch_min_width">150dp</dimen>
+    <dimen name="banner_modern_watch_text">13sp</dimen>
+    <dimen name="banner_modern_synopsis_spacing">2dp</dimen>
+
+    <dimen name="franchise_poster_width">112dp</dimen>
+    <dimen name="franchise_row_margin">24dp</dimen>
+    <dimen name="franchise_row_gap">3dp</dimen>
+
+    <dimen name="franchise_row_bottom_margin">20dp</dimen>
+
+    <dimen name="franchise_list_status_top">1dp</dimen>
+    <dimen name="franchise_list_status_height">30dp</dimen>
+    <dimen name="franchise_info_size">30dp</dimen>
+    <dimen name="franchise_rating_margin">8dp</dimen>
+    <dimen name="franchise_card_corner">20dp</dimen>
+    <dimen name="franchise_synopsis_gap">6dp</dimen>
+    <dimen name="franchise_title_size">14sp</dimen>
+    <dimen name="franchise_synopsis_size">12sp</dimen>
+
+    <dimen name="franchise_year_size">16sp</dimen>
+    <dimen name="franchise_meta_size">10sp</dimen>
+
+    <dimen name="franchise_poster_gradient_height">76dp</dimen>
+</resources>

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp"
+    android:layout_marginBottom="10dp"
+    android:background="@drawable/bg_download_card"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="10dp">
+
+        <ImageView
+            android:id="@+id/episodeThumb"
+            android:layout_width="58dp"
+            android:layout_height="86dp"
+            android:background="@drawable/bg_download_thumb"
+            android:clipToOutline="true"
+            android:outlineProvider="background"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_download_24"
+            tools:ignore="ContentDescription" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/episodeTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:maxLines="1"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="13sp"
+                tools:text="74 · The Next Hokage" />
+
+            <TextView
+                android:id="@+id/episodeMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:alpha="0.45"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins"
+                android:maxLines="1"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="10.5sp"
+                tools:text="reanime HD · 720p" />
+        </LinearLayout>
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/episodeRing"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:indeterminate="false"
+            android:max="100"
+            android:progress="0"
+            app:indicatorColor="?attr/colorPrimary"
+            app:indicatorSize="33dp"
+            app:trackColor="?attr/colorOutline"
+            app:trackThickness="3dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="84dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingEnd="10dp"
+        android:paddingBottom="2dp">
+
+        <TextView
+            android:id="@+id/episodeSize"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:alpha="0.7"
+            android:fontFamily="@font/poppins"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="10.5sp"
+            tools:text="20 MB / 70 MB" />
+
+        <TextView
+            android:id="@+id/episodeSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:alpha="0.45"
+            android:fontFamily="@font/poppins"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="10sp"
+            tools:text="3.2 MB/s" />
+
+        <ImageButton
+            android:id="@+id/episodeAction"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:padding="3dp"
+            android:tint="?attr/colorOnSurface"
+            app:srcCompat="@drawable/ic_baseline_pause_24"
+            tools:ignore="ContentDescription" />
+
+        <LinearLayout
+            android:id="@+id/episodePlay"
+            android:layout_width="wrap_content"
+            android:layout_height="26dp"
+            android:background="@drawable/bg_download_play_pill"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:alpha="0.85"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:text="@string/play"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="9.5sp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText" />
+
+            <ImageView
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="3dp"
+                android:importantForAccessibility="no"
+                app:srcCompat="@drawable/ic_baseline_play_arrow_24"
+                app:tint="?attr/colorOnSurface" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/episodeDelete"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="2dp"
+            android:padding="3dp"
+            android:tint="@color/colorPrimaryRed"
+            app:srcCompat="@drawable/ic_round_delete_24"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+</LinearLayout>

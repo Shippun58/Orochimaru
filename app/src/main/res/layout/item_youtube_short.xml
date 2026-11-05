@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/shortCard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    app:cardCornerRadius="12dp"
+    app:cardBackgroundColor="?attr/primaryGrayBackground"
+    app:cardElevation="0dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/shortThumbnail"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:scaleType="centerCrop"
+            android:contentDescription="@string/video_thumbnail"
+            tools:ignore="ImageContrastCheck" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_play_button"
+                android:padding="12dp"
+                app:srcCompat="@drawable/ic_round_play_arrow_24"
+                android:contentDescription="@string/play"
+                tools:ignore="ImageContrastCheck" />
+
+            <TextView
+                android:id="@+id/shortDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="6dp"
+                android:background="@drawable/bg_calendar_badge"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
+                android:fontFamily="@font/poppins_bold"
+                android:textColor="@android:color/white"
+                android:textSize="10sp"
+                tools:text="0:45" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/shortTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:maxLines="2"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="8dp"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="12sp"
+            tools:text="Check out this epic scene!" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

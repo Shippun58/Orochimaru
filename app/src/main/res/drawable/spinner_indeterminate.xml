@@ -1,0 +1,7 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:drawable="@drawable/spinner_ring">
+    <target
+        android:name="spinner_rotor"
+        android:animation="@animator/spinner_rotate" />
+</animated-vector>

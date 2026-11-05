@@ -1,0 +1,700 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    tools:context=".media.MediaInfoFragment"
+    tools:ignore="SpeakableTextPresentCheck">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/mediaInfoScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingTop="300dp"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp">
+
+            <FrameLayout
+                android:id="@+id/mediaInfoProgressBar"
+                android:layout_gravity="center"
+                android:layout_width="76.5dp"
+                android:layout_height="76.5dp"
+                android:layout_margin="32dp"
+                android:visibility="gone"
+                tools:visibility="gone"
+            >
+
+                <ani.sanin.ui.components.TomoeView
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_gravity="center"
+                app:lottie_rawRes="@raw/tomoe"
+                app:lottie_autoPlay="true"
+                app:lottie_loop="true"
+                app:lottie_speed="1.75" />
+
+            </FrameLayout>
+
+            <LinearLayout
+                android:id="@+id/mediaInfoContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <ImageView
+                    android:id="@+id/mediaInfoLogo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="80dp"
+                    android:adjustViewBounds="true"
+                    android:scaleType="fitStart"
+                    android:visibility="gone"
+                    tools:ignore="ContentDescription"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/mediaInfoTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_bold"
+                    android:gravity="start"
+                    android:text="@string/slogan"
+                    android:textColor="@android:color/white"
+                    android:textSize="24sp"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/mediaInfoPlayCard"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_info_container"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:drawableStart="@drawable/ic_media_play_small"
+                    android:drawablePadding="6dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:gravity="center_vertical"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="@string/watch"
+                    android:textAllCaps="true"
+                    android:textColor="?attr/colorOnSurface"
+                    tools:ignore="ContentDescription" />
+
+                <LinearLayout
+                    android:id="@+id/mediaInfoSynonymsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/bg_info_container"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:alpha="0.6"
+                                android:fontFamily="@font/poppins_bold"
+                                android:text="MEAN SCORE"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/mediaInfoMeanScore"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/poppins_bold"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="18sp"
+                                tools:text="8.2" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:alpha="0.6"
+                                android:fontFamily="@font/poppins_bold"
+                                android:gravity="end"
+                                android:text="RELEASED EPISODES"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/mediaInfoReleased"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/poppins_bold"
+                                android:gravity="end"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="18sp"
+                                tools:text="7 of 12" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:alpha="0.6"
+                                android:fontFamily="@font/poppins_bold"
+                                android:text="WATCH PROGRESS"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/mediaInfoWatchProgress"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/poppins_bold"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="18sp"
+                                tools:text="4 of 7" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:alpha="0.6"
+                                android:fontFamily="@font/poppins_bold"
+                                android:gravity="end"
+                                android:text="NEXT EPISODE"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/mediaInfoNextEpisode"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/poppins_bold"
+                                android:gravity="end"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="18sp"
+                                tools:text="Episode 8" />
+
+                            <TextView
+                                android:id="@+id/mediaInfoNextTimer"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/poppins_family"
+                                android:gravity="end"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="13sp"
+                                tools:text="2 days 4 hrs 10 mins 30 secs" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:alpha="0.6"
+                                android:fontFamily="@font/poppins_bold"
+                                android:text="SHOW STATUS"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/mediaInfoStatus"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/poppins_bold"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="18sp"
+                                tools:text="RELEASING" />
+
+                            <TextView
+                                android:id="@+id/mediaInfoAired"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/poppins"
+                                android:rotation="-0.5"
+                                android:alpha="0.7"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="11sp"
+                                tools:text="Aired: • To: •" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:orientation="vertical"
+                            android:padding="8dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:alpha="0.6"
+                                android:fontFamily="@font/poppins_bold"
+                                android:gravity="end"
+                                android:text="LIST STATUS"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="11sp" />
+
+                            <Button
+                                android:id="@+id/mediaInfoAddToList"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="34dp"
+                                android:ellipsize="marquee"
+                                android:fontFamily="@font/poppins_bold"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:marqueeRepeatLimit="marquee_forever"
+                                android:minWidth="0dp"
+                                android:padding="4dp"
+                                android:singleLine="true"
+                                android:text="@string/add_list"
+                                android:textAllCaps="true"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                app:cornerRadius="16dp"
+                                app:strokeColor="?attr/colorOnSurface" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/mediaInfoMapping"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:layout_margin="6dp"
+                        android:focusable="true"
+                        android:padding="4dp"
+                        android:visibility="gone"
+                        app:srcCompat="@drawable/ic_round_search_sources_24"
+                        app:tint="?attr/colorOnSurface"
+                        tools:ignore="ContentDescription" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/bg_info_container"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:id="@+id/mediaInfoGenreContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:id="@+id/mediaInfoDescriptionText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/description"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/mediaInfoDescription"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="5"
+                        android:paddingTop="8dp"
+                        android:text="@string/description"
+                        android:textColor="?attr/colorOnSurface" />
+
+                    <TextView
+                        android:id="@+id/mediaInfoShowMore"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/show_more"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:id="@+id/mediaInfoExternalLinksContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:id="@+id/mediaInfoMetaSquare"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/bg_info_container"
+                        android:orientation="vertical"
+                        android:padding="12dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:alpha="0.6"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:text="AUTHOR"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="10sp" />
+
+                                <TextView
+                                    android:id="@+id/mediaInfoAuthor"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:ellipsize="end"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:maxLines="1"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="14sp"
+                                    tools:text="Author Name" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="8dp"
+                                    android:alpha="0.6"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:text="SOURCE"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="10sp" />
+
+                                <TextView
+                                    android:id="@+id/mediaInfoSource"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:ellipsize="end"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:maxLines="1"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="14sp"
+                                    tools:text="Source" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:alpha="0.6"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:text="STUDIO"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="10sp" />
+
+                                <TextView
+                                    android:id="@+id/mediaInfoStudio"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:clickable="true"
+                                    android:ellipsize="end"
+                                    android:focusable="true"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:maxLines="1"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="14sp"
+                                    tools:text="Studio" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="8dp"
+                                    android:alpha="0.6"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:text="FORMAT"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="10sp" />
+
+                                <TextView
+                                    android:id="@+id/mediaInfoFormat"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:ellipsize="end"
+                                    android:fontFamily="@font/poppins_bold"
+                                    android:maxLines="1"
+                                    android:textColor="?attr/colorOnSurface"
+                                    android:textSize="14sp"
+                                    tools:text="TV" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/mediaInfoMetaIcons"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_info_container"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="8dp">
+
+                        <ImageView
+                            android:id="@+id/mediaInfoFav"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginTop="1dp"
+                            android:focusable="true"
+                            android:padding="2dp"
+                            app:srcCompat="@drawable/ic_round_favorite_border_24"
+                            app:tint="?attr/colorOnSurface"
+                            tools:ignore="ContentDescription" />
+
+                        <ImageView
+                            android:id="@+id/mediaInfoShare"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginTop="4dp"
+                            android:focusable="true"
+                            android:padding="2dp"
+                            app:srcCompat="@drawable/ic_round_share_24"
+                            app:tint="?attr/colorOnSurface"
+                            tools:ignore="ContentDescription" />
+
+                        <ImageView
+                            android:id="@+id/mediaInfoComment"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="1dp"
+                            android:focusable="true"
+                            android:padding="2dp"
+                            app:srcCompat="@drawable/ic_round_comment_24"
+                            app:tint="?attr/colorOnSurface"
+                            tools:ignore="ContentDescription" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/mediaNextChapterPredictionText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="8dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:text="@string/next_chapter_prediction"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="16sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/mediaNextChapterPrediction"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="8dp"
+                    android:ellipsize="end"
+                    android:maxLines="5"
+                    android:padding="8dp"
+                    android:text="Chap: ??"
+                    android:textColor="?attr/colorOnSurface"
+                    android:visibility="gone"
+                    tools:ignore="HardcodedText" />
+
+                <TextView
+                    android:id="@+id/mediaAnimeAdaptationText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="8dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:text="@string/anime_adaptation"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="16sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/mediaAnimeAdaptation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="8dp"
+                    android:ellipsize="end"
+                    android:maxLines="5"
+                    android:padding="8dp"
+                    android:text="Starts: ??"
+                    android:textColor="?attr/colorOnSurface"
+                    android:visibility="gone"
+                    tools:ignore="HardcodedText" />
+
+                <LinearLayout
+                    android:id="@+id/mediaInfoNameRomajiContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.58"
+                        android:text="@string/name_romaji"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/mediaInfoNameRomaji"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:breakStrategy="balanced"
+                        android:fontFamily="@font/poppins_bold"
+                        android:textColor="?attr/colorOnSurface"
+                        tools:targetApi="m" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/mediaInfoNameContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.58"
+                        android:text="@string/name"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/mediaInfoName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:breakStrategy="balanced"
+                        android:fontFamily="@font/poppins_bold"
+                        android:textColor="?attr/colorOnSurface"
+                        tools:targetApi="m" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/mediaInfoFinalContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/bg_info_container"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <LinearLayout
+                        android:id="@+id/mediaInfoTrailerRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:id="@+id/mediaInfoTrailerHost"
+                            android:layout_width="170dp"
+                            android:layout_height="wrap_content" />
+
+                        <LinearLayout
+                            android:id="@+id/mediaInfoOpEdContainer"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/mediaInfoTagsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:orientation="vertical" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</FrameLayout>

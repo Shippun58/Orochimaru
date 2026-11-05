@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.chip.Chip xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    style="@style/Widget.Material3.Chip.Filter"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp"
+    android:focusable="true"
+    android:textAppearance="@style/Suffix"
+    android:textSize="13sp"
+    app:chipBackgroundColor="@color/chip_background_color"
+    app:chipStrokeWidth="0dp"
+    app:closeIconVisible="false"
+    tools:text="2026" />

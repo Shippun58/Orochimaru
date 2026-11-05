@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="-12dp"
+    android:layout_marginEnd="-12dp"
+    android:clipToPadding="false"
+    android:gravity="center_horizontal"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="-8dp"
+        android:layout_marginBottom="-8dp"
+        android:clipToPadding="false"
+        android:padding="18dp">
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/itemCompactCard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clipToOutline="true"
+            android:translationZ="8dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="4dp">
+
+            <ImageView
+                android:id="@+id/itemCompactImage"
+                android:layout_width="102dp"
+                android:layout_height="154dp"
+                android:scaleType="centerCrop"
+                android:transitionName="mediaCover"
+                tools:ignore="ContentDescription,ImageContrastCheck"
+                tools:srcCompat="@tools:sample/backgrounds/scenic" />
+
+            <View
+                android:id="@+id/itemCompactOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/itemCompactClearlogo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:layout_marginBottom="6dp"
+                android:adjustViewBounds="true"
+                android:maxWidth="88dp"
+                android:maxHeight="30dp"
+                android:scaleType="fitStart"
+                android:visibility="gone"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/itemCompactOverlayTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:layout_marginBottom="6dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="#F3F3F3"
+                android:textSize="11sp"
+                android:visibility="gone"
+                tools:ignore="SpUsage"
+                tools:text="Title" />
+
+            <LinearLayout
+                android:id="@+id/itemCompactScoreBG"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:layout_margin="4dp"
+                android:background="@drawable/bg_rating_pill"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="4dp">
+
+                <ImageView
+                    android:id="@+id/itemCompactBroadcast"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="2dp"
+                    android:src="@drawable/ic_broadcast_ongoing"
+                    android:visibility="gone"
+                    tools:ignore="ContentDescription" />
+
+                <TextView
+                    android:id="@+id/itemCompactScore"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="2dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:paddingTop="2dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp"
+                    tools:ignore="TextContrastCheck"
+                    tools:text="0.0" />
+
+                <ImageView
+                    android:id="@+id/imageView2"
+                    android:layout_width="10dp"
+                    android:layout_height="match_parent"
+                    app:srcCompat="@drawable/ic_round_star_24"
+                    app:tint="?attr/colorPrimary"
+                    tools:ignore="ContentDescription" />
+
+            </LinearLayout>
+
+            <include
+                layout="@layout/item_subdub_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="3dp" />
+
+            <include
+                layout="@layout/item_progress_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="3dp" />
+
+        </androidx.cardview.widget.CardView>
+
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/itemCompactTitle"
+        android:layout_width="102dp"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:maxLines="2"
+        android:textAlignment="center"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="13sp"
+        android:transitionName="mediaTitle"
+        tools:ignore="SpUsage"
+        tools:text="@string/slogan" />
+
+</LinearLayout>

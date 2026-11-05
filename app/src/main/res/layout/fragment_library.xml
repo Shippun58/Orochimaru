@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
+
+    <FrameLayout
+        android:id="@+id/listProgressBar"
+        android:layout_width="76.5dp"
+        android:layout_height="76.5dp"
+        android:layout_gravity="center"
+    >
+
+        <ani.sanin.ui.components.TomoeView
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_gravity="center"
+        app:lottie_rawRes="@raw/tomoe"
+        app:lottie_autoPlay="true"
+        app:lottie_loop="true"
+        app:lottie_speed="1.75" />
+
+    </FrameLayout>
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/listAppBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurface"
+        android:theme="@style/Theme.Sanin.AppBarOverlay">
+
+        <LinearLayout
+            android:id="@+id/settingsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingTop="@dimen/library_top_push"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp">
+
+                <ImageButton
+                    android:id="@+id/listSettings"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:contentDescription="Settings"
+                    android:focusable="true"
+                    android:nextFocusRight="@id/profileButton"
+                    android:nextFocusDown="@id/listTabPill"
+                    app:srcCompat="@drawable/ic_baseline_tune_24"
+                    app:tint="?attr/colorOnBackground" />
+
+                <TextView
+                    android:id="@+id/profileButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:clickable="true"
+                    android:ellipsize="end"
+                    android:focusable="true"
+                    android:fontFamily="@font/poppins_semi_bold"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:nextFocusDown="@id/listTabPill"
+                    android:nextFocusLeft="@id/listSettings"
+                    android:nextFocusRight="@id/listAvatar"
+                    android:text="My Profile"
+                    android:textSize="14sp"
+                    tools:ignore="SpeakableTextPresentCheck" />
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/listAvatar"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Profile"
+                    android:focusable="true"
+                    android:nextFocusLeft="@id/profileButton"
+                    android:nextFocusDown="@id/listTabPill"
+                    android:padding="2dp"
+                    android:scaleType="centerCrop"
+                    app:srcCompat="@drawable/ic_round_person_24"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.App.Circle"
+                    app:tint="@null"
+                    tools:ignore="ContentDescription" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <ani.sanin.ui.components.LibraryStatusPill
+            android:id="@+id/listTabPill"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:focusable="true"
+            android:nextFocusUp="@id/profileButton"
+            android:nextFocusDown="@id/listViewPager" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/listViewPager"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:nextFocusUp="@id/listTabPill"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="top"
+    android:orientation="horizontal">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/itemEpisodeCont"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:minHeight="84dp"
+        android:translationZ="8dp"
+        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+        app:cardCornerRadius="10dp"
+        app:cardElevation="4dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <View
+                android:id="@+id/itemEpisodeFillerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/filler"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:layout_width="140dp"
+                    android:layout_height="match_parent">
+
+                    <ImageView
+                        android:id="@+id/itemMediaImage"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="centerCrop"
+                        tools:ignore="ContentDescription"
+                        tools:srcCompat="@tools:sample/backgrounds/scenic" />
+
+                    <TextView
+                        android:id="@+id/itemEpisodeRating"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|end"
+                        android:layout_margin="4dp"
+                        android:background="@drawable/bg_trans_black"
+                        android:fontFamily="@font/poppins_bold"
+                        android:paddingHorizontal="4dp"
+                        android:paddingVertical="2dp"
+                        android:textColor="@color/golden_yellow"
+                        android:textSize="10sp"
+                        android:visibility="gone"
+                        tools:text="★ 6.9"
+                        tools:visibility="visible" />
+
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="12dp"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="4dp"
+                    android:gravity="center_vertical"
+                    android:minHeight="88dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/itemEpisodeFiller"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="marquee"
+                        android:fontFamily="@font/poppins_bold"
+                        android:maxLines="1"
+                        android:text="@string/filler"
+                        android:textStyle="italic"
+                        android:visibility="gone"
+                        app:lineHeight="15sp" />
+
+                    <TextView
+                        android:id="@+id/itemEpisodeTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:fontFamily="@font/poppins_bold"
+                        android:maxLines="1"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="14sp"
+                        tools:text="Episode title that can be a very long one right here"
+                        app:lineHeight="14sp" />
+
+                    <View
+                        android:id="@+id/itemEpisodeDivider"
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="2dp"
+                        android:background="?attr/colorPrimary"
+                        android:alpha="0.4" />
+
+                    <TextView
+                        android:id="@+id/itemEpisodeDate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.5"
+                        android:fontFamily="@font/poppins_bold"
+                        android:maxLines="1"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="10sp"
+                        android:visibility="gone"
+                        tools:text="2026-01-09"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/itemEpisodeDesc"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.58"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textSize="11sp"
+                        app:lineHeight="13sp"
+                        tools:ignore="TextContrastCheck"
+                        tools:text="@tools:sample/lorem/random" />
+
+                    <TextView
+                        android:id="@+id/itemEpisodeMore"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/strips_more"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="11sp"
+                        android:visibility="gone"
+                        tools:ignore="TextContrastCheck"
+                        tools:visibility="visible" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/itemMediaProgressCont"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/itemMediaProgress"
+                    android:layout_width="0dp"
+                    android:layout_height="2dp"
+                    android:layout_weight="0"
+                    android:background="?attr/colorPrimary" />
+
+                <View
+                    android:id="@+id/itemMediaProgressEmpty"
+                    android:layout_width="0dp"
+                    android:layout_height="2dp"
+                    android:layout_weight="1"
+                    android:background="#80000000" />
+
+            </LinearLayout>
+
+            <View
+                android:id="@+id/itemEpisodeViewedCover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:alpha="0.33"
+                android:background="?android:colorBackground"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/itemEpisodeViewed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="8dp"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_round_remove_red_eye_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+
+            <ImageView
+                android:id="@+id/itemEpisodeDownload"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_trans_black"
+                android:clickable="true"
+                android:focusable="true"
+                android:padding="5dp"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_download_24"
+                app:tint="?attr/colorPrimary"
+                tools:ignore="ContentDescription" />
+
+        </FrameLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+</LinearLayout>

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="6dp"
+    android:layout_marginEnd="6dp"
+    android:clipToPadding="false"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cwCard"
+        android:layout_width="240dp"
+        android:layout_height="135dp"
+        android:translationZ="4dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/cwImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            tools:ignore="ContentDescription"
+            tools:srcCompat="@tools:sample/backgrounds/scenic" />
+
+        <View
+            android:id="@+id/cwGradientOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <ImageView
+            android:id="@+id/cwClearlogo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="10dp"
+            android:adjustViewBounds="true"
+            android:maxWidth="140dp"
+            android:maxHeight="48dp"
+            android:scaleType="fitCenter"
+            android:visibility="gone"
+            tools:ignore="ContentDescription"
+            tools:srcCompat="@tools:sample/backgrounds/scenic"
+            tools:visibility="visible" />
+
+        <TextView
+            android:id="@+id/cwOverlayTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="10dp"
+            android:ellipsize="end"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:maxLines="2"
+            android:textColor="#F3F3F3"
+            android:textSize="13sp"
+            android:visibility="gone"
+            tools:ignore="SpUsage"
+            tools:text="Attack on Titan"
+            tools:visibility="visible" />
+
+        <LinearLayout
+            android:id="@+id/cwEpisodeNo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_episode_clay"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                android:id="@+id/cwEpisodeBroadcast"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_marginEnd="3dp"
+                android:src="@drawable/ic_broadcast_ongoing"
+                android:visibility="gone"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/cwEpisodeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                tools:ignore="SpUsage"
+                tools:text="E5" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <TextView
+                android:id="@+id/cwTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins_bold"
+                android:maxLines="1"
+                android:textColor="@color/bg_white"
+                android:textSize="13sp"
+                tools:text="Attack on Titan" />
+
+            <TextView
+                android:id="@+id/cwSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:alpha="0.8"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins"
+                android:maxLines="1"
+                android:textColor="@color/bg_white"
+                android:textSize="11sp"
+                tools:text="S1 E5 · 22 min left" />
+
+            <ProgressBar
+                android:id="@+id/cwProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="2dp"
+                android:layout_marginTop="4dp"
+                android:progressTint="?attr/colorPrimary"
+                android:progressBackgroundTint="#40FFFFFF" />
+
+            <TextView
+                android:id="@+id/cwTimeWatched"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:alpha="0.9"
+                android:fontFamily="@font/poppins"
+                android:textColor="#FFFFFF"
+                android:textSize="9sp"
+                android:visibility="gone"
+                tools:text="09:10/24:00"
+                tools:visibility="visible" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    </FrameLayout>
+
+</LinearLayout>

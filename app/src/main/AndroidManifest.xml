@@ -1,0 +1,541 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-sdk tools:overrideLibrary="go.server.gojni" />
+
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission
+        android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"
+        tools:ignore="LeanbackUsesWifi" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" /> 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" /> 
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" /> 
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission
+        android:name="android.permission.READ_APP_SPECIFIC_LOCALES"
+        tools:ignore="ProtectedPermissions" />
+
+    
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="false" />
+
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    
+
+    <queries>
+        <package android:name="idm.internet.download.manager.plus" />
+        <package android:name="idm.internet.download.manager" />
+        <package android:name="idm.internet.download.manager.adm.lite" />
+        <package android:name="com.dv.adm" />
+    </queries>
+
+    <application
+        android:name=".App"
+        android:allowBackup="true"
+        android:banner="@drawable/ic_banner"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:largeHeap="true"
+        android:requestLegacyExternalStorage="true"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Sanin"
+        android:usesCleartextTraffic="true"
+        tools:ignore="AllowBackup"
+        tools:targetApi="tiramisu">
+
+        <receiver android:name=".notifications.IncognitoNotificationClickReceiver" />
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/notification_icon" />
+
+        <service
+            android:name=".notifications.push.OrochimaruMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+
+        <activity android:name=".others.calc.CalcActivity"
+            android:parentActivityName=".MainActivity" />
+        
+        <activity
+            android:name=".media.FranchiseActivity"
+            android:label="@string/franchise_screen_title"
+            android:parentActivityName=".MainActivity" />
+
+        <activity android:name=".settings.AnilistSettingsActivity"/>
+        <activity android:name=".settings.PlayerSettingsActivity" />
+        <activity android:name=".settings.FAQActivity" />
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsAboutActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".home.status.StatusActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsAccountActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsAnimeActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsDownloadsActivity"
+            android:parentActivityName=".settings.SettingsActivity" />
+        <activity
+            android:name=".download.DownloadsActivity"
+            android:parentActivityName=".settings.SettingsActivity" />
+        <activity
+            android:name=".settings.SettingsHomeActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsCommonActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsExtensionsActivity"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustPan"/>
+        <activity
+            android:name=".settings.ProvidersActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsAddonActivity"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".settings.SettingsNotificationActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsThemeActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsAppearanceActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsAnimationActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsLogActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsCacheActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.LiveLogcatActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.SettingsExtrasActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".settings.ExtensionsActivity"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+            android:name=".cloudstream.CloudStreamSettingsActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.CloudStreamSettings"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" />
+        <activity
+            android:name=".profile.ProfileActivity"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+            android:name=".profile.SimklProfileActivity"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+            android:name=".profile.FollowActivity"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+            android:name=".profile.activity.FeedActivity"
+            android:configChanges="orientation|screenSize|screenLayout"
+            android:label="Inbox Activity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".profile.notification.NotificationActivity"
+            android:label="Inbox Activity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".cloudstream.CloudStreamRepoDetailActivity"
+            android:parentActivityName=".settings.ExtensionsActivity" />
+        <activity
+            android:name=".settings.AnimeRepoDetailActivity"
+            android:parentActivityName=".settings.ExtensionsActivity" />
+        <activity
+            android:name=".util.ActivityMarkdownCreator"
+            android:windowSoftInputMode="adjustResize|stateVisible" />
+        <activity android:name=".parsers.ParserTestActivity" />
+        <activity
+            android:name=".media.ReviewActivity"
+            android:parentActivityName=".media.MediaDetailsActivity" />
+        <activity
+            android:name=".media.ReviewViewActivity"
+            android:parentActivityName=".media.ReviewActivity" />
+        <activity
+            android:name=".media.SearchActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity android:name=".media.StudioActivity" />
+        <activity android:name=".media.AuthorActivity" />
+        <activity
+            android:name=".media.CalendarActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity android:name=".media.user.ListActivity" />
+        <activity
+            android:name=".profile.SingleStatActivity"
+            android:parentActivityName=".profile.ProfileActivity" />
+
+        <activity android:name=".media.GenreActivity" />
+        <activity
+            android:name=".media.MediaListViewActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".home.KitsuCategoryResultsActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".home.KitsuTrailerPlayerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".media.MediaDetailsActivity"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.Sanin.NeverCutout"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity android:name=".media.CharacterDetailsActivity" />
+        <activity android:name=".home.NoInternet" />
+        <activity android:name=".others.CrashActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:process=":error_process"
+            android:launchMode="singleTask" />
+        <activity
+            android:name=".cloudstream.TmdbDetailsActivity"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".cloudstream.TmdbPersonActivity"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".cloudstream.TmdbWatchActivity"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".cloudstream.TmdbServiceCatalogueActivity"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".cloudstream.TmdbAllServicesActivity"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".cloudstream.TmdbSearchActivity"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".cloudstream.TmdbPlayerActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
+            android:excludeFromRecents="true"
+            android:supportsPictureInPicture="true" />
+        <activity
+            android:name=".media.anime.ExoplayerView"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/video"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            tools:targetApi="n" />
+        <activity
+            android:name=".connections.anilist.Login"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="Anilist Login for Sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="anilist"
+                    android:scheme="sanin" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".connections.mal.Login"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="Myanimelist Login for Sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="mal"
+                    android:scheme="sanin" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".connections.simkl.Login"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="Simkl Login for Sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="simkl-auth"
+                    android:scheme="ani.sanin" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".others.webview.CookieCatcher"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="Discord Login for Sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="dantotsu" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="discord.sanin.com" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".connections.anilist.UrlMedia"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter android:label="@string/read_on_sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="anilist.co" />
+                <data android:host="myanimelist.net" />
+
+            </intent-filter>
+            <intent-filter android:label="@string/watch_on_sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="anilist.co" />
+                <data android:host="myanimelist.net" />
+                <data android:pathPrefix="/anime" />
+            </intent-filter>
+            <intent-filter android:label="@string/view_profile_in_sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="anilist.co" />
+                <data android:pathPrefix="/user" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".MainActivity"
+            android:banner="@drawable/ic_banner"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="ani.sanin.OPEN_MEDIA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+
+                <data android:pathPattern=".*\\.ani" />
+                <data android:pathPattern=".*\\.sani" />
+
+                <data android:mimeType="application/x-ani" />
+                <data android:mimeType="application/x-sani" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:host="add-repo"/>
+                <data android:scheme="aniyomi"/>
+            </intent-filter>
+            <intent-filter android:label="Add CloudStream repo to Sanin">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="cloudstreamrepo" />
+            </intent-filter>
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="cs.repo"
+                    android:pathPrefix="/"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="eu.kanade.tachiyomi.extension.util.ExtensionInstallActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat" />
+
+        <receiver
+            android:name=".notifications.BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        
+        <receiver
+            android:name=".notifications.AlarmPermissionStateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".notifications.anilist.AnilistNotificationReceiver" />
+        <receiver android:name=".notifications.comment.CommentNotificationReceiver" />
+        <receiver android:name=".notifications.subscription.SubscriptionNotificationReceiver" />
+
+        <activity
+            android:name=".notifications.subscription.NotificationPopupActivity"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.Sanin.Dialog"
+            android:taskAffinity=""
+            android:launchMode="singleInstance" />
+
+        <meta-data
+            android:name="preloaded_fonts"
+            android:resource="@array/preloaded_fonts" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:enabled="true"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
+
+        <service
+            android:name="eu.kanade.tachiyomi.extension.util.ExtensionInstallService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name="androidx.media3.exoplayer.scheduler.PlatformScheduler$PlatformSchedulerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <service
+            android:name="ani.sanin.download.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <receiver
+            android:name="ani.sanin.download.DownloadActionReceiver"
+            android:exported="false" />
+
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="androidx.media3.cast.DefaultCastOptionsProvider" />
+
+        <activity
+            android:name=".youtube.ReelShortsPlayerActivity"
+            android:theme="@style/Theme.AppCompat"
+            android:screenOrientation="sensor"
+            android:configChanges="orientation|screenSize" />
+
+
+    </application>
+
+</manifest>

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/calendarRoot"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:descendantFocusability="afterDescendants"
+        android:fillViewport="true"
+        tools:context=".media.CalendarActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/calendarHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp">
+
+            <ImageButton
+                android:id="@+id/calendarBack"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:focusable="true"
+                android:padding="10dp"
+                app:srcCompat="@drawable/ic_arrow_left"
+                app:tint="?attr/colorOnSurface"
+                tools:ignore="ContentDescription" />
+
+            <ImageButton
+                android:id="@+id/calendarTodayBtn"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:focusable="true"
+                android:padding="10dp"
+                app:srcCompat="@drawable/ic_round_calendar_today_24"
+                app:tint="?attr/colorOnSurface"
+                android:contentDescription="Go to today" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="6dp">
+
+                <TextView
+                    android:id="@+id/calendarTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_bold"
+                    android:text="@string/release_calendar"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="20sp" />
+
+                <TextView
+                    android:id="@+id/calendarSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:alpha="0.45"
+                    android:fontFamily="@font/poppins"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="11sp"
+                    android:text="@string/calendar_episodes_this_week" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/calendarListToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="List"
+                android:textSize="11sp"
+                android:focusable="true"
+                android:contentDescription="Toggle list only" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/calendarPill"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginHorizontal="12dp"
+            android:clipToOutline="true"
+            android:orientation="horizontal"
+            android:padding="6dp">
+
+            <HorizontalScrollView
+                android:id="@+id/calendarWeekScroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <ani.sanin.ui.GlassStripLayout
+                    android:id="@+id/calendarWeekStrip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content">
+
+                    <LinearLayout
+                        android:id="@+id/calendarWeekRow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </ani.sanin.ui.GlassStripLayout>
+            </HorizontalScrollView>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/calendarDayLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginHorizontal="16dp"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="16sp"
+            android:visibility="gone"
+            tools:text="Monday, September 1" />
+
+        <LinearLayout
+            android:id="@+id/calendarEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:alpha="0.3"
+                android:importantForAccessibility="no"
+                app:srcCompat="@drawable/ic_round_calendar_today_24"
+                app:tint="?attr/colorOnSurface" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:alpha="0.5"
+                android:fontFamily="@font/poppins"
+                android:text="No episodes this day"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <com.google.android.flexbox.FlexboxLayout
+            android:id="@+id/calendarDayEpisodes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="12dp"
+            android:visibility="gone"
+            app:flexWrap="wrap"
+            app:justifyContent="flex_start" />
+
+    </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <FrameLayout
+        android:id="@+id/calendarSpinner"
+        android:layout_width="76.5dp"
+        android:layout_height="76.5dp"
+        android:layout_gravity="center"
+        android:visibility="gone">
+
+        <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+    </FrameLayout>
+</FrameLayout>

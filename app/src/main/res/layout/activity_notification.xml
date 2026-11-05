@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?attr/colorSurface"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/notificationToolbar"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="?attr/colorSurface"
+            android:elevation="4dp">
+
+            <ImageView
+                android:id="@+id/notificationBack"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start|center_vertical"
+                android:layout_marginStart="12dp"
+                android:src="@drawable/ic_round_arrow_back_ios_new_24"
+                app:tint="?attr/colorOnBackground"
+                android:focusable="true"
+                android:nextFocusDown="@id/notificationTabLayout"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:id="@+id/notificationTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="44dp"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins_bold"
+                android:gravity="center|start"
+                android:singleLine="true"
+                android:textAppearance="@style/TextAppearance.Widget.AppCompat.Toolbar.Title"
+                android:textColor="?attr/colorOnBackground"
+                android:textSize="18sp"
+                tools:text="Notifications" />
+        </FrameLayout>
+
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/notificationTabLayout"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:focusable="true"
+            android:nextFocusDown="@id/notificationContent"
+            app:tabContentStart="16dp"
+            app:tabGravity="fill"
+            app:tabMode="scrollable"
+            app:tabPaddingEnd="16dp"
+            app:tabPaddingStart="16dp"
+            app:tabTextAppearance="@style/NavBarText" />
+
+        <FrameLayout
+            android:id="@+id/notificationContent"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:focusable="true"
+            android:descendantFocusability="afterDescendants" />
+
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/notificationNavRail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_clay_pill"
+        android:elevation="10dp"
+        android:translationZ="10dp"
+        android:focusable="true"
+        android:focusableInTouchMode="false"
+        android:descendantFocusability="afterDescendants"
+        android:visibility="gone"
+        android:clipToOutline="true">
+
+        <ani.sanin.ui.components.SnakeNavRailView
+            android:id="@+id/notificationNavRailBg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:focusable="false"
+            android:clickable="false"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:tag="pill_list"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp">
+
+            <ImageButton
+                android:id="@+id/notificationNavUser"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_person_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:focusable="false" />
+
+            <ImageButton
+                android:id="@+id/notificationNavMedia"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_movie_filter_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:focusable="false" />
+
+            <ImageButton
+                android:id="@+id/notificationNavSubs"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_notifications_active_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:focusable="false" />
+
+            <ImageButton
+                android:id="@+id/notificationNavComment"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_comment_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:focusable="false" />
+        </LinearLayout>
+    </FrameLayout>
+
+</FrameLayout>

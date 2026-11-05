@@ -1,0 +1,488 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/animeContainer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="-16dp"
+    android:layout_marginEnd="-16dp"
+    android:orientation="vertical">
+
+    <include layout="@layout/layout_trending" />
+
+    <HorizontalScrollView
+        android:id="@+id/animeSeasons"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="108dp"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:focusable="true"
+        android:nextFocusUp="@+id/trendingViewPager"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:scrollbarSize="0dp">
+
+        <LinearLayout
+            android:id="@+id/animeSeasonsCont"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/animePreviousSeason"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:textAppearance="@style/SeasonChipLabel"
+                app:chipStrokeColor="?attr/colorPrimaryContainer" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/animeThisSeason"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:textAppearance="@style/SeasonChipLabel"
+                app:chipStrokeColor="?attr/colorPrimaryContainer" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/animeNextSeason"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:textAppearance="@style/SeasonChipLabel"
+                app:chipStrokeColor="?attr/colorPrimaryContainer" />
+        </LinearLayout>
+
+    </HorizontalScrollView>
+
+    <LinearLayout
+        android:id="@+id/animeRecentlyContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="11dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            tools:ignore="UseCompoundDrawables">
+
+            <TextView
+                android:id="@+id/animeRecently"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="24dp"
+                android:layout_weight="1"
+                android:fontFamily="@font/poppins_bold"
+                android:padding="8dp"
+                android:text="@string/updated"
+                android:textSize="16sp"
+                android:visibility="invisible"
+                tools:visibility="visible" />
+
+            <ImageView
+                android:id="@+id/animeRecentlyMore"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="12dp"
+                android:fontFamily="@font/poppins_bold"
+                android:padding="8dp"
+                android:src="@drawable/arrow_mark"
+                android:textSize="16sp"
+                android:visibility="gone"
+                tools:ignore="ContentDescription" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="0dp">
+
+            <FrameLayout
+                android:id="@+id/animeUpdatedProgressBar"
+                android:layout_width="76.5dp"
+                android:layout_height="76.5dp"
+                android:layout_gravity="center"
+            >
+
+                <ani.sanin.ui.components.TomoeView
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_gravity="center"
+                app:lottie_rawRes="@raw/tomoe"
+                app:lottie_autoPlay="true"
+                app:lottie_loop="true"
+                app:lottie_speed="1.75" />
+
+            </FrameLayout>
+
+            <ani.sanin.FadingEdgeRecyclerView
+                android:id="@+id/animeUpdatedRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="true"
+                android:nextFocusUp="@+id/animeSeasons"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:requiresFadingEdge="horizontal"
+                tools:itemCount="4"
+                tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_media_compact"
+                tools:orientation="horizontal" />
+
+        </FrameLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/animeMovies"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="8dp"
+            android:text="@string/trending_movies"
+            android:textSize="16sp"
+            android:visibility="invisible"
+            tools:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/animeMoviesMore"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="12dp"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="8dp"
+            android:src="@drawable/arrow_mark"
+            android:textSize="16sp"
+            android:visibility="invisible"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="11dp">
+
+        <FrameLayout
+            android:id="@+id/animeMoviesProgressBar"
+            android:layout_width="76.5dp"
+            android:layout_height="76.5dp"
+            android:layout_gravity="center"
+        >
+
+            <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+
+        </FrameLayout>
+
+            <ani.sanin.FadingEdgeRecyclerView
+                android:id="@+id/animeMoviesRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="true"
+                android:nextFocusUp="@+id/animeUpdatedRecyclerView"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:requiresFadingEdge="horizontal"
+                tools:itemCount="4"
+                tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_media_compact"
+                tools:orientation="horizontal" />
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/animeTopRated"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="8dp"
+            android:text="@string/top_rated"
+            android:textSize="16sp"
+            android:visibility="invisible"
+            tools:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/animeTopRatedMore"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="12dp"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="8dp"
+            android:src="@drawable/arrow_mark"
+            android:textSize="16sp"
+            android:visibility="invisible"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="11dp">
+
+        <FrameLayout
+            android:id="@+id/animeTopRatedProgressBar"
+            android:layout_width="76.5dp"
+            android:layout_height="76.5dp"
+            android:layout_gravity="center"
+        >
+
+            <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+
+        </FrameLayout>
+
+            <ani.sanin.FadingEdgeRecyclerView
+                android:id="@+id/animeTopRatedRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="true"
+                android:nextFocusUp="@+id/animeMoviesRecyclerView"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:requiresFadingEdge="horizontal"
+                tools:itemCount="4"
+                tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_media_compact"
+                tools:orientation="horizontal" />
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/animeMostFav"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="8dp"
+            android:text="@string/most_favourite"
+            android:textSize="16sp"
+            android:visibility="invisible"
+            tools:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/animeMostFavMore"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="12dp"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="8dp"
+            android:src="@drawable/arrow_mark"
+            android:textSize="16sp"
+            android:visibility="invisible"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="11dp">
+
+        <FrameLayout
+            android:id="@+id/animeMostFavProgressBar"
+            android:layout_width="76.5dp"
+            android:layout_height="76.5dp"
+            android:layout_gravity="center"
+        >
+
+            <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+
+        </FrameLayout>
+
+        <ani.sanin.FadingEdgeRecyclerView
+            android:id="@+id/animeMostFavRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:nestedScrollingEnabled="true"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:requiresFadingEdge="horizontal"
+            tools:itemCount="4"
+            tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/item_media_compact"
+            tools:orientation="horizontal" />
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/animeFranchiseHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="11dp"
+        android:orientation="horizontal"
+        android:visibility="invisible">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:padding="8dp"
+                android:text="@string/row_franchise"
+                android:textSize="16sp" />
+
+            <ImageButton
+                android:id="@+id/animeFranchiseSearch"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="4dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/franchise_search"
+                android:focusable="true"
+                android:focusableInTouchMode="false"
+                android:padding="6dp"
+                app:srcCompat="@drawable/ic_round_search_24"
+                app:tint="?attr/colorOnSurface"
+                tools:ignore="ImageContrastCheck" />
+
+        </LinearLayout>
+
+        <ani.sanin.ui.components.TomoeView
+            android:id="@+id/animeFranchiseProgress"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone"
+            tools:ignore="UnusedAttribute" app:lottie_rawRes="@raw/tomoe" app:lottie_autoPlay="true" app:lottie_loop="true" app:lottie_speed="1.75" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/animeFranchiseSortPill"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins"
+            android:minWidth="0dp"
+            android:text="@string/franchise_sort_random"
+            android:textAllCaps="false"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="11sp"
+            app:icon="@drawable/ic_expand_more"
+            app:iconGravity="textEnd"
+            app:iconPadding="4dp"
+            app:iconSize="18dp"
+            tools:ignore="SpUsage" />
+
+        <ImageView
+            android:id="@+id/animeFranchiseSortDirection"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/franchise_sort_direction"
+            android:focusable="true"
+            android:focusableInTouchMode="false"
+            android:padding="3dp"
+            app:srcCompat="@drawable/ic_round_unfold_more_24"
+            app:tint="?attr/colorOnSurface"
+            tools:ignore="ImageContrastCheck" />
+
+    </LinearLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/animeFranchiseSearchBar"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:visibility="gone"
+        app:boxBackgroundColor="@color/bg"
+        app:boxBackgroundMode="outline"
+        app:boxCornerRadiusBottomEnd="28dp"
+        app:boxCornerRadiusBottomStart="28dp"
+        app:boxCornerRadiusTopEnd="28dp"
+        app:boxCornerRadiusTopStart="28dp"
+        app:endIconDrawable="@drawable/ic_round_search_24"
+        app:hintAnimationEnabled="true">
+
+        <AutoCompleteTextView
+            android:id="@+id/animeFranchiseSearchText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_bold"
+            android:hint="@string/franchise_search_hint"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:nextFocusUp="@id/animeFranchiseSearch"
+            android:padding="8dp"
+            android:selectAllOnFocus="true"
+            android:textSize="14sp"
+            tools:ignore="LabelFor,TextContrastCheck" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:id="@+id/animeFranchiseMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:alpha="0.7"
+        android:fontFamily="@font/poppins"
+        android:gravity="center_horizontal"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="13sp"
+        android:visibility="gone"
+        tools:text="No franchise matches that"
+        tools:visibility="visible" />
+
+</LinearLayout>

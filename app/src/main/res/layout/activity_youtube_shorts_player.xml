@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/shortsRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:overScrollMode="never"
+        android:clipToPadding="false" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="170dp"
+        android:layout_gravity="top"
+        android:background="@drawable/bg_reel_top_scrim"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <LinearLayout
+        android:id="@+id/topHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="4dp"
+        android:paddingEnd="68dp"
+        android:paddingTop="38dp"
+        android:paddingBottom="10dp">
+
+        <ImageButton
+            android:id="@+id/closeBtn"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_play_button"
+            android:focusable="true"
+            android:padding="10dp"
+            app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+            app:tint="@android:color/white"
+            android:contentDescription="@string/close" />
+
+        <ImageView
+            android:id="@+id/channelAvatar"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_avatar_ring"
+            android:padding="2dp"
+            android:scaleType="centerCrop"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/videoTitleText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:fontFamily="@font/poppins_bold"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:shadowColor="#B3000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="5" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/playerMute"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|end"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="38dp"
+        android:background="@drawable/bg_play_button"
+        android:focusable="true"
+        android:padding="10dp"
+        app:srcCompat="@drawable/ic_baseline_volume_up_24"
+        app:tint="@android:color/white"
+        android:contentDescription="Mute" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_title_scrim"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="72dp"
+        android:paddingBottom="20dp">
+
+        <LinearLayout
+            android:id="@+id/animePill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_lens_pill"
+            android:paddingStart="11dp"
+            android:paddingEnd="7dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp">
+
+            <TextView
+                android:id="@+id/animeTitleText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins"
+                android:textColor="#E6FFFFFF"
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:includeFontPadding="false" />
+
+            <ImageView
+                android:layout_width="15dp"
+                android:layout_height="15dp"
+                android:layout_marginStart="1dp"
+                app:srcCompat="@drawable/ic_baseline_keyboard_arrow_right_24"
+                app:tint="#B3FFFFFF"
+                android:contentDescription="@null" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/synopsisText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="@font/poppins"
+            android:textColor="#CCFFFFFF"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:shadowColor="#80000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="4" />
+
+        <TextView
+            android:id="@+id/genresText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:fontFamily="@font/poppins"
+            android:textColor="#B3FFFFFF"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:shadowColor="#80000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="4" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/playerTimeCurrent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="38dp"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp" />
+
+            <SeekBar
+                android:id="@+id/playerProgress"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="1000"
+                android:maxHeight="3dp"
+                android:minHeight="3dp"
+                android:progressTint="@android:color/white"
+                android:progressBackgroundTint="#66FFFFFF"
+                android:thumbTint="@android:color/white"
+                android:paddingVertical="0dp" />
+
+            <TextView
+                android:id="@+id/playerTimeDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="38dp"
+                android:gravity="end"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="56dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="8dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageButton
+            android:id="@+id/btnLike"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginBottom="14dp"
+            android:background="@drawable/bg_play_button"
+            android:focusable="true"
+            android:padding="10dp"
+            app:srcCompat="@drawable/ic_baseline_thumb_up_24"
+            app:tint="@android:color/white"
+            android:contentDescription="Like" />
+
+        <ImageButton
+            android:id="@+id/btnDislike"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_play_button"
+            android:focusable="true"
+            android:padding="10dp"
+            app:srcCompat="@drawable/ic_baseline_thumb_down_24"
+            app:tint="@android:color/white"
+            android:contentDescription="Dislike" />
+
+        <ImageButton
+            android:id="@+id/btnComments"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_play_button"
+            android:focusable="true"
+            android:padding="10dp"
+            app:srcCompat="@drawable/ic_round_comment_24"
+            app:tint="@android:color/white"
+            android:contentDescription="@string/comments" />
+
+        <ImageButton
+            android:id="@+id/btnShare"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_play_button"
+            android:focusable="true"
+            android:padding="10dp"
+            app:srcCompat="@drawable/ic_round_share_24"
+            app:tint="@android:color/white"
+            android:contentDescription="@string/share" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/playerPlayPause"
+        android:layout_width="68dp"
+        android:layout_height="68dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_play_button"
+        android:focusable="true"
+        android:padding="16dp"
+        android:visibility="gone"
+        app:srcCompat="@drawable/ic_baseline_pause_24"
+        app:tint="@android:color/white"
+        android:contentDescription="@string/pause" />
+
+    <LinearLayout
+        android:id="@+id/commentsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#EE1A1A1A"
+        android:visibility="gone"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/comments"
+            android:fontFamily="@font/poppins_bold"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/commentsRecycler"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <ani.sanin.ui.components.TomoeView
+        android:id="@+id/playerLoading"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:visibility="gone" app:lottie_rawRes="@raw/tomoe" app:lottie_autoPlay="true" app:lottie_loop="true" app:lottie_speed="1.75" />
+
+</FrameLayout>

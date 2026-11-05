@@ -1,0 +1,435 @@
+package ani.sanin.util
+
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.util.Log
+import androidx.core.content.FileProvider
+import ani.sanin.App
+import ani.sanin.BuildConfig
+import ani.sanin.connections.crashlytics.CrashlyticsInterface
+import ani.sanin.others.CrashActivity
+import ani.sanin.settings.saving.PrefManager
+import ani.sanin.settings.saving.PrefName
+import ani.sanin.snackString
+import ani.sanin.util.Logger.getDeviceAndAppInfo
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
+import java.util.Date
+import java.util.concurrent.Executors
+import kotlin.system.exitProcess
+
+object LogcatBuffer {
+    private const val BUFFER_SIZE = 50000
+    private val buffer = mutableListOf<String>()
+    private val timestamps = mutableListOf<Long>()
+    private val lock = Any()
+    private var readerThread: Thread? = null
+    private var running = false
+    private var started = false
+
+    fun start() {
+        if (started) return
+        started = true
+        running = true
+        readerThread = Thread({
+            try {
+                val pid = android.os.Process.myPid()
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-v", "time", "--pid=$pid")
+                )
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                while (running) {
+                    val line = reader.readLine() ?: break
+                    val ts = parseTimestamp(line)
+                    synchronized(lock) {
+                        buffer.add(line)
+                        timestamps.add(ts)
+                        if (buffer.size > BUFFER_SIZE) {
+                            buffer.removeAt(0)
+                            timestamps.removeAt(0)
+                        }
+                    }
+                }
+            } catch (_: Exception) { }
+        }, "LogcatBuffer").apply { isDaemon = true; start() }
+    }
+
+    fun clear() {
+        synchronized(lock) {
+            buffer.clear()
+            timestamps.clear()
+        }
+    }
+
+    fun stop() {
+        running = false
+        readerThread?.interrupt()
+        readerThread = null
+    }
+
+    fun getLastMinutes(minutes: Int): String {
+        val cutoff = System.currentTimeMillis() - minutes * 60_000L
+        synchronized(lock) {
+            if (buffer.isEmpty()) return try {
+                readLogcatDirect(minutes)
+            } catch (_: Exception) {
+                "No logs available."
+            }
+            val sb = StringBuilder()
+            for (i in buffer.indices) {
+                if (timestamps[i] >= cutoff) {
+                    sb.appendLine(buffer[i])
+                }
+            }
+            return sb.toString().ifEmpty { "No logs found in the last $minutes minutes." }
+        }
+    }
+
+    private fun parseTimestamp(line: String): Long {
+        if (line.length < 15) return System.currentTimeMillis()
+        return try {
+            val month = line.substring(0, 2).toInt()
+            val day = line.substring(3, 5).toInt()
+            val hour = line.substring(6, 8).toInt()
+            val min = line.substring(9, 11).toInt()
+            val sec = line.substring(12, 14).toInt()
+            val cal = java.util.Calendar.getInstance().apply {
+                timeInMillis = System.currentTimeMillis()
+                set(java.util.Calendar.MONTH, month - 1)
+                set(java.util.Calendar.DAY_OF_MONTH, day)
+                set(java.util.Calendar.HOUR_OF_DAY, hour)
+                set(java.util.Calendar.MINUTE, min)
+                set(java.util.Calendar.SECOND, sec)
+            }
+            cal.timeInMillis
+        } catch (_: Exception) {
+            System.currentTimeMillis()
+        }
+    }
+}
+
+private fun readLogcatDirect(minutes: Int): String {
+    return try {
+        val pid = android.os.Process.myPid()
+        val process = Runtime.getRuntime().exec(
+            arrayOf("logcat", "-d", "-v", "time", "--pid=$pid")
+        )
+        val reader = BufferedReader(InputStreamReader(process.inputStream))
+        val allLines = reader.readLines()
+        reader.close()
+        process.destroy()
+
+        val cutoff = System.currentTimeMillis() - minutes * 60_000L
+        val recent = allLines.filter { line ->
+            try {
+                if (line.length < 15) return@filter false
+                val month = line.substring(0, 2).toInt()
+                val day = line.substring(3, 5).toInt()
+                val hour = line.substring(6, 8).toInt()
+                val min = line.substring(9, 11).toInt()
+                val sec = line.substring(12, 14).toInt()
+                val cal = java.util.Calendar.getInstance().apply {
+                    timeInMillis = System.currentTimeMillis()
+                    set(java.util.Calendar.MONTH, month - 1)
+                    set(java.util.Calendar.DAY_OF_MONTH, day)
+                    set(java.util.Calendar.HOUR_OF_DAY, hour)
+                    set(java.util.Calendar.MINUTE, min)
+                    set(java.util.Calendar.SECOND, sec)
+                }
+                cal.timeInMillis >= cutoff
+            } catch (_: Exception) {
+                true
+            }
+        }
+        recent.joinToString("\n").ifEmpty { "No logs found in the last $minutes minutes." }
+    } catch (e: Exception) {
+        "Failed to read logcat: ${e.message}"
+    }
+}
+
+object Logger {
+    var file: File? = null
+    private val loggerExecutor = Executors.newSingleThreadExecutor()
+
+    fun init(context: Context) {
+        try {
+            if (!PrefManager.getVal<Boolean>(PrefName.LogToFile) || file != null) return
+            file = File(context.getExternalFilesDir(null), "log.txt")
+            if (file?.exists() == true) {
+                if (file!!.length() > 1024 * 1024 * 5) {
+                    file?.delete()
+                    file?.createNewFile()
+                }
+            } else {
+                file?.createNewFile()
+            }
+            file?.appendText("log started\n")
+            file?.appendText(getDeviceAndAppInfo(context))
+
+        } catch (e: Exception) {
+            Injekt.get<CrashlyticsInterface>().logException(e)
+            file = null
+        }
+    }
+
+    fun log(message: String) {
+        
+        
+        
+        val trace = if (file != null) Thread.currentThread().stackTrace.getOrNull(3) else null
+        loggerExecutor.execute {
+            if (file == null) Log.i("Internal Logger", message)
+            else {
+                val className = trace?.className
+                val methodName = trace?.methodName
+                val lineNumber = trace?.lineNumber
+                file?.appendText("date/time: ${Date()} | $className.$methodName($lineNumber)\n")
+                file?.appendText("message: $message\n-\n")
+            }
+        }
+    }
+
+    fun log(level: Int, message: String, tag: String = "Internal Logger") {
+        val trace = if (file != null) Thread.currentThread().stackTrace.getOrNull(3) else null
+        loggerExecutor.execute {
+            if (file == null) Log.println(level, tag, message)
+            else {
+                val className = trace?.className
+                val methodName = trace?.methodName
+                val lineNumber = trace?.lineNumber
+                file?.appendText("date/time: ${Date()} | $className.$methodName($lineNumber)\n")
+                file?.appendText("message: $message\n-\n")
+            }
+        }
+    }
+
+    fun log(e: Exception) {
+        loggerExecutor.execute {
+            if (file == null) e.printStackTrace() else {
+                file?.appendText("---------------------------Exception---------------------------\n")
+                file?.appendText("date/time: ${Date()} |  ${e.message}\n")
+                file?.appendText("trace: ${e.stackTraceToString()}\n")
+            }
+        }
+    }
+
+    fun log(e: Throwable) {
+        loggerExecutor.execute {
+            if (file == null) e.printStackTrace() else {
+                file?.appendText("---------------------------Exception---------------------------\n")
+                file?.appendText("date/time: ${Date()} |  ${e.message}\n")
+                file?.appendText("trace: ${e.stackTraceToString()}\n")
+            }
+        }
+    }
+
+    fun uncaughtException(t: Thread, e: Throwable) {
+        loggerExecutor.execute {
+            if (file == null) e.printStackTrace() else {
+                file?.appendText("---------------------------Uncaught Exception---------------------------\n")
+                file?.appendText("thread: ${t.name}\n")
+                file?.appendText("date/time: ${Date()} |  ${e.message}\n")
+                file?.appendText("trace: ${e.stackTraceToString()}\n")
+            }
+        }
+    }
+
+    fun shareLog(context: Context) {
+        if (file != null) {
+            val shareIntent = Intent(Intent.ACTION_SEND)
+            shareIntent.type = "text/plain"
+            shareIntent.putExtra(
+                Intent.EXTRA_STREAM,
+                FileProvider.getUriForFile(
+                    context,
+                    "${BuildConfig.APPLICATION_ID}.provider",
+                    file!!
+                )
+            )
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Log file")
+            shareIntent.putExtra(Intent.EXTRA_TEXT, "Log file")
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            context.startActivity(Intent.createChooser(shareIntent, "Share log file"))
+            return
+        }
+
+        if (!PrefManager.getVal<Boolean>(PrefName.LoggingEnabled)) {
+            snackString("Enable logging first")
+            return
+        }
+        val logs = try {
+            val recent = readLogcatLastMinutes(15)
+            if (recent.isBlank() || recent.startsWith("No logs")) readLogcat(500) else recent
+        } catch (e: Exception) {
+            "Failed to read logs: ${e.message}"
+        }
+        if (logs.isBlank() || logs.startsWith("Failed to read")) {
+            snackString("No log file found")
+            return
+        }
+        shareTextAsFile(context, logs, "General logs")
+    }
+
+    fun shareTextAsFile(context: Context, text: String, subject: String) {
+        val dir = File(context.cacheDir, "shared_logs").apply { mkdirs() }
+        val file = File(dir, "sanin_logs_${System.currentTimeMillis()}.txt")
+        try {
+            file.writeText(text)
+            val uri = FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.provider", file)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+                putExtra(Intent.EXTRA_TEXT, subject)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Share logs"))
+        } catch (e: Exception) {
+
+            val snippet = text.takeLast(100_000)
+            val fallback = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+                putExtra(Intent.EXTRA_TEXT, snippet)
+            }
+            context.startActivity(Intent.createChooser(fallback, "Share logs"))
+        }
+    }
+
+    fun clearLog() {
+        file?.delete()
+        file = null
+        LogcatBuffer.clear()
+    }
+
+    fun getDeviceAndAppInfo(context: Context): String {
+        val pm = context.packageManager
+        val pkgInfo = pm.getPackageInfo(context.packageName, 0)
+        val versionName = pkgInfo.versionName
+        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pkgInfo.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            pkgInfo.versionCode
+        }
+
+        return buildString {
+            append("Date/time: ${Date()}\n")
+            append("Device: ${Build.MODEL}\n")
+            append("OS version: ${Build.VERSION.RELEASE}\n")
+            append("App version: $versionName\n")
+            append("App version code: $versionCode\n")
+            append("SDK version: ${Build.VERSION.SDK_INT}\n")
+            append("Manufacturer: ${Build.MANUFACTURER}\n")
+            append("Brand: ${Build.BRAND}\n")
+            append("Product: ${Build.PRODUCT}\n")
+            append("Device: ${Build.DEVICE}\n")
+            append("Hardware: ${Build.HARDWARE}\n")
+            append("Host: ${Build.HOST}\n")
+            append("ID: ${Build.ID}\n")
+            append("Type: ${Build.TYPE}\n")
+            append("User: ${Build.USER}\n")
+            append("Tags: ${Build.TAGS}\n")
+            append("Time: ${Build.TIME}\n")
+            append("Radio: ${Build.getRadioVersion()}\n")
+            append("Bootloader: ${Build.BOOTLOADER}\n")
+            append("Board: ${Build.BOARD}\n")
+            append("Fingerprint: ${Build.FINGERPRINT}\n")
+            append("Supported ABIs: ${Build.SUPPORTED_ABIS.joinToString()}\n")
+            append("Supported 32 bit ABIs: ${Build.SUPPORTED_32_BIT_ABIS.joinToString()}\n")
+            append("Supported 64 bit ABIs: ${Build.SUPPORTED_64_BIT_ABIS.joinToString()}\n")
+            append("Is emulator: ${Build.FINGERPRINT.contains("generic")}\n")
+            append("--------------------------------\n")
+        }
+    }
+
+    fun readLogcatLastMinutes(minutes: Int = 2): String {
+        return LogcatBuffer.getLastMinutes(minutes)
+    }
+
+    fun readLogcat(maxLines: Int = 500): String {
+        return try {
+            val pid = android.os.Process.myPid()
+
+            val process = Runtime.getRuntime().exec(
+                arrayOf("logcat", "-d", "--pid=$pid", "-v", "time")
+            )
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val lines = reader.readLines()
+            reader.close()
+            process.destroy()
+
+            lines.takeLast(maxLines).joinToString("\n")
+        } catch (e: Exception) {
+            "Failed to read logcat: ${e.message}"
+        }
+    }
+}
+
+class FinalExceptionHandler : Thread.UncaughtExceptionHandler {
+    private val defaultUEH = Thread.getDefaultUncaughtExceptionHandler()
+    private val MAX_STACK_TRACE_SIZE = 131071
+
+    override fun uncaughtException(t: Thread, e: Throwable) {
+        val stackTraceString = Log.getStackTraceString(e)
+        try {
+            Injekt.get<CrashlyticsInterface>().logException(e)
+        } catch (_: Exception) { }
+
+        if (App.instance?.applicationContext != null) {
+            App.instance?.applicationContext?.let { ctx ->
+                val lastLoadedActivity = App.instance?.mFTActivityLifecycleCallbacks?.lastActivity
+
+                val report = StringBuilder()
+                report.append(getDeviceAndAppInfo(ctx))
+                report.append("Thread: ${t.name}\n")
+                report.append("Activity: ${lastLoadedActivity}\n")
+                report.append("Exception: ${e.message}\n")
+                report.append("Stack trace:\n")
+                report.append(stackTraceString)
+                val reportString = report.toString()
+                try {
+                    Logger.uncaughtException(t, Error(reportString))
+                } catch (_: Exception) { }
+
+                val logcatString = try { Logger.readLogcat() } catch (_: Exception) { "Failed to read logcat" }
+
+                val intent = Intent(ctx, CrashActivity::class.java)
+
+                val trimmedReport = if (reportString.length > MAX_STACK_TRACE_SIZE)
+                    reportString.substring(0, MAX_STACK_TRACE_SIZE)
+                else reportString
+
+                val trimmedLogcat = if (logcatString.length > MAX_STACK_TRACE_SIZE)
+                    logcatString.substring(logcatString.length - MAX_STACK_TRACE_SIZE)
+                else logcatString
+
+                intent.putExtra("stackTrace", trimmedReport)
+                intent.putExtra("logcat", trimmedLogcat)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                try {
+                    ctx.startActivity(intent)
+                } catch (_: Exception) { }
+
+                try {
+                    Thread.sleep(500)
+                } catch (_: InterruptedException) { }
+            }
+        } else {
+            try {
+                Logger.log("App context is null")
+                Logger.uncaughtException(t, e)
+            } catch (_: Exception) { }
+        }
+
+        try {
+            defaultUEH?.uncaughtException(t, e)
+        } catch (_: Exception) { }
+        android.os.Process.killProcess(android.os.Process.myPid())
+        exitProcess(10)
+    }
+}

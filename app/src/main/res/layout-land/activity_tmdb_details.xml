@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="false">
+
+    <ImageView
+        android:id="@+id/tmdbDetailBackdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:importantForAccessibility="no"
+        tools:ignore="ContentDescription" />
+
+    <View
+        android:id="@+id/tmdbDetailGradient"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/tmdb_detail_gradient" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/tmdbDetailBackCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:focusable="true"
+        app:cardBackgroundColor="@color/nav_bg_inv"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp">
+
+        <ImageButton
+            android:id="@+id/tmdbDetailBack"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@color/nav_bg_inv"
+            android:focusable="true"
+            android:padding="14dp"
+            app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+            tools:ignore="ContentDescription" />
+    </androidx.cardview.widget.CardView>
+
+    <FrameLayout
+        android:id="@+id/tmdbDetailFragmentContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <FrameLayout
+        android:id="@+id/tmdbCommentsPlaceholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tmdbCommentsComingSoon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:gravity="center"
+                android:text="@string/coming_soon"
+                android:textColor="@color/bg_white"
+                android:textSize="22sp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/tmdbNavPills"
+        android:layout_width="44dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="8dp"
+        android:elevation="10dp"
+        android:translationZ="10dp"
+        android:focusable="true"
+        android:focusableInTouchMode="false"
+        android:descendantFocusability="afterDescendants"
+        android:visibility="gone"
+        android:clipToOutline="false">
+
+        <ani.sanin.ui.components.SnakeNavRailView
+            android:id="@+id/tmdbNavPillBg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:focusable="false"
+            android:clickable="false"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:background="@drawable/bg_clay_pill"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp">
+
+            <ImageButton
+                android:id="@+id/tmdbNavPillInfo"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_info_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/info"
+                android:focusable="true"
+                android:nextFocusUp="@id/tmdbNavPillComments"
+                android:nextFocusDown="@id/tmdbNavPillWatch" />
+
+            <ImageButton
+                android:id="@+id/tmdbNavPillWatch"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_movie_filter_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/watch"
+                android:focusable="true"
+                android:nextFocusUp="@id/tmdbNavPillInfo"
+                android:nextFocusDown="@id/tmdbNavPillComments" />
+
+            <ImageButton
+                android:id="@+id/tmdbNavPillComments"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_comment_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/comments"
+                android:focusable="true"
+                android:nextFocusUp="@id/tmdbNavPillWatch"
+                android:nextFocusDown="@id/tmdbNavPillInfo" />
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

@@ -1,0 +1,263 @@
+[versions]
+kotlin = "2.4.21"
+ksp = "2.3.12"
+agp = "9.4.1"
+serialization = "1.12.0"
+firebase-bom = "35.1.0"
+glide = "5.0.9"
+exo = "1.11.1"
+nanohttpd = "2.3.1"
+previewseekbarVer = "1.1.1.0"
+markwon = "4.6.2"
+groupie = "2.10.1"
+ass = "0.4.0"
+vad = "2.0.10"
+fuzzy = "1.4.0"
+compose-bom = "2025.06.00"
+androidsvg = "1.4"
+jackson = "2.13.1"
+atomicfu = "0.33.0"
+datetime = "0.8.0"
+kotlinx-io = "0.9.1"
+ksoup = "0.2.6"
+ktor = "3.5.0"
+cryptography = "0.6.0"
+newpipe = "v0.26.3"
+rhino = "1.8.1"
+
+coil = "3.3.0"
+biometric = "1.1.0"
+colorpicker = "6b46b49"
+constraintlayout = "2.2.1"
+coreKtx = "1.19.1"
+lifecycleKtx = "2.8.7"
+navigationKtx = "2.8.4"
+workRuntimeKtx = "2.12.0"
+instancioCore = "5.3.0"
+animeDb = "1.0.0"
+overlappingpanels = "0.1.5"
+
+[libraries]
+
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+
+androidx-core = "androidx.core:core-ktx:1.19.1"
+androidx-appcompat = "androidx.appcompat:appcompat:1.8.0"
+androidx-activity = "androidx.activity:activity-ktx:1.13.0"
+androidx-fragment = "androidx.fragment:fragment-ktx:1.9.1"
+androidx-browser = "androidx.browser:browser:1.10.0"
+androidx-swipe = "androidx.swiperefreshlayout:swiperefreshlayout:1.2.0"
+androidx-legacy = "androidx.legacy:legacy-support-v4:1.0.0"
+
+androidx-work = "androidx.work:work-runtime-ktx:2.12.0"
+androidx-preference = "androidx.preference:preference-ktx:1.2.1"
+androidx-webkit = "androidx.webkit:webkit:1.18.0"
+androidx-biometric = "androidx.biometric:biometric:1.1.0"
+mediarouter = "androidx.mediarouter:mediarouter:1.8.1"
+paging = "androidx.paging:paging-runtime-ktx:3.5.3"
+
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk7", version.ref = "kotlin" }
+
+gson = "com.google.code.gson:gson:2.14.0"
+nicehttp = "com.github.Blatzar:NiceHttp:0.4.18"
+nanohttpd = { module = "org.nanohttpd:nanohttpd", version.ref = "nanohttpd" }
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
+kotlinx-atomicfu = { module = "org.jetbrains.kotlinx:atomicfu", version.ref = "atomicfu" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
+kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
+ksoup = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoup" }
+ktor-http = { module = "io.ktor:ktor-http", version.ref = "ktor" }
+cryptography-core = { module = "dev.whyoleg.cryptography:cryptography-core", version.ref = "cryptography" }
+cryptography-provider-optimal = { module = "dev.whyoleg.cryptography:cryptography-provider-optimal", version.ref = "cryptography" }
+newpipeextractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version.ref = "newpipe" }
+rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
+
+serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+serialization-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version.ref = "serialization" }
+serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
+storage = "com.anggrayudi:storage:1.5.5"
+jsoup = "org.jsoup:jsoup:1.18.1"
+quickjs = "app.cash.quickjs:quickjs-android:0.9.2"
+natsort = "com.github.gpanther:java-nat-sort:natural-comparator-1.1"
+unifile = "com.github.tachiyomiorg:unifile:17bec43"
+libarchive = "me.zhanghai.android.libarchive:library:1.1.4"
+xmlutil-core = "io.github.pdvrieze.xmlutil:core-android:0.90.3"
+xmlutil-serialization = "io.github.pdvrieze.xmlutil:serialization-android:0.90.3"
+
+glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
+glide-ksp = { module = "com.github.bumptech.glide:ksp", version.ref = "glide" }
+glide-okhttp = { module = "com.github.bumptech.glide:okhttp3-integration", version.ref = "glide" }
+glide-transform = "jp.wasabeef:glide-transformations:4.3.0"
+androidsvg-aar = { module = "com.caverock:androidsvg-aar", version.ref = "androidsvg" }
+
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "exo" }
+media3-extractor = { module = "androidx.media3:media3-extractor", version.ref = "exo" }
+media3-ui = { module = "androidx.media3:media3-ui", version.ref = "exo" }
+media3-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "exo" }
+media3-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = "exo" }
+media3-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "exo" }
+media3-session = { module = "androidx.media3:media3-session", version.ref = "exo" }
+media3-cast = { module = "androidx.media3:media3-cast", version.ref = "exo" }
+
+previewseekbar-media3 = { module = "com.github.rubensousa:previewseekbar-media3", version.ref = "previewseekbarVer" }
+ass-media = { module = "io.github.peerless2012:ass-media", version.ref = "ass" }
+ass-kt = { module = "io.github.peerless2012:ass-kt", version.ref = "ass" }
+vad-webrtc = { module = "com.github.gkonovalov.android-vad:webrtc", version.ref = "vad" }
+
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-runtime = { module = "androidx.compose.runtime:runtime" }
+compose-activity = { module = "androidx.activity:activity-compose", version = "1.10.1" }
+
+material = "com.google.android.material:material:1.12.0"
+flexbox = "com.google.android.flexbox:flexbox:3.0.0"
+kenburns = "com.flaviofaria:kenburnsview:1.0.7"
+subsampling = "com.davemorrissey.labs:subsampling-scale-image-view-androidx:3.10.0"
+gesture = "com.alexvasilkov:gesture-views:2.8.3"
+ebook = "com.github.VipulOG:ebook-reader:0.1.6"
+dialogs = "com.github.eltos:simpledialogfragments:v3.7"
+charts = "com.github.AAChartModel:AAChartCore-Kotlin:7.2.3"
+lottie = "com.airbnb.android:lottie:6.6.6"
+qrcode-kotlin = "io.github.g0dkar:qrcode-kotlin-android:4.5.0"
+
+markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
+markwon-editor = { module = "io.noties.markwon:editor", version.ref = "markwon" }
+markwon-strike = { module = "io.noties.markwon:ext-strikethrough", version.ref = "markwon" }
+markwon-tables = { module = "io.noties.markwon:ext-tables", version.ref = "markwon" }
+markwon-tasklist = { module = "io.noties.markwon:ext-tasklist", version.ref = "markwon" }
+markwon-html = { module = "io.noties.markwon:html", version.ref = "markwon" }
+markwon-glide = { module = "io.noties.markwon:image-glide", version.ref = "markwon" }
+
+groupie = { module = "com.github.lisawray.groupie:groupie", version.ref = "groupie" }
+groupie-vb = { module = "com.github.lisawray.groupie:groupie-viewbinding", version.ref = "groupie" }
+shimmer = { module = "com.facebook.shimmer:shimmer", version = "0.5.0" }
+overlappingpanels = { module = "com.github.discord:OverlappingPanels", version.ref = "overlappingpanels" }
+
+rxjava = "io.reactivex:rxjava:1.3.8"
+rxandroid = "io.reactivex:rxandroid:1.2.1"
+rxrelay = "com.jakewharton.rxrelay:rxrelay:1.2.0"
+logcat = "com.squareup.logcat:logcat:0.1"
+injekt = "uy.kohesive.injekt:injekt-core:1.16.+"
+
+
+
+okhttp = "com.squareup.okhttp3:okhttp:5.4.0"
+okhttp-logging = "com.squareup.okhttp3:logging-interceptor:5.4.0"
+okhttp-brotli = "com.squareup.okhttp3:okhttp-brotli:5.4.0"
+okhttp-doh = "com.squareup.okhttp3:okhttp-dnsoverhttps:5.4.0"
+okhttp-zstd = "com.squareup.okhttp3:okhttp-zstd:5.4.0"
+okio = "com.squareup.okio:okio:3.9.1"
+
+anime-db = { module = "com.github.recloudstream:anime-db", version.ref = "animeDb" }
+coil3 = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+colorpicker = { module = "com.github.recloudstream:color-picker-android", version.ref = "colorpicker" }
+constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
+core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+instancio-core = { group = "org.instancio", name = "instancio-core", version.ref = "instancioCore" }
+lifecycle-livedata-ktx = { module = "androidx.lifecycle:lifecycle-livedata-ktx", version.ref = "lifecycleKtx" }
+lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycleKtx" }
+media3-common = { module = "androidx.media3:media3-common", version.ref = "exo" }
+media3-container = { module = "androidx.media3:media3-container", version.ref = "exo" }
+navigation-fragment-ktx = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "navigationKtx" }
+navigation-ui-ktx = { module = "androidx.navigation:navigation-ui-ktx", version.ref = "navigationKtx" }
+work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
+
+annotation = { module = "androidx.annotation:annotation", version = "1.10.0" }
+juniversalchardet = { module = "com.github.albfernandez:juniversalchardet", version = "2.5.0" }
+kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version = "0.4.0" }
+palette-ktx = { module = "androidx.palette:palette-ktx", version = "1.0.0" }
+preference-ktx = { module = "androidx.preference:preference-ktx", version = "1.2.1" }
+activity-ktx = { module = "androidx.activity:activity-ktx", version = "1.13.0" }
+fragment-ktx = { module = "androidx.fragment:fragment-ktx", version = "1.9.1" }
+desugar_jdk_libs_nio = { module = "com.android.tools:desugar_jdk_libs_nio", version = "2.1.5" }
+safefile = { module = "com.github.LagradOst:SafeFile", version = "0.0.8" }
+appcompat = { module = "androidx.appcompat:appcompat", version = "1.8.0" }
+tvprovider = { module = "androidx.tvprovider:tvprovider", version = "1.1.0" }
+json = { module = "org.json:json", version = "20260522" }
+
+
+fuzzy = { module = "me.xdrop:fuzzywuzzy", version.ref = "fuzzy" }
+
+[plugins]
+android = { id = "com.android.application", version.ref = "agp" }
+serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+google = { id = "com.google.gms.google-services", version = "4.5.0" }
+crashlytics = { id = "com.google.firebase.crashlytics", version = "3.0.8" }
+compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+
+
+
+[bundles]
+
+firebase = ["firebase-crashlytics", "firebase-messaging"]
+
+androidx = [
+    "androidx-core",
+    "androidx-appcompat",
+    "androidx-activity",
+    "androidx-fragment",
+    "androidx-browser",
+    "androidx-swipe",
+    "androidx-legacy",
+    "androidx-work",
+    "androidx-preference",
+    "androidx-biometric",
+    "paging"
+]
+
+glide = ["glide", "glide-okhttp", "glide-transform"]
+
+media3 = [
+    "media3-exoplayer",
+    "media3-extractor",
+    "media3-ui",
+    "media3-hls",
+    "media3-dash",
+    "media3-okhttp",
+    "media3-session",
+    "media3-cast"
+    
+    
+]
+
+subtitles = ["ass-media", "ass-kt"]
+
+markwon = [
+    "markwon-core",
+    "markwon-editor",
+    "markwon-strike",
+    "markwon-tables",
+    "markwon-tasklist",
+    "markwon-html",
+    "markwon-glide"
+]
+
+groupie = ["groupie", "groupie-vb"]
+
+okhttp = ["okhttp", "okhttp-logging", "okhttp-brotli", "okhttp-doh", "okhttp-zstd"]
+
+rx = ["rxjava", "rxandroid", "rxrelay"]
+
+misc = [
+    "gson",
+    "nicehttp",
+    "serialization-json",
+    "serialization-json-okio",
+    "serialization-protobuf",
+    "storage",
+    "jsoup",
+    "quickjs",
+    "natsort",
+    "unifile",
+    "logcat",
+    "injekt"
+]
+

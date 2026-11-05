@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:orientation="vertical"
+    tools:context=".cloudstream.CloudStreamRepoDetailActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="16dp">
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/nav_bg_inv"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp">
+
+            <ImageButton
+                android:id="@+id/csRepoBack"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@color/nav_bg_inv"
+                android:focusable="true"
+                android:padding="16dp"
+                app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
+        </androidx.cardview.widget.CardView>
+
+        <ImageView
+            android:id="@+id/csRepoIcon"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="12dp"
+            android:importantForAccessibility="no"
+            tools:ignore="ContentDescription" />
+
+        <TextView
+            android:id="@+id/csRepoTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/poppins_bold"
+            android:maxLines="2"
+            android:textSize="20sp"
+            android:textColor="?attr/colorOnSurface"
+            tools:text="Zangetsu Providers" />
+
+        <ImageButton
+            android:id="@+id/csRepoCopy"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:focusable="true"
+            android:padding="6dp"
+            app:srcCompat="@drawable/format_link_24"
+            app:tint="?attr/colorOnBackground"
+            tools:ignore="ContentDescription" />
+
+        <ImageButton
+            android:id="@+id/csRepoDelete"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:focusable="true"
+            android:padding="6dp"
+            app:srcCompat="@drawable/ic_delete"
+            app:tint="?attr/colorOnBackground"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:id="@+id/csRepoFilterChip"
+            android:layout_width="36dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_round_filter_alt_24"
+            android:tint="?attr/colorOnSurface"
+            android:scaleType="centerInside"
+            android:focusable="true"
+            android:contentDescription="Filter" />
+
+        <ImageView
+            android:id="@+id/csRepoLangChip"
+            android:layout_width="36dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="10dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_round_translate_24"
+            android:tint="?attr/colorOnSurface"
+            android:scaleType="centerInside"
+            android:focusable="true"
+            android:contentDescription="Language" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <ImageView
+            android:id="@+id/csRepoSearchIcon"
+            android:layout_width="36dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="10dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_round_search_24"
+            android:tint="?attr/colorOnSurface"
+            android:scaleType="centerInside"
+            android:focusable="true"
+            android:nextFocusDown="@id/csRepoRecyclerView"
+            android:contentDescription="@string/search" />
+    </LinearLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/csRepoSearchView"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:nextFocusUp="@id/csRepoSearchIcon"
+        android:nextFocusDown="@id/csRepoRecyclerView"
+        android:visibility="gone"
+        app:boxBackgroundColor="@color/bg"
+        app:boxBackgroundMode="outline"
+        app:boxCornerRadiusBottomEnd="28dp"
+        app:boxCornerRadiusBottomStart="28dp"
+        app:boxCornerRadiusTopEnd="28dp"
+        app:boxCornerRadiusTopStart="28dp"
+        app:hintAnimationEnabled="true">
+
+        <AutoCompleteTextView
+            android:id="@+id/csRepoSearchViewText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_bold"
+            android:hint="@string/search"
+            android:imeOptions="actionSearch"
+            android:inputType="textPersonName"
+            android:nextFocusUp="@id/csRepoSearchIcon"
+            android:nextFocusDown="@id/csRepoRecyclerView"
+            android:padding="8dp"
+            android:selectAllOnFocus="true"
+            android:textSize="14sp"
+            tools:ignore="LabelFor,TextContrastCheck" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <ani.sanin.ui.components.TomoeView
+        android:id="@+id/csRepoProgressBar"
+        android:layout_width="76.5dp"
+        android:layout_height="76.5dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="48dp" app:lottie_rawRes="@raw/tomoe" app:lottie_autoPlay="true" app:lottie_loop="true" app:lottie_speed="1.75" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/csRepoRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginHorizontal="24dp"
+        android:clipToPadding="false"
+        android:focusable="true"
+        android:paddingBottom="64dp" />
+
+    <TextView
+        android:id="@+id/csRepoEmptyText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:gravity="center"
+        android:padding="32dp"
+        android:textSize="15sp"
+        android:textColor="?attr/colorOnSurface"
+        android:visibility="gone"
+        tools:text="No extensions" />
+</LinearLayout>

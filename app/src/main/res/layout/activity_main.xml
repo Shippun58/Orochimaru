@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mainDrawer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <FrameLayout
+        android:id="@+id/bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <FrameLayout
+            android:id="@+id/mainProgressBar"
+            android:layout_width="76.5dp"
+            android:layout_height="76.5dp"
+            android:layout_gravity="center"
+        >
+
+            <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/fragmentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:fitsSystemWindows="true">
+
+            <LinearLayout
+                android:id="@+id/mainModeContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/mainModeCard"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:backgroundTint="@color/nav_bg_inv"
+                    android:focusable="true"
+                    app:cardCornerRadius="22dp">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="14dp">
+
+                        <TextView
+                            android:id="@+id/mainModeText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/poppins_semi_bold"
+                            android:text="Anime"
+                            android:textColor="@color/bg_white"
+                            android:textSize="14sp" />
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_marginStart="8dp"
+                            android:importantForAccessibility="no"
+                            app:srcCompat="@drawable/ic_round_keyboard_arrow_down_24"
+                            app:tint="@color/bg_white" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/mainAvatarContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginEnd="16dp"
+                android:visibility="gone">
+
+                <FrameLayout
+                    android:id="@+id/mainCalendarContainer"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:focusable="true"
+                    android:nextFocusDown="@id/homeBannerCarousel">
+
+                    <ImageView
+                        android:id="@+id/mainCalendarIcon"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_round_calendar_today_24"
+                        app:tint="?attr/colorOnSurface"
+                        tools:ignore="ContentDescription" />
+                </FrameLayout>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/mainUserAvatarContainer"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="52dp"
+                    android:backgroundTint="@color/nav_bg_inv"
+                    android:focusable="true"
+                    android:nextFocusDown="@id/homeBannerCarousel"
+                    app:cardCornerRadius="22dp">
+
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/mainUserAvatar"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/ic_round_person_24"
+                        tools:ignore="ContentDescription" />
+                </com.google.android.material.card.MaterialCardView>
+
+                <TextView
+                    android:id="@+id/mainNotificationCount"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_gravity="end|bottom"
+                    android:background="@drawable/notification_circle"
+                    android:fontFamily="@font/poppins_semi_bold"
+                    android:gravity="center"
+                    android:textColor="#F3F3F3"
+                    android:textSize="10sp"
+                    android:visibility="gone"
+                    android:translationX="-28dp"
+                    tools:ignore="SmallSp"
+                    tools:text="1"
+                    tools:visibility="visible" />
+            </FrameLayout>
+        </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/homeNavRail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_clay_pill"
+        android:elevation="10dp"
+        android:translationZ="10dp"
+        android:focusable="true"
+        android:descendantFocusability="afterDescendants"
+        android:visibility="gone"
+        android:clipToOutline="true">
+
+        <ani.sanin.ui.components.SnakeNavRailView
+            android:id="@+id/homeNavRailBg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:focusable="false"
+            android:clickable="false"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:id="@+id/homeNavRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <LinearLayout
+                android:tag="pill_list"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp">
+
+                <ImageButton
+                    android:id="@+id/homeNavHome"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_round_home_24"
+                    android:scaleType="fitCenter"
+                    android:background="@android:color/transparent"
+                    android:focusable="false" />
+
+                <ImageButton
+                    android:id="@+id/homeNavExplore"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_round_media_24"
+                    android:scaleType="fitCenter"
+                    android:background="@android:color/transparent"
+                    android:focusable="false" />
+
+                <ImageButton
+                    android:id="@+id/homeNavDiscovery"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_compass_24"
+                    android:scaleType="fitCenter"
+                    android:background="@android:color/transparent"
+                    android:focusable="false" />
+
+                <ImageButton
+                    android:id="@+id/homeNavLibrary"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_library_siren_24"
+                    android:scaleType="fitCenter"
+                    android:background="@android:color/transparent"
+                    android:focusable="false" />
+            </LinearLayout>
+        </LinearLayout>
+        </FrameLayout>
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/incognito"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="start|top"
+            android:layout_margin="16dp"
+            android:translationZ="7dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/bg_opp"
+            app:cardCornerRadius="16dp">
+
+            <androidx.constraintlayout.utils.widget.ImageFilterView
+                android:id="@+id/incognitoImage"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_incognito_24"
+                app:tint="@color/bg"
+                tools:ignore="ContentDescription" />
+        </androidx.cardview.widget.CardView>
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/rescueModeIcon"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="start|top"
+            android:layout_margin="16dp"
+            android:translationZ="7dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="?attr/colorPrimaryContainer"
+            app:cardCornerRadius="16dp">
+
+            <androidx.constraintlayout.utils.widget.ImageFilterView
+                android:id="@+id/rescueModeImage"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_myanimelist"
+                app:tint="?attr/colorOnPrimaryContainer"
+                tools:ignore="ContentDescription" />
+        </androidx.cardview.widget.CardView>
+    </FrameLayout>
+
+    <include layout="@layout/drawer_right_rail" />
+</androidx.drawerlayout.widget.DrawerLayout>

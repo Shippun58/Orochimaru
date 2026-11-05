@@ -1,0 +1,135 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/listProgressBar"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        tools:visibility="gone">
+
+        <FrameLayout
+            android:layout_gravity="center"
+            android:layout_width="76.5dp"
+            android:layout_height="76.5dp"
+        >
+
+            <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+
+        </FrameLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/titleBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="24dp"
+            android:orientation="horizontal"
+            android:visibility="gone"
+            tools:ignore="UseCompoundDrawables">
+
+            <TextView
+                android:id="@+id/titleText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_weight="1"
+                android:fontFamily="@font/poppins_bold"
+                android:textSize="14sp" />
+
+            <ImageView
+                android:id="@+id/filterButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_lens_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="@string/filter"
+                android:padding="10dp"
+                android:src="@drawable/ic_round_filter_alt_24"
+                app:tint="?attr/colorPrimary" />
+
+            <ImageView
+                android:id="@+id/titleImage"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_lens_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="@string/reply"
+                android:fontFamily="@font/poppins_bold"
+                android:padding="10dp"
+                android:src="@drawable/ic_add"
+                app:tint="?attr/colorPrimary" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/emptyTextView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:gravity="center"
+            android:visibility="gone" />
+
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/feedSwipeRefresh"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <ani.sanin.FadingEdgeRecyclerView
+                android:id="@+id/listRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:nestedScrollingEnabled="true"
+                android:requiresFadingEdge="vertical"
+                tools:listitem="@layout/item_activity" />
+
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+        <FrameLayout
+            android:id="@+id/feedRefresh"
+            android:layout_width="76.5dp"
+            android:layout_height="76.5dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="32dp"
+            android:visibility="gone"
+        >
+
+            <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

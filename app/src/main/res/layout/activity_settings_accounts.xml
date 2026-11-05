@@ -1,0 +1,535 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    android:descendantFocusability="afterDescendants"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    tools:context=".settings.SettingsAccountActivity">
+
+    <LinearLayout
+        android:id="@+id/settingsAccountsLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?attr/colorSurface"
+        android:orientation="vertical"
+        android:paddingStart="32dp"
+        android:paddingEnd="32dp">
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="-16dp"
+            android:layout_marginTop="32dp"
+            app:cardBackgroundColor="@color/nav_bg_inv"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp">
+
+            <ImageButton
+                android:id="@+id/accountSettingsBack"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@color/nav_bg_inv"
+                android:focusable="true"
+                android:padding="16dp"
+                app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription,SpeakableTextPresentCheck" />
+        </androidx.cardview.widget.CardView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="?attr/colorSurface"
+            android:orientation="horizontal"
+            tools:ignore="UseCompoundDrawables">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginVertical="32dp"
+                android:layout_weight="1"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/accounts"
+                android:textSize="28sp" />
+
+            <ImageView
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:layout_gravity="center"
+                android:padding="24dp"
+                app:srcCompat="@drawable/ic_round_person_24"
+                app:tint="?attr/colorOnBackground"
+                tools:ignore="ContentDescription" />
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/settingsAnilistCard"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_anilist_gradient">
+
+            <ImageView
+                android:id="@+id/settingsAnilistGlyph"
+                android:layout_width="130dp"
+                android:layout_height="130dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:alpha="0.12"
+                android:contentDescription="@null"
+                app:srcCompat="@drawable/ic_anilist"
+                app:tint="@android:color/white"
+                tools:ignore="ContentDescription" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.9"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_anilist"
+                        android:tint="@android:color/white"
+                        app:tint="@android:color/white"
+                        tools:ignore="ContentDescription" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_weight="1" />
+
+                    <ImageButton
+                        android:id="@+id/settingsAnilistGear"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:focusable="true"
+                        android:padding="6dp"
+                        app:srcCompat="@drawable/ic_ios_settings"
+                        app:tint="@android:color/white"
+                        android:contentDescription="AniList Settings" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/settingsAnilistAvatarRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/settingsAnilistAvatar"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:scaleType="centerCrop"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.App.CircularImageView"
+                        tools:src="@drawable/ic_round_person_24"
+                        tools:ignore="ContentDescription,ImageContrastCheck" />
+
+                    <TextView
+                        android:id="@+id/settingsAnilistUsername"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/username"
+                        android:textColor="@android:color/white"
+                        android:textSize="15sp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsAnilistLogin"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="2dp"
+                android:backgroundTint="#FF666666"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/link_anilist"
+                android:textColor="@android:color/white"
+                android:textAllCaps="false"
+                app:cornerRadius="24dp" />
+
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/settingsMalLoginContainer"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_mal_gradient">
+
+            <ImageView
+                android:id="@+id/settingsMalGlyph"
+                android:layout_width="130dp"
+                android:layout_height="130dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:alpha="0.15"
+                android:contentDescription="@null"
+                app:srcCompat="@drawable/ic_myanimelist"
+                app:tint="#FF000000"
+                tools:ignore="ContentDescription" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="20dp">
+
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.9"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_myanimelist"
+                    tools:ignore="ContentDescription" />
+
+                <LinearLayout
+                    android:id="@+id/settingsMalAvatarRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/settingsMALAvatar"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:scaleType="centerCrop"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.App.CircularImageView"
+                        tools:src="@drawable/ic_round_person_24"
+                        tools:ignore="ContentDescription,ImageContrastCheck" />
+
+                    <TextView
+                        android:id="@+id/settingsMALUsername"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/username"
+                        android:textColor="#FF111111"
+                        android:textSize="15sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/settingsMALLoginRequired"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.6"
+                    android:fontFamily="@font/poppins_bold"
+                    android:text="@string/login_with_anilist"
+                    android:textAlignment="center"
+                    android:textColor="#FF111111"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsMALLogin"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="2dp"
+                android:backgroundTint="#FF26448D"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/link_mal"
+                android:textColor="@android:color/white"
+                android:textAllCaps="false"
+                app:cornerRadius="24dp" />
+
+            <ImageView
+                android:id="@+id/settingsAccountHelp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:contentDescription="@string/account_help"
+                android:padding="16dp"
+                android:src="@drawable/ic_round_help_24"
+                app:tint="#FF111111"
+                tools:ignore="ImageContrastCheck" />
+
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/settingsSimklCard"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_simkl_gradient">
+
+            <ImageView
+                android:id="@+id/settingsSimklGlyph"
+                android:layout_width="130dp"
+                android:layout_height="130dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:alpha="0.12"
+                android:contentDescription="@null"
+                app:srcCompat="@drawable/simkl_logo"
+                app:tint="@android:color/white"
+                tools:ignore="ContentDescription" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="20dp">
+
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.9"
+                    android:contentDescription="@null"
+                    android:src="@drawable/simkl_logo"
+                    android:tint="@android:color/white"
+                    app:tint="@android:color/white"
+                    tools:ignore="ContentDescription" />
+
+                <LinearLayout
+                    android:id="@+id/settingsSimklAvatarRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/settingsSimklAvatar"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:scaleType="centerCrop"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.App.CircularImageView"
+                        tools:src="@drawable/ic_round_person_24"
+                        tools:ignore="ContentDescription,ImageContrastCheck" />
+
+                    <TextView
+                        android:id="@+id/settingsSimklUsername"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/username"
+                        android:textColor="@android:color/white"
+                        android:textSize="15sp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsSimklLogin"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="2dp"
+                android:backgroundTint="#FF000000"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/link_simkl"
+                android:textColor="@android:color/white"
+                android:textAllCaps="false"
+                app:cornerRadius="24dp" />
+
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="4dp"
+            android:fontFamily="@font/poppins_bold"
+            android:text="@string/community"
+            android:textColor="?attr/colorOnBackground"
+            android:textSize="18sp"
+            android:alpha="0.7" />
+
+        <FrameLayout
+            android:id="@+id/settingsDiscordLogin"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_discord_gradient">
+
+            <ImageView
+                android:layout_width="130dp"
+                android:layout_height="130dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:alpha="0.08"
+                android:contentDescription="@null"
+                app:srcCompat="@drawable/ic_discord"
+                app:tint="@android:color/white"
+                tools:ignore="ContentDescription" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="20dp">
+
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.9"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_discord"
+                    app:tint="@android:color/white"
+                    tools:ignore="ContentDescription" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:fontFamily="@font/poppins"
+                    android:text="@string/join_discord"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:alpha="0.8" />
+
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsDiscordJoin"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="2dp"
+                android:backgroundTint="@android:color/white"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/join_discord"
+                android:textColor="#FF5865F2"
+                android:textAllCaps="false"
+                app:cornerRadius="24dp" />
+
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/settingsTelegramLogin"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_telegram_gradient">
+
+            <ImageView
+                android:layout_width="130dp"
+                android:layout_height="130dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:alpha="0.15"
+                android:contentDescription="@null"
+                app:srcCompat="@drawable/ic_telegram"
+                app:tint="#FF000000"
+                tools:ignore="ContentDescription" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="20dp">
+
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.95"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_telegram"
+                    android:tint="@android:color/white"
+                    app:tint="@android:color/white"
+                    tools:ignore="ContentDescription" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:fontFamily="@font/poppins"
+                    android:text="@string/join_telegram"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:alpha="0.95" />
+
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsTelegramJoin"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="2dp"
+                android:backgroundTint="#FF2AABEE"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/join_telegram_button"
+                android:textColor="@android:color/white"
+                android:textAllCaps="false"
+                app:cornerRadius="24dp" />
+
+        </FrameLayout>
+
+        <ani.sanin.FadingEdgeRecyclerView
+            android:id="@+id/settingsRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="?attr/colorSurface"
+            android:nestedScrollingEnabled="false"
+            android:requiresFadingEdge="vertical"
+            tools:itemCount="1"
+            tools:listitem="@layout/item_settings" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

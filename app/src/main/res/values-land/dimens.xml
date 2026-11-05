@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="library_top_push">0dp</dimen>
+
+    <dimen name="banner_modern_height">355dp</dimen>
+    <dimen name="banner_modern_content_start">34dp</dimen>
+    <dimen name="banner_modern_poster_width">145dp</dimen>
+    <dimen name="banner_modern_poster_height">220dp</dimen>
+    <dimen name="banner_modern_poster_margin_end">28dp</dimen>
+    <dimen name="banner_modern_watch_height">38dp</dimen>
+    <dimen name="banner_modern_watch_padding">40dp</dimen>
+    <dimen name="banner_modern_title_text">22sp</dimen>
+    <dimen name="banner_modern_synopsis_text">12sp</dimen>
+    <dimen name="banner_modern_meta_text">12sp</dimen>
+    <dimen name="banner_modern_meta_gap">8dp</dimen>
+    <integer name="banner_modern_synopsis_lines">3</integer>
+
+    <dimen name="banner_classic_height">355dp</dimen>
+    <dimen name="banner_classic_logo_width">250dp</dimen>
+    <dimen name="banner_classic_logo_height">66dp</dimen>
+    <dimen name="banner_classic_watch_height">38dp</dimen>
+    <dimen name="banner_classic_watch_padding">20dp</dimen>
+    <dimen name="banner_classic_watch_text">13sp</dimen>
+    <dimen name="banner_classic_chip_text">10sp</dimen>
+    <dimen name="banner_classic_chip_height">20dp</dimen>
+    <dimen name="banner_classic_chip_gap">5dp</dimen>
+    <dimen name="banner_classic_chip_pad">8dp</dimen>
+    <dimen name="banner_classic_logo_top">0dp</dimen>
+    <dimen name="banner_classic_gradient">64dp</dimen>
+    <dimen name="banner_classic_title_text">16sp</dimen>
+    <dimen name="banner_modern_meta_top">18dp</dimen>
+    <dimen name="banner_modern_watch_min_width">196dp</dimen>
+    <dimen name="banner_modern_watch_text">14sp</dimen>
+    <dimen name="banner_modern_synopsis_spacing">3dp</dimen>
+
+    <dimen name="franchise_poster_width">88dp</dimen>
+</resources>

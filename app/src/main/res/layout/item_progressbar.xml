@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="76.5dp"
+    android:layout_height="76.5dp"
+    android:layout_gravity="center"
+    android:visibility="gone"
+    tools:ignore="ContentDescription">
+
+    <ani.sanin.ui.components.TomoeView
+        android:id="@+id/spinnerTop"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_gravity="center"
+        app:lottie_rawRes="@raw/tomoe"
+        app:lottie_autoPlay="true"
+        app:lottie_loop="true"
+        app:lottie_speed="1.75" />
+
+</FrameLayout>

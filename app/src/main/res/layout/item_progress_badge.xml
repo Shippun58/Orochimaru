@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/progressBadge"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_subdub_pill"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="6dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp"
+    android:visibility="gone"
+    tools:visibility="visible">
+
+    <ImageView
+        android:id="@+id/progressWatchedIcon"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:src="@drawable/ic_baseline_remove_red_eye_24"
+        android:tint="?attr/colorPrimary"
+        tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/progressWatchedCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="3dp"
+        android:fontFamily="@font/poppins_bold"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        tools:ignore="SpUsage"
+        tools:text="5" />
+
+    <View
+        android:id="@+id/progressDividerMid"
+        android:layout_width="1dp"
+        android:layout_height="12dp"
+        android:layout_marginStart="5dp"
+        android:layout_marginEnd="5dp"
+        android:background="#66FFFFFF" />
+
+    <ImageView
+        android:id="@+id/progressReleasedIcon"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:src="@drawable/ic_broadcast_ongoing"
+        android:tint="?attr/colorPrimary"
+        tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/progressReleasedCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="3dp"
+        android:fontFamily="@font/poppins_bold"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        tools:ignore="SpUsage"
+        tools:text="12" />
+
+    <View
+        android:id="@+id/progressDividerTT"
+        android:layout_width="1dp"
+        android:layout_height="12dp"
+        android:layout_marginStart="5dp"
+        android:layout_marginEnd="5dp"
+        android:background="#66FFFFFF"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/progressTT"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/poppins_bold"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        android:visibility="gone"
+        tools:ignore="SpUsage"
+        tools:text="3d 7h" />
+
+</LinearLayout>

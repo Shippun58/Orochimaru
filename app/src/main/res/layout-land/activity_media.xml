@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="false">
+
+    <ImageView
+        android:id="@+id/mediaBg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:importantForAccessibility="no"
+        tools:ignore="ContentDescription" />
+
+    <View
+        android:id="@+id/mediaBgGradient"
+        android:layout_width="320dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/gradient_rtl_dark"
+        android:importantForAccessibility="no" />
+
+    <View
+        android:id="@+id/mediaDarkenOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FF000000"
+        android:importantForAccessibility="no" />
+
+    <com.flaviofaria.kenburnsview.KenBurnsView
+        android:id="@+id/mediaBanner"
+        android:layout_width="match_parent"
+        android:layout_height="288dp"
+        android:scaleType="centerCrop"
+        android:visibility="gone"
+        tools:ignore="ContentDescription,ImageContrastCheck" />
+
+    <ImageView
+        android:id="@+id/mediaBannerNoKen"
+        android:layout_width="match_parent"
+        android:layout_height="288dp"
+        android:scaleType="centerCrop"
+        android:visibility="gone"
+        tools:ignore="ContentDescription,ImageContrastCheck" />
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/mediaAppBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
+    <FrameLayout
+        android:id="@+id/mediaInfoFragmentContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false" />
+
+    <LinearLayout
+        android:id="@+id/mediaRightPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/mediaTabContent"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="0dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <View
+                android:id="@+id/mediaRightBg"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#CC000000" />
+
+            <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/mediaViewPager"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:nextFocusUp="@+id/mediaNavPills"
+                android:nestedScrollingEnabled="false"
+                tools:ignore="SpeakableTextPresentCheck" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/fragmentExtensionsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingTop="16dp"
+        android:visibility="gone" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/mediaCover"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:translationZ="5dp"
+        android:visibility="gone"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="16dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/mediaCoverImage"
+            android:layout_width="108dp"
+            android:layout_height="160dp"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/roundedImageView"
+            tools:ignore="ContentDescription,ImageContrastCheck" />
+    </androidx.cardview.widget.CardView>
+
+    <FrameLayout
+        android:id="@+id/mediaNavPills"
+        android:layout_width="44dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="8dp"
+        android:elevation="10dp"
+        android:translationZ="10dp"
+        android:focusable="true"
+        android:focusableInTouchMode="false"
+        android:descendantFocusability="afterDescendants"
+        android:visibility="gone"
+        android:clipToOutline="true">
+
+        <ani.sanin.ui.components.SnakeNavRailView
+            android:id="@+id/navPillBg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:focusable="false"
+            android:clickable="false"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:tag="pill_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp">
+
+            <ImageButton
+                android:id="@+id/navPillInfo"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_info_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:focusable="true"
+                android:nextFocusUp="@id/navPillComments"
+                android:nextFocusDown="@id/navPillWatch" />
+
+            <ImageButton
+                android:id="@+id/navPillWatch"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_movie_filter_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:focusable="true"
+                android:nextFocusUp="@id/navPillInfo"
+                android:nextFocusDown="@id/navPillComments" />
+
+            <ImageButton
+                android:id="@+id/navPillComments"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="12dp"
+                android:src="@drawable/ic_round_comment_24"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:visibility="gone"
+                android:focusable="true"
+                android:nextFocusUp="@id/navPillWatch"
+                android:nextFocusDown="@id/navPillInfo" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/incognito"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="start"
+        android:layout_margin="16dp"
+        android:translationZ="7dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="@color/bg_opp"
+        app:cardCornerRadius="16dp">
+
+        <androidx.constraintlayout.utils.widget.ImageFilterView
+            android:id="@+id/incognitoImage"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_incognito_24"
+            app:tint="@color/bg"
+            tools:ignore="ContentDescription" />
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/mediaClose"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="end"
+        android:layout_margin="16dp"
+        android:focusable="true"
+        android:nextFocusDown="@+id/mediaNavPills"
+        android:translationZ="7dp"
+        app:cardBackgroundColor="@color/nav_bg"
+        app:cardCornerRadius="16dp">
+
+        <androidx.constraintlayout.utils.widget.ImageFilterView
+            android:id="@+id/mediaCloseImage"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_round_close_24"
+            tools:ignore="ContentDescription" />
+    </androidx.cardview.widget.CardView>
+
+</FrameLayout>

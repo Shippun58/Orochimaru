@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp"
+    android:focusable="true">
+
+    <TextView
+        android:id="@+id/sliderTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/poppins_semi_bold"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="15sp"
+        tools:text="Cache Cap" />
+
+    <TextView
+        android:id="@+id/sliderDesc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:alpha="0.72"
+        android:fontFamily="@font/poppins"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="12sp"
+        android:visibility="gone"
+        tools:text="A short description of what this slider controls"
+        tools:visibility="visible" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/slider"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:stepSize="10"
+            app:labelBehavior="floating"
+            app:trackColorActive="?attr/colorPrimary"
+            app:trackColorInactive="?attr/colorSurfaceVariant"
+            app:thumbColor="?attr/colorPrimary" />
+
+        <TextView
+            android:id="@+id/sliderValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="@font/poppins"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="14sp"
+            tools:text="100" />
+    </LinearLayout>
+</LinearLayout>

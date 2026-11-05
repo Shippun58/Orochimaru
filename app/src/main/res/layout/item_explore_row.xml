@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        tools:ignore="UseCompoundDrawables">
+
+        <TextView
+            android:id="@+id/rowTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:layout_weight="1"
+            android:fontFamily="@font/poppins_bold"
+            android:padding="8dp"
+            android:textSize="16sp"
+            android:visibility="invisible"
+            tools:text="Trending"
+            tools:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/rowMore"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="12dp"
+            android:padding="8dp"
+            android:src="@drawable/arrow_mark"
+            android:visibility="invisible"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="11dp">
+
+        <FrameLayout
+            android:id="@+id/rowProgress"
+            android:layout_width="76.5dp"
+            android:layout_height="76.5dp"
+            android:layout_gravity="center">
+
+            <ani.sanin.ui.components.TomoeView
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_gravity="center"
+                app:lottie_autoPlay="true"
+                app:lottie_loop="true"
+                app:lottie_rawRes="@raw/tomoe"
+                app:lottie_speed="1.75" />
+        </FrameLayout>
+
+        <ani.sanin.FadingEdgeRecyclerView
+            android:id="@+id/rowRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:nestedScrollingEnabled="true"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:requiresFadingEdge="horizontal"
+            tools:itemCount="4"
+            tools:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/item_media_compact"
+            tools:orientation="horizontal" />
+    </FrameLayout>
+</LinearLayout>

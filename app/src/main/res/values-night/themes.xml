@@ -1,0 +1,335 @@
+<resources>
+
+    <style name="Theme.Sanin" parent="Theme.Base">
+        <item name="android:statusBarColor">@color/transparent</item>
+        <item name="colorOnPrimary">@color/bg_black</item>
+        <item name="android:textColor">@color/bg_white</item>
+        <item name="colorSecondaryVariant">@color/violet_400</item>
+
+        <item name="textColor">@color/textColor</item>
+        <item name="grayTextColor">@color/grayTextColor</item>
+        <item name="primaryGrayBackground">@color/primaryGrayBackground</item>
+        <item name="primaryBlackBackground">@color/primaryBlackBackground</item>
+        <item name="iconGrayBackground">@color/iconGrayBackground</item>
+        <item name="boxItemBackground">@color/boxItemBackground</item>
+        <item name="iconColor">@color/iconColor</item>
+        <item name="white">@color/bg_white</item>
+        <item name="black">@color/bg_black</item>
+    </style>
+
+    <style name="Theme.Sanin.Sanin" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_sanin_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_sanin_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_sanin_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_sanin_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_sanin_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_sanin_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_sanin_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_sanin_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_sanin_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_sanin_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_sanin_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_sanin_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_sanin_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_sanin_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_sanin_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_sanin_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_sanin_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_sanin_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_sanin_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_sanin_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_sanin_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_sanin_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_sanin_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_sanin_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_sanin_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_sanin_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Lime" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_lime_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_lime_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_lime_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_lime_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_lime_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_lime_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_lime_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_lime_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_lime_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_lime_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_lime_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_lime_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_lime_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_lime_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_lime_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_lime_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_lime_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_lime_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_lime_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_lime_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_lime_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_lime_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_lime_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_lime_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_lime_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_lime_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Indigo" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_indigo_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_indigo_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_indigo_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_indigo_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_indigo_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_indigo_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_indigo_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_indigo_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_indigo_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_indigo_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_indigo_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_indigo_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_indigo_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_indigo_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_indigo_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_indigo_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_indigo_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_indigo_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_indigo_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_indigo_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_indigo_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_indigo_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_indigo_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_indigo_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_indigo_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_indigo_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Saikou" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_saikou_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_saikou_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_saikou_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_saikou_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_saikou_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_saikou_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_saikou_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_saikou_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_saikou_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_saikou_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_saikou_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_saikou_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_saikou_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_saikou_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_saikou_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_saikou_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_saikou_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_saikou_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_saikou_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_saikou_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_saikou_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_saikou_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_saikou_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_saikou_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_saikou_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_saikou_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Sun" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_sun_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_sun_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_sun_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_sun_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_sun_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_sun_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_sun_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_sun_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_sun_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_sun_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_sun_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_sun_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_sun_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_sun_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_sun_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_sun_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_sun_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_sun_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_sun_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_sun_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_sun_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_sun_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_sun_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_sun_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_sun_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_sun_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Blood" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_blood_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_blood_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_blood_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_blood_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_blood_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_blood_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_blood_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_blood_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_blood_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_blood_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_blood_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_blood_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_blood_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_blood_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_blood_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_blood_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_blood_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_blood_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_blood_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_blood_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_blood_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_blood_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_blood_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_blood_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_blood_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_blood_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Ocean" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_ocean_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_ocean_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_ocean_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_ocean_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_ocean_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_ocean_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_ocean_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_ocean_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_ocean_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_ocean_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_ocean_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_ocean_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_ocean_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_ocean_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_ocean_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_ocean_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_ocean_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_ocean_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_ocean_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_ocean_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_ocean_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_ocean_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_ocean_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_ocean_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_ocean_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_ocean_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Kurama" parent="Theme.Base">
+        <item name="colorPrimary">@color/md_theme_dark_kurama_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_dark_kurama_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/md_theme_dark_kurama_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/md_theme_dark_kurama_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/md_theme_dark_kurama_secondary</item>
+        <item name="colorOnSecondary">@color/md_theme_dark_kurama_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/md_theme_dark_kurama_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/md_theme_dark_kurama_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/md_theme_dark_kurama_tertiary</item>
+        <item name="colorOnTertiary">@color/md_theme_dark_kurama_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/md_theme_dark_kurama_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/md_theme_dark_kurama_onTertiaryContainer</item>
+        <item name="colorError">@color/md_theme_dark_kurama_error</item>
+        <item name="colorErrorContainer">@color/md_theme_dark_kurama_errorContainer</item>
+        <item name="colorOnError">@color/md_theme_dark_kurama_onError</item>
+        <item name="colorOnErrorContainer">@color/md_theme_dark_kurama_onErrorContainer</item>
+        <item name="android:colorBackground">@color/md_theme_dark_kurama_background</item>
+        <item name="colorOnBackground">@color/md_theme_dark_kurama_onBackground</item>
+        <item name="colorSurface">@color/md_theme_dark_kurama_surface</item>
+        <item name="colorOnSurface">@color/md_theme_dark_kurama_onSurface</item>
+        <item name="colorSurfaceVariant">@color/md_theme_dark_kurama_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/md_theme_dark_kurama_onSurfaceVariant</item>
+        <item name="colorOutline">@color/md_theme_dark_kurama_outline</item>
+        <item name="colorOnSurfaceInverse">@color/md_theme_dark_kurama_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/md_theme_dark_kurama_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/md_theme_dark_kurama_inversePrimary</item>
+    </style>
+
+    <style name="Theme.Sanin.Monochrome" parent="Theme.Base">
+        <item name="colorPrimary">@color/bg_white</item>
+        <item name="colorOnPrimary">@color/bg_black</item>
+        <item name="colorPrimaryContainer">@color/bg_white</item>
+        <item name="colorOnPrimaryContainer">@color/bg_black</item>
+        <item name="colorSecondary">@color/bg_white</item>
+        <item name="colorOnSecondary">@color/bg_black</item>
+        <item name="colorSecondaryContainer">@color/bg_white</item>
+        <item name="colorOnSecondaryContainer">@color/bg_black</item>
+        <item name="colorTertiary">@color/bg_white</item>
+        <item name="colorOnTertiary">@color/bg_black</item>
+        <item name="colorTertiaryContainer">@color/bg_white</item>
+        <item name="colorOnTertiaryContainer">@color/bg_black</item>
+        <item name="colorError">@color/bg_white</item>
+        <item name="colorErrorContainer">@color/bg_white</item>
+        <item name="colorOnError">@color/bg_black</item>
+        <item name="colorOnErrorContainer">@color/bg_black</item>
+        <item name="android:colorBackground">@color/bg_black</item>
+        <item name="colorOnBackground">@color/bg_white</item>
+        <item name="colorSurface">@color/bg_black</item>
+        <item name="colorOnSurface">@color/bg_white</item>
+        <item name="colorSurfaceVariant">@color/bg_black</item>
+        <item name="colorOnSurfaceVariant">@color/bg_white</item>
+        <item name="colorOutline">@color/bg_white</item>
+        <item name="colorOnSurfaceInverse">@color/bg_white</item>
+        <item name="colorSurfaceInverse">@color/bg_black</item>
+        <item name="colorPrimaryInverse">@color/bg_black</item>
+    </style>
+
+    <style name="Theme.Sanin.SaninOLED" parent="Theme.Sanin.Sanin">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.LimeOLED" parent="Theme.Sanin.Lime">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.IndigoOLED" parent="Theme.Sanin.Indigo">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.SaikouOLED" parent="Theme.Sanin.Saikou">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.SunOLED" parent="Theme.Sanin.Sun">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.BloodOLED" parent="Theme.Sanin.Blood">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.MonochromeOLED" parent="Theme.Sanin.Monochrome">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.OceanOLED" parent="Theme.Sanin.Ocean">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+    <style name="Theme.Sanin.KuramaOLED" parent="Theme.Sanin.Kurama">
+        <item name="android:colorBackground">@color/darkest_Black</item>
+        <item name="colorSurface">@color/darkest_Black</item>
+        <item name="colorSurfaceVariant">@color/nav_bg</item>
+    </style>
+
+</resources>

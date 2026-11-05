@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/sourceCardView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
+    android:focusable="true"
+    android:nextFocusRight="@id/sourceSettingsImageView">
+
+    <ImageView
+        android:id="@+id/sourceIconImageView"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="9dp"
+        android:importantForAccessibility="no"
+        tools:ignore="ContentDescription" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/sourceNameTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textSize="15sp"
+            tools:text="HiAnime" />
+
+        <TextView
+            android:id="@+id/sourceMetaTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textSize="10sp"
+            tools:ignore="SmallSp"
+            tools:text="v1.0.8 • anime • en" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/sourceSettingsImageView"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="3dp"
+        android:background="?android:attr/selectableItemBackground"
+        android:focusable="true"
+        android:nextFocusLeft="@id/sourceCardView"
+        android:nextFocusRight="@id/sourceInstallImageView"
+        android:scaleX="0.8"
+        android:scaleY="0.8"
+        android:visibility="gone"
+        app:srcCompat="@drawable/ic_baseline_tune_24"
+        app:tint="?attr/colorOnBackground"
+        tools:ignore="ContentDescription" />
+
+    <ImageView
+        android:id="@+id/sourceInstallImageView"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="3dp"
+        android:background="?android:attr/selectableItemBackground"
+        android:focusable="true"
+        android:nextFocusLeft="@id/sourceSettingsImageView"
+        android:nextFocusRight="@id/sourceCardView"
+        android:scaleX="0.6"
+        android:scaleY="0.6"
+        app:srcCompat="@drawable/ic_download_24"
+        app:tint="?attr/colorOnBackground"
+        tools:ignore="ContentDescription" />
+</LinearLayout>

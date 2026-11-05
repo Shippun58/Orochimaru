@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:descendantFocusability="afterDescendants"
+    android:fillViewport="true"
+    tools:context=".settings.SettingsActivity">
+
+    <LinearLayout
+        android:id="@+id/settingsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="32dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="20dp">
+
+            <ImageButton
+                android:id="@+id/settingsBack"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:focusable="true"
+                android:nextFocusDown="@+id/settingsRecyclerView"
+                android:padding="10dp"
+                app:srcCompat="@drawable/ic_arrow_left"
+                app:tint="?attr/colorOnSurface"
+                tools:ignore="ContentDescription" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_bold"
+                    android:text="@string/settings"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="26sp" />
+
+                <TextView
+                    android:id="@+id/settingsVersion"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:alpha="0.5"
+                    android:fontFamily="@font/poppins_semi_bold"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="12sp"
+                    tools:text="v3.2.2" />
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/settingsLogo"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/bg_settings_logo_circle"
+                android:padding="10dp"
+                android:src="@drawable/sanin_emblem"
+                tools:ignore="ContentDescription" />
+        </LinearLayout>
+
+        <ani.sanin.FadingEdgeRecyclerView
+            android:id="@+id/settingsRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="16dp"
+            android:nestedScrollingEnabled="false"
+            android:requiresFadingEdge="vertical" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

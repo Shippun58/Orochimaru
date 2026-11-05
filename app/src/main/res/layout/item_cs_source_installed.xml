@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/sourceCardView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
+    android:focusable="true"
+    android:nextFocusRight="@+id/dragHandle">
+
+    <LinearLayout
+        android:id="@+id/dragHandle"
+        android:layout_width="36dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="-10dp"
+        android:layout_marginEnd="3dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:focusable="true"
+        android:nextFocusRight="@+id/updateImageView"
+        android:nextFocusLeft="@id/sourceCardView">
+
+        <ImageView
+            android:id="@+id/dragUpArrow"
+            android:layout_width="16dp"
+            android:layout_height="14dp"
+            android:src="@drawable/ic_round_keyboard_arrow_up_24"
+            android:scaleType="fitCenter"
+            android:importantForAccessibility="no" />
+
+        <ImageView
+            android:id="@+id/dragDownArrow"
+            android:layout_width="16dp"
+            android:layout_height="14dp"
+            android:src="@drawable/ic_round_keyboard_arrow_down_24"
+            android:scaleType="fitCenter"
+            android:importantForAccessibility="no" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/sourceIconImageView"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="9dp"
+        android:importantForAccessibility="no"
+        tools:ignore="ContentDescription" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/sourceNameTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textSize="15sp"
+            tools:text="HiAnime" />
+
+        <TextView
+            android:id="@+id/sourceMetaTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_semi_bold"
+            android:textSize="10sp"
+            tools:ignore="SmallSp"
+            tools:text="v1.0.8 • anime • en" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/updateImageView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="0"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/ic_round_sync_24"
+        android:focusable="true"
+        android:nextFocusRight="@+id/deleteImageView"
+        android:nextFocusLeft="@id/dragHandle"
+        app:tint="?attr/colorOnBackground"
+        tools:ignore="ContentDescription" />
+
+    <ImageView
+        android:id="@+id/deleteImageView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="0"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/ic_round_delete_24"
+        android:focusable="true"
+        android:nextFocusRight="@+id/settingsImageView"
+        android:nextFocusLeft="@id/updateImageView"
+        app:tint="?attr/colorOnBackground"
+        tools:ignore="ContentDescription" />
+
+    <ImageView
+        android:id="@+id/settingsImageView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="10dp"
+        android:layout_weight="0"
+        android:src="@drawable/ic_baseline_tune_24"
+        android:focusable="true"
+        android:nextFocusLeft="@id/deleteImageView"
+        android:nextFocusRight="@id/sourceCardView"
+        app:tint="?attr/colorOnBackground"
+        tools:ignore="ContentDescription" />
+</LinearLayout>

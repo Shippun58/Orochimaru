@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/streamingServiceCard"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_streaming_service_tile"
+    android:clickable="true"
+    android:focusable="true"
+    android:focusableInTouchMode="false">
+
+    <ImageView
+        android:id="@+id/streamingServiceLogo"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter" />
+
+    <ImageButton
+        android:id="@+id/streamingServiceSeeAll"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_gravity="center"
+        android:background="@null"
+        android:contentDescription="@string/see_all"
+        android:padding="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/arrow_mark"
+        android:visibility="gone"
+        tools:ignore="ImageContrastCheck" />
+</FrameLayout>

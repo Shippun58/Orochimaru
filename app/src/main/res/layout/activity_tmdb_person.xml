@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="false">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/tmdbPersonScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="32dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="72dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/tmdbPersonProfile"
+                    android:layout_width="128dp"
+                    android:layout_height="192dp"
+                    android:scaleType="centerCrop"
+                    app:shapeAppearanceOverlay="@style/roundedImageView"
+                    tools:ignore="ContentDescription"
+                    tools:srcCompat="@tools:sample/backgrounds/scenic" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tmdbPersonName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_bold"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="22sp"
+                        tools:text="Edward Norton" />
+
+                    <TextView
+                        android:id="@+id/tmdbPersonDepartment"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="13sp"
+                        android:visibility="gone"
+                        tools:text="Acting"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/tmdbPersonBorn"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="13sp"
+                        android:visibility="gone"
+                        tools:text="Born 18 August 1969"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/tmdbPersonDied"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="13sp"
+                        android:visibility="gone"
+                        tools:text="Died 3 May 2020"
+                        tools:visibility="visible" />
+
+                    <TextView
+                        android:id="@+id/tmdbPersonBirthplace"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="@font/poppins_semi_bold"
+                        android:textColor="?attr/colorOutline"
+                        android:textSize="13sp"
+                        android:visibility="gone"
+                        tools:text="Boston, Massachusetts, USA"
+                        tools:visibility="visible" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tmdbPersonBiography"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:lineSpacingMultiplier="1.15"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="14sp"
+                android:visibility="gone"
+                tools:text="Edward Harrison Norton is an American actor."
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/tmdbPersonPhotosTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginStart="12dp"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/tmdb_person_photos"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="16sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/tmdbPersonPhotosRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal"
+                android:scrollbars="none"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tmdbPersonKnownForTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginStart="12dp"
+                android:fontFamily="@font/poppins_bold"
+                android:text="@string/tmdb_person_known_for"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="16sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/tmdbPersonKnownForRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal"
+                android:scrollbars="none"
+                android:visibility="gone" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <FrameLayout
+        android:id="@+id/tmdbPersonProgress"
+        android:layout_width="76.5dp"
+        android:layout_height="76.5dp"
+        android:layout_gravity="center">
+
+        <ani.sanin.ui.components.TomoeView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
+    </FrameLayout>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/tmdbPersonBackCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:focusable="true"
+        app:cardBackgroundColor="@color/nav_bg_inv"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp">
+
+        <ImageButton
+            android:id="@+id/tmdbPersonBack"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@color/nav_bg_inv"
+            android:focusable="true"
+            android:padding="14dp"
+            app:srcCompat="@drawable/ic_round_arrow_back_ios_new_24"
+            tools:ignore="ContentDescription" />
+    </androidx.cardview.widget.CardView>
+
+</FrameLayout>
