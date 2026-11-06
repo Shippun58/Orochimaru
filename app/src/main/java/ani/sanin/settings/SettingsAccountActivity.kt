@@ -53,6 +53,7 @@ class SettingsAccountActivity : AppCompatActivity() {
 
         binding = ActivitySettingsAccountsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        onBackPressedDispatcher.addCallback(this, restartMainActivity)
 
         binding.apply {
             settingsAccountsLayout.updateLayoutParams<ViewGroup.MarginLayoutParams> {
