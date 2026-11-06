@@ -238,7 +238,7 @@ enum class PrefName(val data: Pref) {
     GlassEffectSurfaceTint(Pref(Location.UI, Int::class, Color.parseColor("#000000"))),
     GlassEffectTextColor(Pref(Location.UI, Int::class, Color.WHITE)),
 
-    HomeBannerMode(Pref(Location.UI, Int::class, 2)),
+    HomeBannerMode(Pref(Location.UI, Int::class, 0)),
     BannerType(Pref(Location.UI, Int::class, 0)),
     ShowContinueWatching(Pref(Location.UI, Boolean::class, true)),
     ShowPlanned(Pref(Location.UI, Boolean::class, true)),
