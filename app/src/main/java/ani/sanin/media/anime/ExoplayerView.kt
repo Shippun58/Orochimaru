@@ -223,6 +223,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import androidx.core.net.toUri
 import ani.sanin.connections.LogoApi
 import ani.sanin.connections.comments.AnikotoAPI
@@ -312,6 +313,7 @@ class ExoplayerView :
     private var episodeCommentJob: Job? = null
     private var commentPanelEpisode: String? = null
     private lateinit var customSubtitleView: Xubtitle
+    private lateinit var customSubtitleTopView: Xubtitle
     private var assHandler: AssHandler? = null
     private var assSubtitleView: io.github.peerless2012.ass.media.widget.AssSubtitleView? = null
     private lateinit var assMediaSourceFactory: DefaultMediaSourceFactory
@@ -345,6 +347,12 @@ class ExoplayerView :
         private const val MAX_LIVE_RECONNECTS = 3
         private const val AUTO_SYNC_INTERVAL_MS = 15_000L
         private const val AUTO_SYNC_MIN_SPEECH_MS = 25_000L
+        private const val AUTO_SYNC_MAX_CAPTURE_MS = 10 * 60_000L
+        private const val AUTO_SYNC_STRONG_SCORE = 0.90
+        private const val AUTO_SYNC_STABLE_SCORE = 0.80
+        private const val AUTO_SYNC_MIN_GAIN = 0.05
+        private const val AUTO_SYNC_MIN_OFFSET_CHANGE_MS = 80L
+        private const val AUTO_SYNC_MIN_RATE_CHANGE = 0.001
 
         fun clearAllCaches() {
             try {
@@ -580,6 +588,11 @@ class ExoplayerView :
         textView.translationY = -textElevation + positionOffset
     }
 
+    private fun applyTopSubtitleStyles(textView: Xubtitle) {
+        applySubtitleStyles(textView)
+        textView.translationY = 0f
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -615,6 +628,7 @@ class ExoplayerView :
         skipTimeText = skipTimeButton.findViewById(R.id.exo_skip_timestamp_text)
         timeStampText = playerView.findViewById(R.id.exo_time_stamp_text)
         customSubtitleView = playerView.findViewById(R.id.customSubtitleView)
+        customSubtitleTopView = playerView.findViewById(R.id.customSubtitleTopView)
 
         animeTitle = playerView.findViewById(R.id.exo_anime_title)
         episodeTitle = playerView.findViewById(R.id.exo_ep_sel)
@@ -2560,8 +2574,7 @@ class ExoplayerView :
 
     private fun buildExoplayer() {
 
-        customSubtitleView.text = ""
-        customSubtitleView.visibility = View.GONE
+        renderCustomSubtitle("", "")
         exoSubtitleView.visibility = View.GONE
 
         playerErrorRetryCount = 0
@@ -2695,71 +2708,78 @@ class ExoplayerView :
                     synchronized(storedSyncCues) {
                         if (newCueTexts.isNotEmpty()) {
                             val lines = newCueTexts
-                                .map(::stripSubtitleTagJunk)
+                                .map(::cleanSubtitleText)
                                 .filter { it.isNotBlank() }
                                 .distinct()
-                            if (lines.isNotEmpty()) {
-                            val text = lines.joinToString("\n")
-                            val dedupKey = "p${cueGroup.presentationTimeUs}|$text"
-
-                            val isWindowRepeat = cueTextStartTimes[text]?.any { startMs ->
-                                cueStartMs - startMs in 0..15_000
-                            } ?: false
-                            if (dedupKey !in seenCueTexts && !isWindowRepeat && !isTitleSignCue(text)) {
+                            for (text in lines) {
+                                val dedupKey = "p${cueGroup.presentationTimeUs}|$text"
+                                val isWindowRepeat = cueTextStartTimes[text]?.any { startMs ->
+                                    cueStartMs - startMs in 0..15_000
+                                } ?: false
+                                if (dedupKey in seenCueTexts || isWindowRepeat || isTitleSignCue(text)) {
+                                    continue
+                                }
                                 seenCueTexts.add(dedupKey)
 
-                                if (storedSyncCues.isNotEmpty() && storedSyncCues.last().durationMs == 3000L) {
-                                    val gap = cueStartMs - storedSyncCues.last().startTimeMs
-                                    if (gap in 1001..60000) {
-                                        val idx = storedSyncCues.size - 1
-                                        storedSyncCues[idx] =
-                                            storedSyncCues[idx].copy(durationMs = gap)
+                                var fillIndex = storedSyncCues.size - 1
+                                while (fillIndex >= 0) {
+                                    val previous = storedSyncCues[fillIndex]
+                                    if (previous.durationMs != 3000L) break
+                                    val gap = cueStartMs - previous.startTimeMs
+                                    val maxGap = if (fillIndex == storedSyncCues.size - 1) {
+                                        60_000L
+                                    } else {
+                                        15_000L
                                     }
+                                    if (gap !in 1001..maxGap) break
+                                    storedSyncCues[fillIndex] =
+                                        previous.copy(durationMs = gap)
+                                    fillIndex--
                                 }
                                 storedSyncCues.add(
                                     SyncCue(text = text, startTimeMs = cueStartMs, durationMs = 3000L)
                                 )
                                 cueTextStartTimes.getOrPut(text) { mutableListOf() }.add(cueStartMs)
-                                if (!areSyncCuesSortedByStart(storedSyncCues)) {
-                                    storedSyncCues.sortBy { it.startTimeMs }
-                                }
                             }
+                            if (!areSyncCuesSortedByStart(storedSyncCues)) {
+                                storedSyncCues.sortBy { it.startTimeMs }
                             }
                         }
                     }
                     lastPeriodShiftMs = exoPlayer.currentPosition - cueGroup.presentationTimeUs / 1000
                     if (libassActive) {
                         exoSubtitleView.visibility = View.GONE
-                        customSubtitleView.visibility = View.GONE
-                        customSubtitleView.text = ""
+                        renderCustomSubtitle("", "")
                         return
                     }
                     val currentPosition = exoPlayer.currentPosition
 
                     val subtitleOffset = activeSubtitleOffset()
-                    val syncEnabled = PrefManager.getVal<Boolean>(PrefName.SubtitleSyncEnabled)
+                    val subtitleRate = activeSubtitleRate()
+                    val syncActive = subtitleSyncActive(subtitleOffset, subtitleRate)
+                    val cuePosition = if (syncActive) {
+                        ((currentPosition - subtitleOffset) / subtitleRate).roundToLong()
+                    } else {
+                        currentPosition
+                    }
+                    val (hasStoredCues, activeCues) = synchronized(storedSyncCues) {
+                        storedSyncCues.isNotEmpty() to syncCuesAt(storedSyncCues, cuePosition)
+                    }
+                    val hasOverlappingCues = activeCues.size >= 2
 
                     val useCustomRendering = PrefManager.getVal<Boolean>(PrefName.TextviewSubtitles) ||
-                        (syncEnabled && subtitleOffset != 0L && storedSyncCues.isNotEmpty())
+                        (syncActive && hasStoredCues) ||
+                        hasOverlappingCues
                     if (useCustomRendering) {
                         exoSubtitleView.visibility = View.GONE
-                        customSubtitleView.visibility = View.VISIBLE
 
-                        if (syncEnabled && subtitleOffset != 0L && storedSyncCues.isNotEmpty()) {
-                            val adjustedPos = currentPosition - subtitleOffset
-                            val matchingCue = synchronized(storedSyncCues) {
-                                lastSyncCueAtOrBefore(storedSyncCues, adjustedPos)
-                            }
-                            if (matchingCue != null) {
-                                customSubtitleView.text = matchingCue.text
-                            } else {
-                                customSubtitleView.text = ""
-                            }
+                        if (syncActive || hasOverlappingCues) {
+                            renderCustomSubtitleTexts(activeCues.map { it.text })
                             return
                         }
 
                         if (newCueTexts.isEmpty()) {
-                            customSubtitleView.text = ""
+                            renderCustomSubtitleTexts(emptyList())
                             activeSubtitles.clear()
                             lastSubtitle = null
                             lastPosition = 0
@@ -2783,10 +2803,9 @@ class ExoplayerView :
                             }
                         }
 
-                        customSubtitleView.text = activeSubtitles.joinToString("\n")
+                        renderCustomSubtitleTexts(activeSubtitles.toList())
                     } else {
-                        customSubtitleView.text = ""
-                        customSubtitleView.visibility = View.GONE
+                        renderCustomSubtitle("", "")
                         exoSubtitleView.visibility = View.VISIBLE
                     }
                     } finally {
@@ -2805,6 +2824,7 @@ class ExoplayerView :
         )
 
         applySubtitleStyles(customSubtitleView)
+        applyTopSubtitleStyles(customSubtitleTopView)
         setupSubFormatting(playerView)
 
         try {
@@ -3112,10 +3132,30 @@ class ExoplayerView :
         return PrefManager.getVal<Long>(PrefName.SubtitleDelay)
     }
 
-    private fun storeSubtitleOffset(offsetMs: Long, source: String = "") {
-        PrefManager.setVal(PrefName.SubtitleDelayKey, currentSubtitleSyncKey())
+    private fun activeSubtitleRateFor(key: String): Double {
+        if (PrefManager.getVal<String>(PrefName.SubtitleDelayKey) != key) return 1.0
+        return PrefManager.getVal<Float>(PrefName.SubtitleSyncRate)
+            .toDouble()
+            .coerceIn(0.90, 1.10)
+    }
+
+    private fun activeSubtitleRate(): Double = activeSubtitleRateFor(currentSubtitleSyncKey())
+
+    private fun subtitleSyncActive(offsetMs: Long, rate: Double): Boolean {
+        return PrefManager.getVal<Boolean>(PrefName.SubtitleSyncEnabled) &&
+            (offsetMs != 0L || abs(rate - 1.0) > 0.0005)
+    }
+
+    private fun storeSubtitleOffset(offsetMs: Long, source: String = "", rate: Double? = null) {
+        val key = currentSubtitleSyncKey()
+        val effectiveRate = rate ?: activeSubtitleRateFor(key)
+        PrefManager.setVal(PrefName.SubtitleDelayKey, key)
         PrefManager.setVal(PrefName.SubtitleDelay, offsetMs)
-        PrefManager.setVal(PrefName.SubtitleSyncEnabled, offsetMs != 0L)
+        PrefManager.setVal(PrefName.SubtitleSyncRate, effectiveRate.toFloat())
+        PrefManager.setVal(
+            PrefName.SubtitleSyncEnabled,
+            offsetMs != 0L || abs(effectiveRate - 1.0) > 0.0005,
+        )
         PrefManager.setVal(PrefName.SubtitleSyncSource, source)
     }
 
@@ -3131,9 +3171,10 @@ class ExoplayerView :
     private fun refreshSyncRender() {
         if (!::exoPlayer.isInitialized) return
         val subtitleOffset = activeSubtitleOffset()
-        val syncEnabled = PrefManager.getVal<Boolean>(PrefName.SubtitleSyncEnabled)
-        val cues = synchronized(storedSyncCues) { storedSyncCues.isNotEmpty() }
-        if (syncEnabled && subtitleOffset != 0L && cues) {
+        val subtitleRate = activeSubtitleRate()
+        val syncActive = subtitleSyncActive(subtitleOffset, subtitleRate)
+        val cues = synchronized(storedSyncCues) { storedSyncCues.toList() }
+        if (syncActive && cues.isNotEmpty()) {
 
             val selectedTextMime = exoPlayer.currentTracks.groups
                 .firstOrNull { it.type == TRACK_TYPE_TEXT && it.isSelected }
@@ -3144,17 +3185,12 @@ class ExoplayerView :
             if (libassActive) return
 
             val pos = exoPlayer.currentPosition
-            val matchingCue = synchronized(storedSyncCues) {
-                (pos - subtitleOffset).let { adjustedPos ->
-                    lastSyncCueAtOrBefore(storedSyncCues, adjustedPos)
-                }
-            }
+            val adjustedPos = ((pos - subtitleOffset) / subtitleRate).roundToLong()
             exoSubtitleView.visibility = View.GONE
-            customSubtitleView.visibility = View.VISIBLE
-            customSubtitleView.text = matchingCue?.text ?: ""
+            renderCustomSubtitleTexts(syncCuesAt(cues, adjustedPos).map { it.text })
         } else if (!PrefManager.getVal<Boolean>(PrefName.TextviewSubtitles)) {
 
-            customSubtitleView.visibility = View.GONE
+            renderCustomSubtitle("", "")
             exoSubtitleView.visibility = View.VISIBLE
         }
     }
@@ -3173,7 +3209,7 @@ class ExoplayerView :
             speechRecorderKey = key
             speechRecorder.clearSegments()
         }
-        storeSubtitleOffset(0L, "")
+        storeSubtitleOffset(0L, "", 1.0)
         if (format == "ASS" || cues.size < 8 || isLiveStream()) {
             speechRecorder.setEnabled(false)
             return
@@ -3200,6 +3236,12 @@ class ExoplayerView :
         speechRecorder.setEnabled(true)
         autoSyncJob = lifecycleScope.launch {
             var lastSpeechMs = 0L
+            var bestResult: SubtitleAudioSync.Result? = null
+            var appliedOffset: Long? = null
+            var appliedRate = 1.0
+            var lastOffset = Long.MIN_VALUE
+            var lastRate = 0.0
+            var stableResults = 0
             try {
                 while (isActive) {
                     delay(AUTO_SYNC_INTERVAL_MS)
@@ -3212,26 +3254,78 @@ class ExoplayerView :
                     if (speechMs <= lastSpeechMs + 2_000L) continue
                     lastSpeechMs = speechMs
                     val result = withContext(Dispatchers.Default) {
-                        SubtitleAudioSync.correlate(autoSyncCues, segments)
-                    } ?: continue
+                        val offsetOnly = SubtitleAudioSync.correlate(autoSyncCues, segments)
+                        if (offsetOnly != null && offsetOnly.score >= AUTO_SYNC_STRONG_SCORE) {
+                            offsetOnly
+                        } else {
+                            val affine = SubtitleAudioSync.correlateAffine(autoSyncCues, segments)
+                            when {
+                                affine == null -> offsetOnly
+                                offsetOnly == null -> affine
+                                affine.score > offsetOnly.score + AUTO_SYNC_MIN_GAIN -> affine
+                                else -> offsetOnly
+                            }
+                        }
+                    }
+                    if (result == null) {
+                        if (speechMs >= AUTO_SYNC_MAX_CAPTURE_MS) break
+                        continue
+                    }
                     if (!PrefManager.getVal<Boolean>(PrefName.SubtitleAutoSyncVad)) break
                     if (currentSubtitleSyncKey() != key) break
                     if (hasManualSyncForCurrentEpisode()) break
-                    storeSubtitleOffset(result.offsetMs, "auto")
-                    refreshSyncRender()
-                    Logger.log(
-                        "SubtitleAutoSync: offset=${result.offsetMs}ms " +
-                            "onset=${"%.2f".format(result.onsetShare)} " +
-                            "presence=${"%.2f".format(result.presenceShare)} " +
-                            "cues=${result.consideredCues}"
-                    )
-                    if (result.offsetMs != 0L) {
-                        snackString(
-                            "Auto-synced subtitles from audio (%+.1fs)"
-                                .format(result.offsetMs / 1000.0)
-                        )
+
+                    val previousBest = bestResult
+                    val improved = previousBest == null ||
+                        result.score > previousBest.score + AUTO_SYNC_MIN_GAIN
+                    if (improved) {
+                        bestResult = result
+                        val offsetChanged = appliedOffset == null ||
+                            abs(result.offsetMs - appliedOffset!!) >= AUTO_SYNC_MIN_OFFSET_CHANGE_MS
+                        val rateChanged = abs(result.rate - appliedRate) >= AUTO_SYNC_MIN_RATE_CHANGE
+                        if (offsetChanged || rateChanged) {
+                            val firstApplication = appliedOffset == null
+                            storeSubtitleOffset(result.offsetMs, "auto", result.rate)
+                            refreshSyncRender()
+                            appliedOffset = result.offsetMs
+                            appliedRate = result.rate
+                            Logger.log(
+                                "SubtitleAutoSync: offset=${result.offsetMs}ms " +
+                                    "rate=${"%.4f".format(result.rate)} " +
+                                    "onset=${"%.2f".format(result.onsetShare)} " +
+                                    "presence=${"%.2f".format(result.presenceShare)} " +
+                                    "cues=${result.consideredCues}"
+                            )
+                            if (firstApplication && (result.offsetMs != 0L ||
+                                    abs(result.rate - 1.0) > 0.0005)
+                            ) {
+                                snackString(
+                                    "Auto-synced subtitles from audio (%+.1fs%s)"
+                                        .format(
+                                            result.offsetMs / 1000.0,
+                                            if (abs(result.rate - 1.0) > 0.0005) {
+                                                ", %.3fx speed".format(result.rate)
+                                            } else {
+                                                ""
+                                            },
+                                        )
+                                )
+                            }
+                        }
                     }
-                    break
+
+                    stableResults = if (
+                        abs(result.offsetMs - lastOffset) <= AUTO_SYNC_MIN_OFFSET_CHANGE_MS &&
+                        abs(result.rate - lastRate) <= AUTO_SYNC_MIN_RATE_CHANGE
+                    ) {
+                        stableResults + 1
+                    } else {
+                        0
+                    }
+                    lastOffset = result.offsetMs
+                    lastRate = result.rate
+                    if (result.score >= AUTO_SYNC_STABLE_SCORE && stableResults >= 2) break
+                    if (speechMs >= AUTO_SYNC_MAX_CAPTURE_MS) break
                 }
             } finally {
                 if (generation == autoSyncGeneration) {
@@ -3256,6 +3350,7 @@ class ExoplayerView :
 
     override fun getSyncPlayerPosition(): Long = getPlayerPosition()
     override fun getSubtitleOffset(): Long = activeSubtitleOffset()
+    override fun getSubtitleRate(): Double = activeSubtitleRate()
     override fun setSubtitleOffset(offsetMs: Long) = applySubtitleOffset(offsetMs)
 
     private fun parseSubtitleContent(content: String, detectedFormat: String? = null): List<SyncCue> {
@@ -3360,7 +3455,7 @@ class ExoplayerView :
 
     
     private fun prepareParsedCues(cues: List<SyncCue>): PreparedSubtitleCues {
-        val usable = cues.filterNot { isTitleSignCue(it.text) }
+        val usable = cues.filterNot { isTitleSignCue(it.text) }.sortedBy { it.startTimeMs }
         return PreparedSubtitleCues(usable, usable.mapTo(mutableSetOf()) { it.text })
     }
 
@@ -3390,14 +3485,35 @@ class ExoplayerView :
         return true
     }
 
-    private fun lastSyncCueAtOrBefore(cues: List<SyncCue>, posMs: Long): SyncCue? {
-        var lo = 0
-        var hi = cues.size
-        while (lo < hi) {
-            val mid = (lo + hi) / 2
-            if (cues[mid].startTimeMs <= posMs) lo = mid + 1 else hi = mid
+    private fun syncCuesAt(cues: List<SyncCue>, posMs: Long): List<SyncCue> {
+        val active = ArrayList<SyncCue>(2)
+        for (cue in cues) {
+            if (cue.startTimeMs > posMs) break
+            if (posMs < cue.startTimeMs + cue.durationMs) active.add(cue)
         }
-        return if (lo == 0) null else cues[lo - 1]
+        return active
+    }
+
+    private fun renderCustomSubtitleTexts(texts: List<String>) {
+        val unique = LinkedHashSet<String>()
+        for (text in texts) {
+            val trimmed = text.trim()
+            if (trimmed.isNotEmpty()) unique.add(trimmed)
+        }
+        val topText = if (unique.size >= 2) unique.first() else ""
+        val bottomText = if (unique.size >= 2) {
+            unique.drop(1).joinToString("\n")
+        } else {
+            unique.firstOrNull() ?: ""
+        }
+        renderCustomSubtitle(topText, bottomText)
+    }
+
+    private fun renderCustomSubtitle(topText: String, bottomText: String) {
+        customSubtitleTopView.text = topText
+        customSubtitleTopView.visibility = if (topText.isEmpty()) View.GONE else View.VISIBLE
+        customSubtitleView.text = bottomText
+        customSubtitleView.visibility = if (bottomText.isEmpty()) View.GONE else View.VISIBLE
     }
 
     private fun storeParsedCues(cues: List<SyncCue>) {
@@ -4574,6 +4690,7 @@ class ExoplayerView :
         if (type == TRACK_TYPE_TEXT) {
             setupSubFormatting(playerView)
             applySubtitleStyles(customSubtitleView)
+            applyTopSubtitleStyles(customSubtitleTopView)
         }
         playerView.subtitleView?.alpha =
             when (isDisabled) {
@@ -4671,11 +4788,11 @@ class ExoplayerView :
             speechRecorder.setEnabled(false)
             autoSyncCues = emptyList()
             autoSyncCueKey = null
-            customSubtitleView.visibility = View.GONE
-            customSubtitleView.text = ""
+            renderCustomSubtitle("", "")
         }
         setupSubFormatting(playerView)
         applySubtitleStyles(customSubtitleView)
+        applyTopSubtitleStyles(customSubtitleTopView)
     }
 
     override fun onTracksChanged(tracks: Tracks) {
@@ -5399,12 +5516,18 @@ class ExoplayerView :
             if (this::customSubtitleView.isInitialized) {
                 customSubtitleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, pipFontSize)
             }
+            if (this::customSubtitleTopView.isInitialized) {
+                customSubtitleTopView.setTextSize(TypedValue.COMPLEX_UNIT_SP, pipFontSize)
+            }
         } else {
             orientationListener?.enable()
 
             setupSubFormatting(playerView)
             if (this::customSubtitleView.isInitialized) {
                 applySubtitleStyles(customSubtitleView)
+            }
+            if (this::customSubtitleTopView.isInitialized) {
+                applyTopSubtitleStyles(customSubtitleTopView)
             }
         }
         if (isInitialized) {

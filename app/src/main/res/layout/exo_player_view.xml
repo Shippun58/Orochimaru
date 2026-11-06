@@ -54,6 +54,15 @@
     </androidx.media3.ui.SubtitleView>
 
     <ani.sanin.others.Xubtitle
+        android:id="@+id/customSubtitleTopView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal|top"
+        android:layout_marginTop="64dp"
+        android:adjustViewBounds="true"
+        android:visibility="gone"/>
+
+    <ani.sanin.others.Xubtitle
         android:id="@+id/customSubtitleView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

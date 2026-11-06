@@ -34,7 +34,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 data class SyncCue(
     val text: String,
@@ -47,6 +49,7 @@ private const val PROGRESS_PAYLOAD = "sync_progress"
 interface SubtitleSyncHost {
     fun getSyncPlayerPosition(): Long
     fun getSubtitleOffset(): Long
+    fun getSubtitleRate(): Double = 1.0
     fun setSubtitleOffset(offsetMs: Long)
     fun getSyncCues(): List<SyncCue>
 }
@@ -56,8 +59,10 @@ class SubtitleSyncDialogFragment : DialogFragment() {
     private val binding get() = _binding!!
     val model: MediaDetailsViewModel by activityViewModels()
     private var currentOffset: Long = 0L
+    private var currentRate: Double = 1.0
 
     private var openingOffset: Long = 0L
+    private var openingRate: Double = 1.0
     private var updateJob: Job? = null
     private var adapter: SyncAdapter? = null
     private var prevPlayingIndex: Int = -1
@@ -95,17 +100,24 @@ class SubtitleSyncDialogFragment : DialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        currentOffset = (requireActivity() as? SubtitleSyncHost)?.getSubtitleOffset() ?: 0L
+        val host = requireActivity() as? SubtitleSyncHost
+        currentOffset = host?.getSubtitleOffset() ?: 0L
+        currentRate = host?.getSubtitleRate() ?: 1.0
         openingOffset = currentOffset
+        openingRate = currentRate
         setupViews()
         startUpdateLoop()
     }
 
     private fun onCueClicked(cue: SyncCue) {
         val playerPos = getPlayerPosition()
-        currentOffset = playerPos - cue.startTimeMs
+        currentOffset = playerPos - (cue.startTimeMs * currentRate).roundToLong()
         binding.syncOffsetInput.setText(currentOffset.toString())
         applyOffset()
+    }
+
+    private fun cuePosition(playerPositionMs: Long): Long {
+        return ((playerPositionMs - currentOffset) / currentRate).roundToLong()
     }
 
     private fun styleSyncControls() {
@@ -270,6 +282,7 @@ class SubtitleSyncDialogFragment : DialogFragment() {
     private fun resetOffset() {
 
         currentOffset = openingOffset
+        currentRate = openingRate
         binding.syncOffsetInput.setText(currentOffset.toString())
         (requireActivity() as? SubtitleSyncHost)?.setSubtitleOffset(currentOffset)
         dismiss()
@@ -285,11 +298,16 @@ class SubtitleSyncDialogFragment : DialogFragment() {
             currentOffset < 0L -> "Offset: ${currentOffset}ms - Subtitles appear earlier"
             else -> "Offset: 0ms - In sync"
         }
-        binding.syncStatusText.text = status
+        val rate = if (abs(currentRate - 1.0) > 0.0005) {
+            " | Speed: %.3fx".format(currentRate)
+        } else {
+            ""
+        }
+        binding.syncStatusText.text = status + rate
     }
 
     private fun scrollToCurrentCue() {
-        val position = getPlayerPosition()
+        val position = cuePosition(getPlayerPosition())
         val cues = (requireActivity() as? SubtitleSyncHost)?.getSyncCues() ?: return
         val index = cues.indexOfLast { position >= it.startTimeMs }
         if (index >= 0) {
@@ -345,7 +363,7 @@ class SubtitleSyncDialogFragment : DialogFragment() {
 
         fun updatePlayerPosition(pos: Long) {
             playerPositionMs = pos
-            val adjustedPos = pos - currentOffset
+            val adjustedPos = cuePosition(pos)
 
             var newPlayingIndex = -1
             cues.forEachIndexed { index, cue ->
@@ -372,7 +390,7 @@ class SubtitleSyncDialogFragment : DialogFragment() {
 
             if (payloads.any { it == PROGRESS_PAYLOAD }) {
                 val cue = cues[position]
-                val adjustedPos = playerPositionMs - currentOffset
+                val adjustedPos = cuePosition(playerPositionMs)
                 val showProgress = adjustedPos in cue.startTimeMs..<(cue.startTimeMs + cue.durationMs)
                 if (showProgress) {
                     val progressValue = ((adjustedPos - cue.startTimeMs) * 1000f / cue.durationMs).roundToInt()
@@ -403,7 +421,7 @@ class SubtitleSyncDialogFragment : DialogFragment() {
 
         override fun onBindViewHolder(holder: CueViewHolder, position: Int) {
             val cue = cues[position]
-            val adjustedPos = playerPositionMs - currentOffset
+            val adjustedPos = cuePosition(playerPositionMs)
             val isPlaying = adjustedPos in cue.startTimeMs..<(cue.startTimeMs + cue.durationMs)
 
             holder.textView.text = cue.text

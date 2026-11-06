@@ -17,6 +17,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.roundToLong
 
 data class SpeechSegment(val startMs: Long, val endMs: Long)
 
@@ -27,23 +28,48 @@ object SubtitleAudioSync {
     private const val REFINE_STEP_MS = 10L
     private const val ONSET_TOLERANCE_MS = 200L
     private const val PRESENCE_TOLERANCE_MS = 350L
-    private const val MIN_CAPTURE_WINDOW_MS = 90_000L
+    private const val MIN_CAPTURE_WINDOW_MS = 120_000L
+    private const val AFFINE_MIN_CAPTURE_WINDOW_MS = 180_000L
     private const val MIN_SPEECH_MS = 25_000L
     private const val MIN_CUES = 10
     private const val MIN_SEGMENTS = 10
-    private const val MIN_CONSIDERED_CUES = 25
-    private const val MIN_ONSET_SHARE = 0.28
-    private const val MIN_PRESENCE_SHARE = 0.65
-    private const val MIN_SCORE_MARGIN = 0.12
+    private const val MIN_CONSIDERED_CUES = 30
+    private const val MIN_ONSET_SHARE = 0.45
+    private const val MIN_PRESENCE_SHARE = 0.75
+    private const val MIN_SCORE_MARGIN = 0.16
     private const val MIN_APPLIED_OFFSET_MS = 250L
+    private const val MIN_HALF_CUES = 8
+    private const val MIN_HALF_ONSET_SHARE = 0.30
+    private const val MIN_HALF_PRESENCE_SHARE = 0.55
+    private const val MIN_RATE_DELTA = 0.0015
+    private const val AFFINE_MIN_RATE = 0.95
+    private const val AFFINE_MAX_RATE = 1.05
+    private const val AFFINE_COARSE_RATE_STEPS = 20
+    private const val AFFINE_COARSE_OFFSET_STEP_MS = 500L
+    private const val AFFINE_REFINE_RADIUS_MS = 500L
+    private const val AFFINE_REFINE_OFFSET_STEP_MS = 20L
+    private const val AFFINE_REFINE_RATE_RADIUS = 0.005
+    private const val AFFINE_REFINE_RATE_STEP = 0.001
     private const val MERGE_GAP_MS = 250L
     private const val MIN_SEGMENT_MS = 120L
 
     data class Result(
         val offsetMs: Long,
+        val rate: Double,
         val onsetShare: Double,
         val presenceShare: Double,
         val consideredCues: Int,
+    ) {
+        val score: Double
+            get() = onsetShare + presenceShare * 0.5
+    }
+
+    private data class Prepared(
+        val segments: List<SpeechSegment>,
+        val onsets: LongArray,
+        val windowStartMs: Long,
+        val windowEndMs: Long,
+        val cueStarts: LongArray,
     )
 
     private data class Candidate(
@@ -60,28 +86,21 @@ object SubtitleAudioSync {
             get() = onsetShare + presenceShare * 0.5
     }
 
-    fun correlate(cues: List<SyncCue>, rawSegments: List<SpeechSegment>): Result? {
-        if (cues.size < MIN_CUES || rawSegments.size < MIN_SEGMENTS) return null
-        val segments = merge(rawSegments)
-        if (segments.size < MIN_SEGMENTS) return null
-        val totalSpeech = segments.sumOf { it.endMs - it.startMs }
-        if (totalSpeech < MIN_SPEECH_MS) return null
-        val windowStartMs = segments.first().startMs
-        val windowEndMs = segments.last().endMs
-        if (windowEndMs - windowStartMs < MIN_CAPTURE_WINDOW_MS) return null
+    private data class AffineCandidate(
+        val rate: Double,
+        val scaledStarts: LongArray,
+        val candidate: Candidate,
+    )
 
-        val onsets = LongArray(segments.size) { segments[it].startMs }
-        val usableCues = cues
-            .filter { it.startTimeMs >= 0L && it.durationMs > 0L }
-            .sortedBy { it.startTimeMs }
-        if (usableCues.size < MIN_CUES) return null
-        val cueStarts = LongArray(usableCues.size) { usableCues[it].startTimeMs }
+    fun correlate(cues: List<SyncCue>, rawSegments: List<SpeechSegment>): Result? {
+        val prepared = prepare(cues, rawSegments) ?: return null
 
         val coarseCandidates = ArrayList<Candidate>(4096)
         var offset = -MAX_OFFSET_MS
         while (offset <= MAX_OFFSET_MS) {
             val candidate = evaluate(
-                cueStarts, segments, onsets, windowStartMs, windowEndMs, offset,
+                prepared.cueStarts, prepared.segments, prepared.onsets,
+                prepared.windowStartMs, prepared.windowEndMs, offset,
             )
             if (candidate.considered >= MIN_CONSIDERED_CUES) coarseCandidates.add(candidate)
             offset += COARSE_STEP_MS
@@ -98,7 +117,8 @@ object SubtitleAudioSync {
         var fineOffset = coarseBest.offsetMs - REFINE_RADIUS_MS
         while (fineOffset <= coarseBest.offsetMs + REFINE_RADIUS_MS) {
             val candidate = evaluate(
-                cueStarts, segments, onsets, windowStartMs, windowEndMs, fineOffset,
+                prepared.cueStarts, prepared.segments, prepared.onsets,
+                prepared.windowStartMs, prepared.windowEndMs, fineOffset,
             )
             if (candidate.considered >= MIN_CONSIDERED_CUES && candidate.score > best.score) {
                 best = candidate
@@ -116,16 +136,144 @@ object SubtitleAudioSync {
         ) {
             return null
         }
-        val shiftedFirstCue = usableCues.first().startTimeMs + best.offsetMs
-        if (shiftedFirstCue < -5_000L) return null
+        if (!passesHalfCheck(prepared.cueStarts, prepared, best.offsetMs)) return null
+        if (shiftedFirstCue(prepared.cueStarts, best.offsetMs) < -5_000L) return null
 
-        val appliedOffset = if (abs(best.offsetMs) < MIN_APPLIED_OFFSET_MS) 0L else best.offsetMs
         return Result(
-            offsetMs = appliedOffset,
+            offsetMs = appliedOffset(best.offsetMs),
+            rate = 1.0,
             onsetShare = best.onsetShare,
             presenceShare = best.presenceShare,
             consideredCues = best.considered,
         )
+    }
+
+    fun correlateAffine(cues: List<SyncCue>, rawSegments: List<SpeechSegment>): Result? {
+        val prepared = prepare(cues, rawSegments) ?: return null
+        if (prepared.windowEndMs - prepared.windowStartMs < AFFINE_MIN_CAPTURE_WINDOW_MS) {
+            return null
+        }
+
+        var best: AffineCandidate? = null
+        for (step in 0..AFFINE_COARSE_RATE_STEPS) {
+            val rate = AFFINE_MIN_RATE +
+                (AFFINE_MAX_RATE - AFFINE_MIN_RATE) * step / AFFINE_COARSE_RATE_STEPS
+            val scaledStarts = scaleCueStarts(prepared.cueStarts, rate)
+            var offset = -MAX_OFFSET_MS
+            while (offset <= MAX_OFFSET_MS) {
+                val candidate = evaluate(
+                    scaledStarts, prepared.segments, prepared.onsets,
+                    prepared.windowStartMs, prepared.windowEndMs, offset,
+                )
+                if (candidate.considered >= MIN_CONSIDERED_CUES) {
+                    val affine = AffineCandidate(rate, scaledStarts, candidate)
+                    if (best == null || affine.candidate.score > best.candidate.score) {
+                        best = affine
+                    }
+                }
+                offset += AFFINE_COARSE_OFFSET_STEP_MS
+            }
+        }
+        var refined = best ?: return null
+        val refineCenterRate = refined.rate
+        val refineCenterOffset = refined.candidate.offsetMs
+
+        var fineRate = refineCenterRate - AFFINE_REFINE_RATE_RADIUS
+        while (fineRate <= refineCenterRate + AFFINE_REFINE_RATE_RADIUS + 1e-9) {
+            val scaledStarts = scaleCueStarts(prepared.cueStarts, fineRate)
+            var fineOffset = refineCenterOffset - AFFINE_REFINE_RADIUS_MS
+            while (fineOffset <= refineCenterOffset + AFFINE_REFINE_RADIUS_MS) {
+                val candidate = evaluate(
+                    scaledStarts, prepared.segments, prepared.onsets,
+                    prepared.windowStartMs, prepared.windowEndMs, fineOffset,
+                )
+                if (candidate.considered >= MIN_CONSIDERED_CUES &&
+                    candidate.score > refined.candidate.score
+                ) {
+                    refined = AffineCandidate(fineRate, scaledStarts, candidate)
+                }
+                fineOffset += AFFINE_REFINE_OFFSET_STEP_MS
+            }
+            fineRate += AFFINE_REFINE_RATE_STEP
+        }
+
+        val bestCandidate = refined.candidate
+        if (bestCandidate.onsetShare < MIN_ONSET_SHARE ||
+            bestCandidate.presenceShare < MIN_PRESENCE_SHARE
+        ) {
+            return null
+        }
+        if (!passesHalfCheck(refined.scaledStarts, prepared, bestCandidate.offsetMs)) return null
+        if (shiftedFirstCue(
+                prepared.cueStarts,
+                bestCandidate.offsetMs,
+                refined.rate,
+            ) < -5_000L
+        ) {
+            return null
+        }
+
+        val finalRate = if (abs(refined.rate - 1.0) < MIN_RATE_DELTA) 1.0 else refined.rate
+        return Result(
+            offsetMs = appliedOffset(bestCandidate.offsetMs),
+            rate = finalRate,
+            onsetShare = bestCandidate.onsetShare,
+            presenceShare = bestCandidate.presenceShare,
+            consideredCues = bestCandidate.considered,
+        )
+    }
+
+    private fun prepare(cues: List<SyncCue>, rawSegments: List<SpeechSegment>): Prepared? {
+        if (cues.size < MIN_CUES || rawSegments.size < MIN_SEGMENTS) return null
+        val segments = merge(rawSegments)
+        if (segments.size < MIN_SEGMENTS) return null
+        val totalSpeech = segments.sumOf { it.endMs - it.startMs }
+        if (totalSpeech < MIN_SPEECH_MS) return null
+        val windowStartMs = segments.first().startMs
+        val windowEndMs = segments.last().endMs
+        if (windowEndMs - windowStartMs < MIN_CAPTURE_WINDOW_MS) return null
+
+        val onsets = LongArray(segments.size) { segments[it].startMs }
+        val usableCues = cues
+            .filter { it.startTimeMs >= 0L && it.durationMs > 0L }
+            .sortedBy { it.startTimeMs }
+        if (usableCues.size < MIN_CUES) return null
+        val cueStarts = LongArray(usableCues.size) { usableCues[it].startTimeMs }
+        return Prepared(segments, onsets, windowStartMs, windowEndMs, cueStarts)
+    }
+
+    private fun scaleCueStarts(starts: LongArray, rate: Double): LongArray {
+        return LongArray(starts.size) { (starts[it] * rate).roundToLong() }
+    }
+
+    private fun shiftedFirstCue(cueStarts: LongArray, offsetMs: Long, rate: Double = 1.0): Long {
+        if (cueStarts.isEmpty()) return Long.MAX_VALUE
+        return (cueStarts.first() * rate).roundToLong() + offsetMs
+    }
+
+    private fun appliedOffset(offsetMs: Long): Long {
+        return if (abs(offsetMs) < MIN_APPLIED_OFFSET_MS) 0L else offsetMs
+    }
+
+    private fun passesHalfCheck(cueStarts: LongArray, prepared: Prepared, offsetMs: Long): Boolean {
+        val mid = (prepared.windowStartMs + prepared.windowEndMs) / 2
+        return halfPasses(cueStarts, prepared, prepared.windowStartMs, mid, offsetMs) &&
+            halfPasses(cueStarts, prepared, mid, prepared.windowEndMs, offsetMs)
+    }
+
+    private fun halfPasses(
+        cueStarts: LongArray,
+        prepared: Prepared,
+        startMs: Long,
+        endMs: Long,
+        offsetMs: Long,
+    ): Boolean {
+        val candidate = evaluate(
+            cueStarts, prepared.segments, prepared.onsets, startMs, endMs, offsetMs,
+        )
+        if (candidate.considered < MIN_HALF_CUES) return true
+        return candidate.onsetShare >= MIN_HALF_ONSET_SHARE &&
+            candidate.presenceShare >= MIN_HALF_PRESENCE_SHARE
     }
 
     private fun merge(raw: List<SpeechSegment>): List<SpeechSegment> {

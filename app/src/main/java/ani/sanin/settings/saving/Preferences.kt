@@ -258,6 +258,7 @@ enum class PrefName(val data: Pref) {
     TextviewSubtitles(Pref(Location.Player, Boolean::class, false)),
     SubtitleDelay(Pref(Location.Player, Long::class, 0L)),
     SubtitleDelayKey(Pref(Location.Player, String::class, "")),
+    SubtitleSyncRate(Pref(Location.Player, Float::class, 1f)),
     SubtitleSyncEnabled(Pref(Location.Player, Boolean::class, false)),
     SubtitleSyncSource(Pref(Location.Player, String::class, "")),
     SubtitleAutoSyncVad(Pref(Location.Player, Boolean::class, true)),
