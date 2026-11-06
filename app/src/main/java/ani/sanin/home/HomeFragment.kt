@@ -114,6 +114,7 @@ class HomeFragment : Fragment() {
     private var catalogueJob: Job? = null
 
     private var loggedOutMode = false
+    private var homeLoading = false
     private var loggedOutCtaView: View? = null
     private var loggedOutJob: Job? = null
     private val loggedOutRowViews = mutableListOf<View>()
@@ -313,7 +314,8 @@ class HomeFragment : Fragment() {
                 recyclerView.visibility = View.GONE
                 empty.visibility = View.GONE
                 if (it != null) {
-                    container.visibility = View.VISIBLE
+                    container.visibility =
+                        if (!homeLoading && it.isNotEmpty()) View.VISIBLE else View.GONE
                     if (it.isNotEmpty()) {
                         rvDataMap[recyclerView] = it
                         recyclerView.adapter = ConcatAdapter(
@@ -353,6 +355,8 @@ class HomeFragment : Fragment() {
                             LayoutAnimationController(setSlideIn(), 0.25f)
 
                     } else {
+                        recyclerView.adapter = null
+                        rvDataMap.remove(recyclerView)
                         empty.visibility = View.VISIBLE
                     }
                     more.visibility = View.VISIBLE
@@ -388,7 +392,8 @@ class HomeFragment : Fragment() {
                 recyclerView.visibility = View.GONE
                 empty.visibility = View.GONE
                 if (it != null) {
-                    container.visibility = View.VISIBLE
+                    container.visibility =
+                        if (!homeLoading && it.isNotEmpty()) View.VISIBLE else View.GONE
                     if (it.isNotEmpty()) {
                         rvDataMap[recyclerView] = it
                         val openMore: (View) -> Unit = { v ->
@@ -414,6 +419,8 @@ class HomeFragment : Fragment() {
                             LayoutAnimationController(setSlideIn(), 0.25f)
 
                     } else {
+                        recyclerView.adapter = null
+                        rvDataMap.remove(recyclerView)
                         empty.visibility = View.VISIBLE
                     }
                     more.visibility = View.VISIBLE
@@ -601,13 +608,19 @@ class HomeFragment : Fragment() {
                 if (inRescueMode) {
                     alOnlySections.forEach { it.visibility = View.GONE }
 
-                    binding.homeContinueWatchingContainer.visibility = View.VISIBLE
-                    binding.homePlannedAnimeContainer.visibility = View.VISIBLE
+                    if (!homeLoading) {
+                        binding.homeContinueWatchingContainer.visibility = View.VISIBLE
+                        binding.homePlannedAnimeContainer.visibility = View.VISIBLE
+                    }
                 } else {
                     val homeLayoutShow: List<Boolean> = PrefManager.getVal(PrefName.HomeLayout)
                     val alOnlyIndices = listOf(1)
+                    val favHasData =
+                        (binding.homeFavAnimeRecyclerView.adapter?.itemCount ?: 0) > 0
                     alOnlySections.forEachIndexed { idx, view ->
-                        if (homeLayoutShow.getOrElse(alOnlyIndices[idx]) { true }) {
+                        if (!homeLoading && favHasData &&
+                            homeLayoutShow.getOrElse(alOnlyIndices[idx]) { true }
+                        ) {
                             view.visibility = View.VISIBLE
                         } else {
                             view.visibility = View.GONE
@@ -629,6 +642,7 @@ class HomeFragment : Fragment() {
             }
             if (!running && shouldRefresh) {
                 running = true
+                homeLoading = true
                 showHomeLoading(true)
                 if (!loggedOutMode) hideHomeSections()
                 scope.launch {
@@ -734,8 +748,11 @@ class HomeFragment : Fragment() {
                     }
 
                     withContext(Dispatchers.Main) {
+                        val b = _binding ?: return@withContext
                         model.empty.postValue(empty)
-                        binding.homeHiddenItemsContainer.visibility = View.GONE
+                        b.homeHiddenItemsContainer.visibility = View.GONE
+                        homeLoading = false
+                        reapplyHomeLayout()
                         showHomeLoading(false)
                     }
 
@@ -794,6 +811,7 @@ class HomeFragment : Fragment() {
         val b = _binding ?: return
         clearLoggedOutHome()
         hideHomeSections()
+        homeLoading = true
         showHomeLoading(true)
 
         val cta = layoutInflater.inflate(R.layout.view_logged_out_cta, b.homeContainer, false)
@@ -819,6 +837,7 @@ class HomeFragment : Fragment() {
                 setupLoggedOutFocusChain()
                 applyHomeBannerFocusChain()
             }
+            homeLoading = false
             showHomeLoading(false)
         }
 
@@ -1890,21 +1909,32 @@ class HomeFragment : Fragment() {
     }
 
     private fun reapplyHomeLayout() {
-        if (_binding == null || catalogueMode || PrefManager.getVal(PrefName.RescueMode)) return
+        val b = _binding ?: return
+        if (catalogueMode || homeLoading) return
+        val rescueMode = PrefManager.getVal<Boolean>(PrefName.RescueMode)
         val homeLayoutShow = PrefManager.getVal<List<Boolean>>(PrefName.HomeLayout)
-        val order = PrefManager.getVal<List<Int>>(PrefName.HomeLayoutOrder)
-        if (order.isEmpty()) return
-        val containers = homeSections().map { it.container }
-        containers.forEachIndexed { i, c ->
-            c.visibility = if (homeLayoutShow.getOrElse(i) { true }) View.VISIBLE else View.GONE
+        val sections = homeSections()
+        sections.forEachIndexed { i, section ->
+            val hasData = (section.rv.adapter?.itemCount ?: 0) > 0
+            val enabled =
+                if (rescueMode) i != 1 else homeLayoutShow.getOrElse(i) { true }
+            section.container.visibility =
+                if (hasData && enabled) View.VISIBLE else View.GONE
         }
-        var insertIndex = binding.homeContainer.indexOfChild(binding.homeHiddenItemsContainer) + 1
-        order.forEach { i ->
-            val container = containers.getOrNull(i)
-            if (container != null) {
-                binding.homeContainer.removeView(container)
-                binding.homeContainer.addView(container, insertIndex)
-                insertIndex++
+        if (!rescueMode) {
+            val order = PrefManager.getVal<List<Int>>(PrefName.HomeLayoutOrder)
+            if (order.isNotEmpty()) {
+                val containers = sections.map { it.container }
+                var insertIndex =
+                    b.homeContainer.indexOfChild(b.homeHiddenItemsContainer) + 1
+                order.forEach { i ->
+                    val container = containers.getOrNull(i)
+                    if (container != null) {
+                        b.homeContainer.removeView(container)
+                        b.homeContainer.addView(container, insertIndex)
+                        insertIndex++
+                    }
+                }
             }
         }
         setupSectionFocusChain()
@@ -1925,6 +1955,7 @@ class HomeFragment : Fragment() {
         loggedOutItemFocusListeners.clear()
         bannerAutoScrollHandler?.removeCallbacksAndMessages(null)
         bannerSnapHelper.attachToRecyclerView(null)
+        homeLoading = false
         _binding = null
         super.onDestroyView()
     }
