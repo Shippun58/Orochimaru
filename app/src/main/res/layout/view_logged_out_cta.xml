@@ -19,7 +19,7 @@
         android:gravity="center"
         android:text="@string/logged_out_home_title"
         android:textColor="?attr/colorPrimary"
-        android:textSize="24sp" />
+        android:textSize="18sp" />
 
     <TextView
         android:id="@+id/loggedOutMessage"
@@ -30,7 +30,8 @@
         android:gravity="center"
         android:text="@string/logged_out_home_message"
         android:textColor="?attr/colorOnSurface"
-        android:textSize="15sp" />
+        android:textSize="14sp"
+        android:textStyle="italic" />
 
     <Button
         android:id="@+id/loggedOutLinkButton"

@@ -301,17 +301,19 @@ class HomeFragment : Fragment() {
             more: View,
             string: String
         ) {
-            container.visibility = View.VISIBLE
-            progress.visibility = View.VISIBLE
+            container.visibility = View.GONE
+            progress.visibility = View.GONE
             recyclerView.visibility = View.GONE
             empty.visibility = View.GONE
             title.visibility = View.INVISIBLE
             more.visibility = View.INVISIBLE
 
             mode.observe(viewLifecycleOwner) {
+                if (loggedOutMode) return@observe
                 recyclerView.visibility = View.GONE
                 empty.visibility = View.GONE
                 if (it != null) {
+                    container.visibility = View.VISIBLE
                     if (it.isNotEmpty()) {
                         rvDataMap[recyclerView] = it
                         recyclerView.adapter = ConcatAdapter(
@@ -374,17 +376,19 @@ class HomeFragment : Fragment() {
             more: View,
             string: String
         ) {
-            container.visibility = View.VISIBLE
-            progress.visibility = View.VISIBLE
+            container.visibility = View.GONE
+            progress.visibility = View.GONE
             recyclerView.visibility = View.GONE
             empty.visibility = View.GONE
             title.visibility = View.INVISIBLE
             more.visibility = View.INVISIBLE
 
             mode.observe(viewLifecycleOwner) {
+                if (loggedOutMode) return@observe
                 recyclerView.visibility = View.GONE
                 empty.visibility = View.GONE
                 if (it != null) {
+                    container.visibility = View.VISIBLE
                     if (it.isNotEmpty()) {
                         rvDataMap[recyclerView] = it
                         val openMore: (View) -> Unit = { v ->
@@ -625,6 +629,8 @@ class HomeFragment : Fragment() {
             }
             if (!running && shouldRefresh) {
                 running = true
+                showHomeLoading(true)
+                if (!loggedOutMode) hideHomeSections()
                 scope.launch {
                     if (loggedOutMode) {
                         withContext(Dispatchers.Main) {
@@ -730,6 +736,7 @@ class HomeFragment : Fragment() {
                     withContext(Dispatchers.Main) {
                         model.empty.postValue(empty)
                         binding.homeHiddenItemsContainer.visibility = View.GONE
+                        showHomeLoading(false)
                     }
 
                     live.postValue(false)
@@ -764,6 +771,13 @@ class HomeFragment : Fragment() {
         ).forEach { it.visibility = View.GONE }
     }
 
+    private fun showHomeLoading(show: Boolean) {
+        val b = _binding ?: return
+        b.homeUserStatusContainer.visibility = if (show) View.VISIBLE else View.GONE
+        b.homeUserStatusProgressBar.visibility = if (show) View.VISIBLE else View.GONE
+        b.homeUserStatusRecyclerView.visibility = View.GONE
+    }
+
     private fun clearLoggedOutHome() {
         loggedOutJob?.cancel()
         loggedOutJob = null
@@ -780,6 +794,7 @@ class HomeFragment : Fragment() {
         val b = _binding ?: return
         clearLoggedOutHome()
         hideHomeSections()
+        showHomeLoading(true)
 
         val cta = layoutInflater.inflate(R.layout.view_logged_out_cta, b.homeContainer, false)
         val insertAt = (b.homeContainer.indexOfChild(b.homeHiddenItemsContainer) + 1)
@@ -796,12 +811,15 @@ class HomeFragment : Fragment() {
             val items = withContext(Dispatchers.IO) {
                 Kitsu.publicAnime(sort = "-userCount")
             }
-            if (_binding == null || items.isEmpty()) return@launch
-            val row = createLoggedOutRow(getString(R.string.recommended), items)
-            b.homeContainer.addView(row, insertAt + 1)
-            loggedOutRowViews.add(row)
-            setupLoggedOutFocusChain()
-            applyHomeBannerFocusChain()
+            if (_binding == null) return@launch
+            if (items.isNotEmpty()) {
+                val row = createLoggedOutRow(getString(R.string.recommended), items)
+                b.homeContainer.addView(row, insertAt + 1)
+                loggedOutRowViews.add(row)
+                setupLoggedOutFocusChain()
+                applyHomeBannerFocusChain()
+            }
+            showHomeLoading(false)
         }
 
         setupLoggedOutFocusChain()
