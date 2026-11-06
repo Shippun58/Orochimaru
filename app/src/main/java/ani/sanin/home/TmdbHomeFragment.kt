@@ -47,6 +47,7 @@ import ani.sanin.getThemeColor
 import ani.sanin.loadImage
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
+import ani.sanin.settings.SettingsAccountActivity
 import ani.sanin.sizeBannerCard
 import ani.sanin.px
 import ani.sanin.util.FocusEffectUtil
@@ -111,6 +112,7 @@ class TmdbHomeFragment : Fragment() {
     private var loadJob: Job? = null
     private var bannerCarouselAdapter: TmdbBannerCarouselAdapter? = null
     private val bannerSnapHelper = PagerSnapHelper()
+    private var loggedOutCtaButton: View? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -181,13 +183,13 @@ class TmdbHomeFragment : Fragment() {
             watchBtn.nextFocusUpId = R.id.mainCalendarContainer
             cal?.nextFocusDownId = watchBtn.id
             avatar?.nextFocusDownId = watchBtn.id
-            watchBtn.nextFocusDownId = View.NO_ID
+            watchBtn.nextFocusDownId = loggedOutCtaButton?.id ?: View.NO_ID
         } else {
             b.tmdbBannerFrame.nextFocusUpId = View.NO_ID
             watchBtn.nextFocusUpId = R.id.mainCalendarContainer
             cal?.nextFocusDownId = R.id.mainCalendarContainer
             avatar?.nextFocusDownId = R.id.mainUserAvatarContainer
-            watchBtn.nextFocusDownId = View.NO_ID
+            watchBtn.nextFocusDownId = loggedOutCtaButton?.id ?: View.NO_ID
         }
 
         binding.tmdbHomeSections.post {
@@ -202,15 +204,30 @@ class TmdbHomeFragment : Fragment() {
                     val card = child.getChildAt(j)
                     val target = card.findViewById<View>(R.id.tmdbCardPoster) ?: card
                     if (first) {
-                        if (activeBtn != null) {
-                            activeBtn.nextFocusDownId = target.id
-                            target.nextFocusUpId = activeBtn.id
+                        val cta = loggedOutCtaButton
+                        if (cta != null) {
+                            if (activeBtn != null) {
+                                activeBtn.nextFocusDownId = cta.id
+                                cta.nextFocusUpId = activeBtn.id
+                            } else {
+                                cta.nextFocusUpId = R.id.mainCalendarContainer
+                            }
+                            cta.nextFocusDownId = target.id
+                            target.nextFocusUpId = cta.id
+                            if (carousel != null) {
+                                carousel.nextFocusDownId = cta.id
+                            }
                         } else {
-                            target.nextFocusUpId = R.id.mainCalendarContainer
-                        }
+                            if (activeBtn != null) {
+                                activeBtn.nextFocusDownId = target.id
+                                target.nextFocusUpId = activeBtn.id
+                            } else {
+                                target.nextFocusUpId = R.id.mainCalendarContainer
+                            }
 
-                        if (carousel != null) {
-                            carousel.nextFocusDownId = target.id
+                            if (carousel != null) {
+                                carousel.nextFocusDownId = target.id
+                            }
                         }
                         first = false
                     }
@@ -296,6 +313,7 @@ class TmdbHomeFragment : Fragment() {
         bannerHandler.removeCallbacksAndMessages(null)
         bannerSnapHelper.attachToRecyclerView(null)
         bannerCarouselAdapter = null
+        loggedOutCtaButton = null
         logoJob?.cancel()
         _binding = null
     }
@@ -306,6 +324,7 @@ class TmdbHomeFragment : Fragment() {
             else CsRepos.installed(requireContext()).firstOrNull { it.id == sourceId }
         loadJob?.cancel()
         binding.tmdbHomeSections.removeAllViews()
+        loggedOutCtaButton = null
         binding.tmdbHomeSpinner.isVisible = true
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
 
@@ -315,12 +334,50 @@ class TmdbHomeFragment : Fragment() {
                 loadPluginSections(plugin)
             } else false
 
-            loadSimklContinueWatching()
-            if (!hasPluginSections) {
-                loadSimklHomeSections()
+            val loggedOut = plugin == null && isSimklLoggedOut()
+            if (loggedOut) {
+                addLoggedOutCta()
+                loadPublicSections()
+            } else {
+                loadSimklContinueWatching()
+                if (!hasPluginSections) {
+                    loadSimklHomeSections()
+                }
             }
             binding.tmdbHomeSpinner.isVisible = false
         }
+    }
+
+    private fun isSimklLoggedOut(): Boolean =
+        PrefManager.getNullableVal<Simkl.SimklToken>(PrefName.SimklToken, null) == null
+
+    private fun addLoggedOutCta() {
+        val cta = layoutInflater.inflate(R.layout.view_logged_out_cta, binding.tmdbHomeSections, false)
+        val button = cta.findViewById<View>(R.id.loggedOutLinkButton)
+        button.setOnClickListener {
+            startActivity(Intent(requireContext(), SettingsAccountActivity::class.java))
+        }
+        FocusEffectUtil.applyFocusListener(button)
+        binding.tmdbHomeSections.addView(cta)
+        loggedOutCtaButton = button
+
+        val mode = PrefManager.getVal<Int>(PrefName.HomeBannerMode)
+        if (mode == 0 || mode == 2) {
+            val watchBtn = activeWatchBtn()
+            button.nextFocusUpId = watchBtn?.id ?: R.id.mainCalendarContainer
+            watchBtn?.nextFocusDownId = button.id
+        } else {
+            button.nextFocusUpId = R.id.mainCalendarContainer
+        }
+        applyTmdbBannerFocusChain()
+    }
+
+    private suspend fun loadPublicSections() = coroutineScope {
+        val items = async(Dispatchers.IO) {
+            Tmdb.trending("all", "week").filter { it.posterPath != null }
+        }.await()
+        addSection(getString(R.string.recommended), items)
+        applyTmdbBannerFocusChain()
     }
 
     private suspend fun loadBanner(plugin: CsInstalledSource? = null) {

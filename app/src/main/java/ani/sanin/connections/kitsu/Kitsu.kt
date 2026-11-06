@@ -470,6 +470,31 @@ object Kitsu {
         return CategoryPage(media = media, hasMore = hasMore)
     }
 
+    suspend fun publicAnime(
+        sort: String = "-userCount",
+        status: String? = null,
+        limit: Int = PAGE_LIMIT,
+        offset: Int = 0,
+    ): List<Media> = withContext(Dispatchers.IO) {
+        val safeLimit = limit.coerceIn(1, PAGE_LIMIT)
+        val safeOffset = offset.coerceAtLeast(0)
+        val statusFilter = status?.takeIf { it.isNotBlank() }?.let { "&filter[status]=$it" } ?: ""
+        val doc = get(
+            "/anime?sort=$sort$statusFilter&page[limit]=$safeLimit&page[offset]=$safeOffset&include=mappings"
+        ) ?: return@withContext emptyList()
+        val mappingsById = doc.included.orEmpty().associateBy { it.id }
+        doc.dataList().mapNotNull { resource ->
+            val attrs = resource.animeAttributes() ?: return@mapNotNull null
+            if (attrs.nsfw && !PrefManager.getVal<Boolean>(PrefName.IncludeAdultDiscovery)) return@mapNotNull null
+            val anilistId = resource.relationshipIds("mappings").firstNotNullOfOrNull { mappingId ->
+                mappingsById[mappingId]?.mappingAttributes()
+                    ?.takeIf { it.externalSite == ANILIST_SITE }
+                    ?.externalId?.toIntOrNull()
+            } ?: return@mapNotNull null
+            resource.toMedia(anilistId, attrs)
+        }
+    }
+
     suspend fun search(query: String, limit: Int = 20): List<Media> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")

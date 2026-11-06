@@ -99,6 +99,9 @@
     <string name="missing_sequels">Missed Sequels</string>
     <string name="no_missing_sequels">No missed sequels found.</string>
     <string name="recommended">Recommended</string>
+    <string name="logged_out_home_title">Looks a little empty in here, doesn\'t it?</string>
+    <string name="logged_out_home_message">Connect your tracker and give your Home screen something to work with. Your watching activity, all your progress— easy to keep up with.</string>
+    <string name="logged_out_home_link">Link</string>
 
     <string name="get_recommendations">Watch/Read some Anime or Manga to get Recommendations</string>
     <string name="empty">All caught up, when New?</string>
