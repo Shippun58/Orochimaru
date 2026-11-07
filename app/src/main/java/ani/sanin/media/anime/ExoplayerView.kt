@@ -4380,7 +4380,7 @@ class ExoplayerView :
                     val ep = episodes[episodeArr[currentEpisodeIndex + i]] ?: return@nextEpisode
                     val selected = media.selected ?: return@nextEpisode
                     lifecycleScope.launch(Dispatchers.IO) {
-                        if (media.id < 0) {
+                        if (TmdbStreamResolver.sessionFor(media.id) != null) {
 
                             ani.sanin.cloudstream.TmdbStreamResolver.populateSyntheticEpisode(
                                 this@ExoplayerView, media, ep
@@ -4450,7 +4450,7 @@ class ExoplayerView :
         val extTimestamps =
             ((extractor?.server?.video?.timestamps ?: emptyList()) +
                 (extractor?.timestamps ?: emptyList())).distinct()
-        val isTmdbMode = media.id < 0
+        val isTmdbMode = TmdbStreamResolver.sessionFor(media.id) != null
         val episodeNum = media.anime?.selectedEpisode?.trim()?.toIntOrNull()
         val episodeKey = if (isTmdbMode) {
             media.anime?.selectedEpisode?.trim()?.takeIf { it.isNotEmpty() }

@@ -155,7 +155,7 @@ class SelectorDialogFragment : DialogFragment() {
                 loaded = true
                 val m = media
                 val providerName =
-                    if (m != null && m.id < 0) {
+                    if (m != null && ani.sanin.cloudstream.TmdbStreamResolver.sessionFor(m.id) != null) {
                         ani.sanin.cloudstream.TmdbStreamResolver.syntheticSourceName(m.id)
                     } else {
                         model.watchSources?.get(m?.selected?.sourceIndex ?: 0)?.name
@@ -209,7 +209,7 @@ class SelectorDialogFragment : DialogFragment() {
                             adapter.add(extractor)
                         }
                     }
-                    if (!cacheValid && media!!.id < 0) {
+                    if (!cacheValid && ani.sanin.cloudstream.TmdbStreamResolver.sessionFor(media!!.id) != null) {
 
                         scope.launch(Dispatchers.IO) {
                             val ok = ani.sanin.cloudstream.TmdbStreamResolver.populateSyntheticEpisode(
@@ -288,7 +288,7 @@ class SelectorDialogFragment : DialogFragment() {
                     episode = ep
 
                     var success = false
-                    if (media!!.id < 0) {
+                    if (ani.sanin.cloudstream.TmdbStreamResolver.sessionFor(media!!.id) != null) {
                         success = ani.sanin.cloudstream.TmdbStreamResolver.populateSyntheticEpisode(
                             requireContext(), media!!, ep
                         )
