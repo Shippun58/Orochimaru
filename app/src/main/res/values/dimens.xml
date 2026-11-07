@@ -2,6 +2,8 @@
 
     <dimen name="activity_horizontal_margin">16dp</dimen>
     <dimen name="activity_vertical_margin">16dp</dimen>
+    <dimen name="anime_watch_side_padding">8dp</dimen>
+    <dimen name="anime_watch_header_side_margin">-8dp</dimen>
     <dimen name="rounded_image_radius">10dp</dimen>
     <dimen name="rounded_button_radius">4dp</dimen>
 

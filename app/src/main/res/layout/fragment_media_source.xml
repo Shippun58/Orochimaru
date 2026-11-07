@@ -96,8 +96,8 @@
         android:descendantFocusability="afterDescendants"
         android:clipToPadding="false"
         android:paddingTop="300dp"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
+        android:paddingStart="@dimen/anime_watch_side_padding"
+        android:paddingEnd="@dimen/anime_watch_side_padding"
         android:paddingBottom="128dp"
         tools:itemCount="1"
         tools:listitem="@layout/item_media_source" />

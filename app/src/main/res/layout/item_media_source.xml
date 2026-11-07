@@ -4,8 +4,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="-24dp"
-    android:layout_marginEnd="-24dp"
+    android:layout_marginStart="@dimen/anime_watch_header_side_margin"
+    android:layout_marginEnd="@dimen/anime_watch_header_side_margin"
     android:clipToPadding="false"
     android:orientation="vertical">
 
@@ -284,6 +284,8 @@
         android:layout_width="match_parent"
         android:layout_height="80dp"
         android:layout_gravity="center"
+        android:layout_marginStart="@dimen/anime_watch_side_padding"
+        android:layout_marginEnd="@dimen/anime_watch_side_padding"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
         android:focusable="true"

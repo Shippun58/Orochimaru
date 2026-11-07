@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="library_top_push">0dp</dimen>
+    <dimen name="anime_watch_side_padding">24dp</dimen>
+    <dimen name="anime_watch_header_side_margin">-24dp</dimen>
 
     <dimen name="banner_modern_height">355dp</dimen>
     <dimen name="banner_modern_content_start">34dp</dimen>

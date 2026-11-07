@@ -1217,9 +1217,10 @@ class TmdbWatchFragment : Fragment() {
         autoSearchJob?.cancel()
         if (isResolving) return
         val d = detail ?: return
-        val season = if (mediaType == "tv") selectedSeason else null
+        val continue = if (mediaType == "tv") continueTarget() else null
+        val season = if (mediaType == "tv") continue?.first ?: selectedSeason else null
 
-        val resumeEp = if (mediaType == "tv") lastPlayed()?.second else null
+        val resumeEp = if (mediaType == "tv") continue?.second else null
         Logger.log("TMDB_WATCH: auto search on open for '${d.displayTitle}' (season=$season ep=$resumeEp)")
         setSourceStatus(getString(R.string.tmdb_watch_searching, d.displayTitle))
         isResolving = true
@@ -1279,7 +1280,9 @@ class TmdbWatchFragment : Fragment() {
                     }
                     val epForSheet = if (mediaType == "tv") {
                         resumeEp?.let { ep ->
-                            episodes.firstOrNull { it.seasonNumber == selectedSeason && it.episodeNumber == ep }
+                            episodes.firstOrNull {
+                                it.seasonNumber == (season ?: selectedSeason) && it.episodeNumber == ep
+                            }
                         } ?: episodes.firstOrNull()
                     } else {
                         movieEpisodes.firstOrNull()
@@ -1364,7 +1367,7 @@ class TmdbWatchFragment : Fragment() {
 
     private fun onContinueClick() {
         val d = detail ?: return
-        val (season, ep) = lastPlayed() ?: run {
+        val (season, ep) = continueTarget() ?: run {
             if (mediaType == "tv") onEpisodeClick(episodes.firstOrNull() ?: return)
             else onEpisodeClick(movieEpisodes.firstOrNull() ?: return)
             return
@@ -1379,7 +1382,9 @@ class TmdbWatchFragment : Fragment() {
     }
 
     private fun restoreSeason(): Int {
-        val saved = lastPlayed()?.first ?: return seasons.firstOrNull()?.seasonNumber ?: 1
+        val saved = continueTarget()?.first
+            ?: lastPlayed()?.first
+            ?: return seasons.firstOrNull()?.seasonNumber ?: 1
         return seasons.firstOrNull { it.seasonNumber == saved }?.seasonNumber ?: 1
     }
 
@@ -1413,6 +1418,64 @@ class TmdbWatchFragment : Fragment() {
         return null
     }
 
+    private fun parseSeasonEpisode(key: String?): Pair<Int, Int>? {
+        val match = key?.let { Regex("^S(\\d+)E(\\d+)$").matchEntire(it) } ?: return null
+        val season = match.groupValues[1].toIntOrNull() ?: return null
+        val episode = match.groupValues[2].toIntOrNull() ?: return null
+        return season to episode
+    }
+
+    private fun nextEpisodeAfter(season: Int, episode: Int): Pair<Int, Int>? {
+        val loaded = when {
+            season == selectedSeason -> episodes
+            pluginEpisodes.containsKey(season) -> pluginEpisodes[season].orEmpty()
+            else -> emptyList()
+        }
+        val index = loaded.indexOfFirst { it.episodeNumber == episode }
+        if (index >= 0 && index + 1 < loaded.size) {
+            return season to loaded[index + 1].episodeNumber
+        }
+
+        val seasonInfo = seasons.firstOrNull { it.seasonNumber == season }
+        if (seasonInfo != null && episode < seasonInfo.episodeCount) {
+            return season to (episode + 1)
+        }
+        val nextSeason = seasons.filter { it.seasonNumber > season }.minByOrNull { it.seasonNumber }
+            ?: return null
+        return nextSeason.seasonNumber to 1
+    }
+
+    private fun continueTarget(): Pair<Int, Int>? {
+        if (mediaType != "tv") return lastPlayed() ?: (1 to 1)
+
+        val syntheticId = TmdbStreamResolver.syntheticId(mediaId)
+        val playerKey = PrefManager.getNullableCustomVal(
+            "${syntheticId}_current_ep",
+            null,
+            String::class.java
+        )
+        var target = parseSeasonEpisode(playerKey) ?: lastPlayed() ?: (selectedSeason to 1)
+        val watchPercentage = PrefManager.getVal<Float>(PrefName.WatchPercentage)
+        var guard = 0
+        while (guard++ < 100) {
+            val epKey = "S${target.first}E${target.second}"
+            val pos = PrefManager.getNullableCustomVal(
+                "${syntheticId}_$epKey",
+                0L,
+                Long::class.java
+            ) ?: 0L
+            val max = PrefManager.getNullableCustomVal(
+                "${syntheticId}_${epKey}_max",
+                0L,
+                Long::class.java
+            ) ?: 0L
+            if (pos <= 0L || max <= 0L) break
+            if (pos.toFloat() / max.toFloat() <= watchPercentage) break
+            target = nextEpisodeAfter(target.first, target.second) ?: break
+        }
+        return target
+    }
+
     private fun saveSourcePref() {
 
         if (selectedSourceIndex == -1) {
@@ -1427,7 +1490,7 @@ class TmdbWatchFragment : Fragment() {
         val h = headerBinding
         val syntheticId = TmdbStreamResolver.syntheticId(mediaId)
 
-        val (s, e) = lastPlayed() ?: (if (mediaType == "tv") selectedSeason to 1 else 1 to 1)
+        val (s, e) = continueTarget() ?: (if (mediaType == "tv") selectedSeason to 1 else 1 to 1)
         val epKey = if (mediaType == "tv") "S${s}E$e" else "1"
         val pos = PrefManager.getNullableCustomVal("${syntheticId}_$epKey", 0L, Long::class.java) ?: 0L
         val max = PrefManager.getNullableCustomVal("${syntheticId}_${epKey}_max", 0L, Long::class.java) ?: 0L
@@ -1437,11 +1500,15 @@ class TmdbWatchFragment : Fragment() {
             return
         }
         val detail = detail ?: return
+        val ep = episodes.firstOrNull { it.seasonNumber == s && it.episodeNumber == e }
+        val still = ep?.stillPath?.takeIf { it.isNotBlank() }
         h.tmdbWatchContinueCard.isVisible = true
-        h.tmdbWatchContinueImage.loadImage(Tmdb.imageUrl(detail.backdropPath ?: detail.posterPath, 780))
+        h.tmdbWatchContinueImage.loadImage(
+            Tmdb.imageUrl(still ?: detail.backdropPath ?: detail.posterPath, 780)
+        )
         val mm = TimeUnit.MILLISECONDS.toMinutes(pos)
         val ss = TimeUnit.MILLISECONDS.toSeconds(pos) % 60
-        val episodeTitle = episodes.firstOrNull { it.seasonNumber == s && it.episodeNumber == e }?.name
+        val episodeTitle = ep?.name?.takeIf { it.isNotBlank() }
             ?: (if (mediaType == "tv") "S${s} E$e" else detail.displayTitle)
         h.tmdbWatchContinueText.text = episodeTitle
         h.tmdbWatchContinueDetail.text = getString(R.string.tmdb_watch_continue_detail, s, e, mm, ss)
