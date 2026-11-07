@@ -1217,10 +1217,10 @@ class TmdbWatchFragment : Fragment() {
         autoSearchJob?.cancel()
         if (isResolving) return
         val d = detail ?: return
-        val continue = if (mediaType == "tv") continueTarget() else null
-        val season = if (mediaType == "tv") continue?.first ?: selectedSeason else null
+        val cwTarget = if (mediaType == "tv") continueTarget() else null
+        val season = if (mediaType == "tv") cwTarget?.first ?: selectedSeason else null
 
-        val resumeEp = if (mediaType == "tv") continue?.second else null
+        val resumeEp = if (mediaType == "tv") cwTarget?.second else null
         Logger.log("TMDB_WATCH: auto search on open for '${d.displayTitle}' (season=$season ep=$resumeEp)")
         setSourceStatus(getString(R.string.tmdb_watch_searching, d.displayTitle))
         isResolving = true
