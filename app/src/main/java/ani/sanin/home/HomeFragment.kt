@@ -141,7 +141,6 @@ class HomeFragment : Fragment() {
             if (activity != null && _binding != null) lifecycleScope.launch(Dispatchers.Main) {
                 val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
                 val bannerMode: Int = PrefManager.getVal(PrefName.HomeBannerMode)
-                val isCarouselMode = bannerMode == 0
                 val showProfileHeader = bannerMode == 1
 
                 if (rescueMode && MAL.token != null) {
@@ -158,34 +157,7 @@ class HomeFragment : Fragment() {
                     binding.homeUserChaptersRead.text = MAL.chaptersRead?.toString() ?: "—"
                 }
 
-                if (isCarouselMode) {
-                    binding.homeUserBg.visibility = View.GONE
-                    binding.homeUserBgNoKen.visibility = View.GONE
-                    binding.homeUserDataContainer.visibility = View.GONE
-                    binding.homeBannerCardWrap.visibility = View.VISIBLE
-                    setupBannerCarousel()
-                } else if (showProfileHeader) {
-                    binding.homeBannerCardWrap.visibility = View.GONE
-                    binding.homeUserBg.visibility = View.VISIBLE
-                    binding.homeUserBgNoKen.visibility = View.VISIBLE
-                    val bannerAnimations: Boolean = PrefManager.getVal<Boolean>(PrefName.AnimationsEnabled) && PrefManager.getVal<Boolean>(PrefName.BannerAnimations)
-                    val bannerUrl = if (rescueMode) (Anilist.bg ?: MAL.avatar) else Anilist.bg
-                    blurImage(
-                        if (bannerAnimations) binding.homeUserBg else binding.homeUserBgNoKen,
-                        bannerUrl
-                    )
-                } else if (bannerMode == 2) {
-                    binding.homeBannerCardWrap.visibility = View.GONE
-                    binding.homeUserBg.visibility = View.GONE
-                    binding.homeUserBgNoKen.visibility = View.GONE
-                    binding.homeNavigatingBannerContainer.visibility = View.VISIBLE
-                } else {
-                    binding.homeBannerCardWrap.visibility = View.GONE
-                    binding.homeUserBg.visibility = View.GONE
-                    binding.homeUserBgNoKen.visibility = View.GONE
-                    binding.homeNavigatingBannerContainer.visibility = View.GONE
-                }
-                applyHomeBannerLandscapeMode()
+                applyHomeBannerMode()
 
                 binding.homeUserDataProgressBar.visibility = View.GONE
 
@@ -271,15 +243,15 @@ class HomeFragment : Fragment() {
         binding.homeRefresh.setSlingshotDistance(height + 128)
         binding.homeRefresh.setProgressViewEndTarget(false, height + 128)
         binding.homeRefresh.setOnRefreshListener {
-            if (catalogueMode) loadCatalogue() else Refresh.activity[1]!!.postValue(true)
+            if (catalogueMode) loadCatalogueHome() else Refresh.activity[1]!!.postValue(true)
         }
-        binding.homeCatalogueRefresh.setOnRefreshListener { loadCatalogue() }
 
         binding.homeUserDataProgressBar.visibility = View.VISIBLE
         binding.homeUserDataContainer.visibility = View.GONE
         if (catalogueMode) {
+            applyHomeBannerMode()
             applyCatalogueMode()
-            loadCatalogue()
+            loadCatalogueHome()
         } else if (model.loaded) {
             load()
             if (loggedOutMode) setupLoggedOutHome()
@@ -389,6 +361,14 @@ class HomeFragment : Fragment() {
 
             mode.observe(viewLifecycleOwner) {
                 if (loggedOutMode) return@observe
+                if (catalogueMode) {
+                    container.visibility = View.GONE
+                    recyclerView.visibility = View.GONE
+                    empty.visibility = View.GONE
+                    title.visibility = View.GONE
+                    more.visibility = View.GONE
+                    return@observe
+                }
                 recyclerView.visibility = View.GONE
                 empty.visibility = View.GONE
                 if (it != null) {
@@ -506,6 +486,10 @@ class HomeFragment : Fragment() {
 
             binding.homeHiddenItemsContainer.visibility = View.GONE
             model.getHidden().observe(viewLifecycleOwner) {
+                if (catalogueMode) {
+                    binding.homeHiddenItemsContainer.visibility = View.GONE
+                    return@observe
+                }
                 if (it != null) {
                     if (it.isNotEmpty()) {
                         binding.homeHiddenItemsRecyclerView.adapter =
@@ -562,7 +546,7 @@ class HomeFragment : Fragment() {
 
         model.empty.observe(viewLifecycleOwner)
         {
-            if (loggedOutMode) {
+            if (loggedOutMode || catalogueMode) {
                 binding.homeSaninContainer.visibility = View.GONE
                 return@observe
             }
@@ -593,6 +577,10 @@ class HomeFragment : Fragment() {
 
         PrefManager.getLiveVal(PrefName.RescueMode, false).asLiveBool()
             .observe(viewLifecycleOwner) { inRescueMode ->
+
+                if (catalogueMode) {
+                    return@observe
+                }
 
                 if (loggedOutMode) {
                     hideHomeSections()
@@ -633,10 +621,8 @@ class HomeFragment : Fragment() {
 
         live.observe(viewLifecycleOwner) { shouldRefresh ->
             if (catalogueMode) {
-                if (shouldRefresh && binding.homeCatalogueSections.childCount == 0 &&
-                    catalogueJob?.isActive != true
-                ) {
-                    loadCatalogue()
+                if (shouldRefresh && catalogueJob?.isActive != true) {
+                    loadCatalogueHome()
                 }
                 return@observe
             }
@@ -1013,6 +999,44 @@ class HomeFragment : Fragment() {
     private val bannerSnapHelper = PagerSnapHelper()
     private var bannerAutoScrollHandler: Handler? = null
     private var bannerAutoScrollRunnable: Runnable? = null
+
+    private fun applyHomeBannerMode() {
+        val rescueMode: Boolean = PrefManager.getVal(PrefName.RescueMode)
+        val bannerMode: Int = PrefManager.getVal(PrefName.HomeBannerMode)
+        when (bannerMode) {
+            0 -> {
+                binding.homeUserBg.visibility = View.GONE
+                binding.homeUserBgNoKen.visibility = View.GONE
+                binding.homeUserDataContainer.visibility = View.GONE
+                binding.homeBannerCardWrap.visibility = View.VISIBLE
+                setupBannerCarousel()
+            }
+            1 -> {
+                binding.homeBannerCardWrap.visibility = View.GONE
+                binding.homeUserBg.visibility = View.VISIBLE
+                binding.homeUserBgNoKen.visibility = View.VISIBLE
+                val bannerAnimations: Boolean = PrefManager.getVal<Boolean>(PrefName.AnimationsEnabled) && PrefManager.getVal<Boolean>(PrefName.BannerAnimations)
+                val bannerUrl = if (rescueMode) (Anilist.bg ?: MAL.avatar) else Anilist.bg
+                blurImage(
+                    if (bannerAnimations) binding.homeUserBg else binding.homeUserBgNoKen,
+                    bannerUrl
+                )
+            }
+            2 -> {
+                binding.homeBannerCardWrap.visibility = View.GONE
+                binding.homeUserBg.visibility = View.GONE
+                binding.homeUserBgNoKen.visibility = View.GONE
+                binding.homeNavigatingBannerContainer.visibility = View.VISIBLE
+            }
+            else -> {
+                binding.homeBannerCardWrap.visibility = View.GONE
+                binding.homeUserBg.visibility = View.GONE
+                binding.homeUserBgNoKen.visibility = View.GONE
+                binding.homeNavigatingBannerContainer.visibility = View.GONE
+            }
+        }
+        applyHomeBannerLandscapeMode()
+    }
 
     private fun setupBannerCarousel() {
         applyHomeBannerLandscapeMode()
@@ -1767,15 +1791,40 @@ class HomeFragment : Fragment() {
         media.meanScore?.let { "$it%" }
 
     private fun applyCatalogueMode() {
-        binding.homeRefresh.visibility = View.GONE
-        binding.homeCatalogueRefresh.visibility = View.VISIBLE
+        binding.homeRefresh.visibility = View.VISIBLE
+        binding.homeUserStatusContainer.visibility = View.GONE
+        binding.homeSaninContainer.visibility = View.GONE
+        binding.homeHiddenItemsContainer.visibility = View.GONE
+        binding.homeFavAnimeContainer.visibility = View.GONE
+        binding.homePlannedAnimeContainer.visibility = View.GONE
+        binding.homeMissingSequelsContainer.visibility = View.GONE
+        binding.homeRecommendedContainer.visibility = View.GONE
+        binding.homeCatalogueSections.visibility = View.VISIBLE
+    }
+
+    private fun loadCatalogueHome() {
+        Logger.log("HomeCatalogue: loading home data + catalogue")
+        viewLifecycleOwner.lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    model.initHomePage()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Logger.log("HomeCatalogue: home data failed")
+                    Logger.log(e)
+                }
+            }
+            if (_binding == null) return@launch
+            loadCatalogue()
+        }
     }
 
     private fun loadCatalogue() {
         val sourceId = AnimeCatalogueHome.savedSourceId()
         Logger.log("HomeCatalogue: loading source '$sourceId'")
         catalogueJob?.cancel()
-        binding.homeCatalogueRefresh.isRefreshing = true
+        binding.homeRefresh.isRefreshing = true
         catalogueJob = viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val rows = withContext(Dispatchers.IO) {
@@ -1796,7 +1845,7 @@ class HomeFragment : Fragment() {
                 )
                 renderCatalogueRows(sourceId, rows)
             } finally {
-                if (_binding != null) binding.homeCatalogueRefresh.isRefreshing = false
+                if (_binding != null) binding.homeRefresh.isRefreshing = false
             }
         }
     }
@@ -1888,11 +1937,14 @@ class HomeFragment : Fragment() {
         if (catalogueMode != wasCatalogue) {
             Logger.log("HomeFragment: catalogue mode changed to $catalogueMode")
             if (catalogueMode) {
+                applyHomeBannerMode()
                 applyCatalogueMode()
-                loadCatalogue()
+                loadCatalogueHome()
             } else {
-                binding.homeCatalogueRefresh.visibility = View.GONE
+                binding.homeCatalogueSections.visibility = View.GONE
+                catalogueJob?.cancel()
                 binding.homeRefresh.visibility = View.VISIBLE
+                reapplyHomeLayout()
                 if (!model.loaded) Refresh.activity[1]!!.postValue(true)
             }
             return
@@ -1900,7 +1952,7 @@ class HomeFragment : Fragment() {
         if (catalogueMode) {
             applyCatalogueMode()
             if (binding.homeCatalogueSections.childCount == 0 && catalogueJob?.isActive != true) {
-                loadCatalogue()
+                loadCatalogueHome()
             }
             return
         }
