@@ -9,7 +9,7 @@ import java.net.URLEncoder
 
 object SubDubCache {
 
-    private const val BASE_URL = "https://anivault-proxy.shemaus58.workers.dev"
+    private const val BASE_URL = "https://api.anidub.moe"
 
     private val cache = LruCache<String, SubDubInfo>(300)
 
