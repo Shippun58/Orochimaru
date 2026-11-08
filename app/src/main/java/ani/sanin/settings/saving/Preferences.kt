@@ -186,8 +186,8 @@ enum class PrefName(val data: Pref) {
     NavRailAnimations(Pref(Location.UI, Boolean::class, true)),
     AnimatedVectorDrawables(Pref(Location.UI, Boolean::class, true)),
     FirstTimeProviderShown(Pref(Location.General, Boolean::class, false)),
-    NavPillHeight(Pref(Location.UI, Int::class, 58)),
-    NavPillIconSize(Pref(Location.UI, Int::class, 23)),
+    NavPillHeight(Pref(Location.UI, Int::class, 52)),
+    NavPillIconSize(Pref(Location.UI, Int::class, 16)),
     NavPillIconColor(Pref(Location.UI, Int::class, 0xFFFFFFFF.toInt())),
     NavPillCornerRadius(Pref(Location.UI, Int::class, 48)),
 
@@ -203,7 +203,7 @@ enum class PrefName(val data: Pref) {
     UseCustomKeyboard(Pref(Location.UI, Boolean::class, true)),
     KeyboardMode(Pref(Location.UI, Int::class, -1)),
 
-    UIScale(Pref(Location.UI, Float::class, 1.0f)),
+    UIScale(Pref(Location.UI, Float::class, 0.75f)),
 
     AccentColor(Pref(Location.UI, Int::class, 0)),
 
@@ -219,7 +219,7 @@ enum class PrefName(val data: Pref) {
     CardMetadataTop(Pref(Location.UI, Int::class, 3)),
     CardMetadataBottom(Pref(Location.UI, Int::class, 2)),
 
-    GlassEffectEnabled(Pref(Location.UI, Boolean::class, true)),
+    GlassEffectEnabled(Pref(Location.UI, Boolean::class, false)),
     GlassEffectNavPills(Pref(Location.UI, Boolean::class, true)),
     GlassEffectSideRail(Pref(Location.UI, Boolean::class, true)),
     GlassEffectServerSheet(Pref(Location.UI, Boolean::class, true)),
