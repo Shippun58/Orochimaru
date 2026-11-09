@@ -46,6 +46,7 @@ enum class PrefName(val data: Pref) {
     AnimeExtensionRepos(Pref(Location.General, Set::class, setOf("https://raw.githubusercontent.com/Confused-Creature-180/aniyomi-extensions/repo/index.min.json"))),
     CloudStreamRepos(Pref(Location.General, Set::class, setOf<String>())),
     CloudStreamInstalledSources(Pref(Location.General, List::class, listOf<String>())),
+    StremioInstalledAddons(Pref(Location.General, List::class, listOf<String>())),
     CloudStreamTypeFilter(Pref(Location.General, String::class, "All")),
     AnimeTypeFilter(Pref(Location.General, String::class, "All")),
     AnimeLangSort(Pref(Location.General, String::class, "all")),

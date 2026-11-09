@@ -320,6 +320,10 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
             pluginNames.add(src.name)
             pluginIds.add(src.id)
         }
+        StremioAddonManager.metadataSources().forEach { addon ->
+            pluginNames.add(addon.manifest.name)
+            pluginIds.add(StremioAddonManager.sourceId(addon))
+        }
 
         fun showSourcePicker() {
             val savedSource = PrefManager.getVal<String>(PrefName.ContentSource)

@@ -45,7 +45,15 @@ import ani.sanin.util.TvKeyboardUtil
 class ExtensionsActivity : AppCompatActivity() {
     lateinit var binding: ActivityExtensionsBinding
 
-    private var cloudStreamMode = false
+    private enum class ExtensionMode(val label: String) {
+        ANIYOMI("Aniyomi"),
+        CLOUDSTREAM("CloudStream"),
+        STREMIO("Stremio"),
+    }
+
+    private var extensionMode = ExtensionMode.ANIYOMI
+    private val cloudStreamMode get() = extensionMode == ExtensionMode.CLOUDSTREAM
+    private val stremioMode get() = extensionMode == ExtensionMode.STREMIO
 
     private var pillTabs by mutableStateOf<List<LibraryStatusTab>>(emptyList())
     private var selectedPillIndex by mutableIntStateOf(0)
@@ -117,7 +125,11 @@ class ExtensionsActivity : AppCompatActivity() {
         initActivity(this)
         AndroidBug5497Workaround.assistActivity(this) { }
 
-        cloudStreamMode = intent.getBooleanExtra(EXTRA_CLOUDSTREAM_MODE, false)
+        extensionMode = when {
+            intent.getBooleanExtra(EXTRA_STREMIO_MODE, false) -> ExtensionMode.STREMIO
+            intent.getBooleanExtra(EXTRA_CLOUDSTREAM_MODE, false) -> ExtensionMode.CLOUDSTREAM
+            else -> ExtensionMode.ANIYOMI
+        }
 
         setupModeToggle()
 
@@ -190,13 +202,14 @@ class ExtensionsActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_CLOUDSTREAM_MODE = "extra_cloudstream_mode"
+        const val EXTRA_STREMIO_MODE = "extra_stremio_mode"
         const val EXTRA_INSTALL_UPDATES = "extra_install_updates"
     }
 
     private fun updateSearchUiForTab(tabPosition: Int) {
-        val installed = tabPosition == 0
-        binding.searchIconButton.visibility = if (installed) View.VISIBLE else View.GONE
-        if (!installed) collapseSearchBar()
+        val showSearch = stremioMode || tabPosition == 0
+        binding.searchIconButton.visibility = if (showSearch) View.VISIBLE else View.GONE
+        if (!showSearch) collapseSearchBar()
     }
 
     private fun selectTab(position: Int) {
@@ -280,27 +293,33 @@ class ExtensionsActivity : AppCompatActivity() {
             }
         }
         FocusEffectUtil.applyFocusListener(binding.modeToggle)
-        updateToggleUI(cloudStreamMode, animate = false)
+        updateToggleUI(extensionMode, animate = false)
     }
 
     private fun toggleMode() {
         if (modeToggleAnimating) return
-        switchMode(!cloudStreamMode)
+        val next = when (extensionMode) {
+            ExtensionMode.ANIYOMI -> ExtensionMode.CLOUDSTREAM
+            ExtensionMode.CLOUDSTREAM -> ExtensionMode.STREMIO
+            ExtensionMode.STREMIO -> ExtensionMode.ANIYOMI
+        }
+        switchMode(next)
     }
 
-    private fun updateToggleUI(cloudStream: Boolean, animate: Boolean) {
+    private fun updateToggleUI(mode: ExtensionMode, animate: Boolean) {
         val density = resources.displayMetrics.density
         val thumbStart = 3f * density
         val thumbEnd = (160 - 30 - 3) * density
-        binding.modeToggleLabel.text = if (cloudStream) "CloudStream" else "Aniyomi"
-        styleToggleDrawables(cloudStream)
+        val isAniyomi = mode == ExtensionMode.ANIYOMI
+        binding.modeToggleLabel.text = mode.label
+        styleToggleDrawables(mode)
         if (!animate || !PrefManager.getVal<Boolean>(PrefName.AnimationsEnabled) || !PrefManager.getVal<Boolean>(PrefName.MiscUiAnimations)) {
-            binding.modeToggleThumb.translationX = if (cloudStream) thumbEnd else thumbStart
+            binding.modeToggleThumb.translationX = if (isAniyomi) thumbStart else thumbEnd
             return
         }
         modeToggleAnimating = true
         val currentX = binding.modeToggleThumb.translationX
-        val targetX = if (cloudStream) thumbEnd else thumbStart
+        val targetX = if (isAniyomi) thumbStart else thumbEnd
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 300
             interpolator = DecelerateInterpolator(1.5f)
@@ -310,21 +329,21 @@ class ExtensionsActivity : AppCompatActivity() {
                 binding.modeToggleThumb.translationX = currentX + (targetX - currentX) * t
                 if (!labelSwapped && t > 0.4f) {
                     labelSwapped = true
-                    binding.modeToggleLabel.text = if (cloudStream) "CloudStream" else "Aniyomi"
+                    binding.modeToggleLabel.text = mode.label
                 }
             }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     modeToggleAnimating = false
                     binding.modeToggleThumb.translationX = targetX
-                    binding.modeToggleLabel.text = if (cloudStream) "CloudStream" else "Aniyomi"
+                    binding.modeToggleLabel.text = mode.label
                 }
             })
             start()
         }
     }
 
-    private fun styleToggleDrawables(cloudStream: Boolean) {
+    private fun styleToggleDrawables(mode: ExtensionMode) {
         val primary = getThemeColor(com.google.android.material.R.attr.colorPrimary)
         val radius = 18 * resources.displayMetrics.density
         val thumbRadius = 15 * resources.displayMetrics.density
@@ -341,8 +360,17 @@ class ExtensionsActivity : AppCompatActivity() {
             cornerRadii = thumbRound
         }
         binding.modeToggleThumbIcon.setImageResource(
-            if (cloudStream) R.drawable.ic_toggle_cloudstream else R.drawable.ic_toggle_aniyomi
+            when (mode) {
+                ExtensionMode.ANIYOMI -> R.drawable.ic_toggle_aniyomi
+                ExtensionMode.CLOUDSTREAM -> R.drawable.ic_toggle_cloudstream
+                ExtensionMode.STREMIO -> R.drawable.ic_extension
+            }
         )
+        if (mode == ExtensionMode.STREMIO) {
+            binding.modeToggleThumbIcon.setColorFilter(primary)
+        } else {
+            binding.modeToggleThumbIcon.clearColorFilter()
+        }
     }
 
     fun focusPill(): Boolean = binding.extensionsPill.requestFocus()
@@ -365,15 +393,16 @@ class ExtensionsActivity : AppCompatActivity() {
         }, if (attempt == 0) 150 else 100)
     }
 
-    private fun switchMode(cloudStream: Boolean) {
-        if (cloudStreamMode == cloudStream) return
-        cloudStreamMode = cloudStream
-        updateToggleUI(cloudStream, animate = true)
+    private fun switchMode(mode: ExtensionMode) {
+        if (extensionMode == mode) return
+        extensionMode = mode
+        updateToggleUI(mode, animate = true)
         collapseSearchBar()
         binding.searchViewText.setText("")
         binding.searchViewText.clearFocus()
         setupTabs()
         setupModeButtons()
+        updateSearchUiForTab(0)
     }
 
     private fun setupTabs() {
@@ -382,26 +411,32 @@ class ExtensionsActivity : AppCompatActivity() {
             override fun getItemCount(): Int = 2
 
             override fun createFragment(position: Int): Fragment {
-                return if (cloudStreamMode) {
-                    when (position) {
+                return when (extensionMode) {
+                    ExtensionMode.CLOUDSTREAM -> when (position) {
                         0 -> CloudStreamInstalledFragment()
                         else -> CloudStreamAvailableFragment()
                     }
-                } else {
-                    when (position) {
+                    ExtensionMode.STREMIO -> when (position) {
+                        0 -> StremioInstalledFragment()
+                        else -> StremioAvailableFragment()
+                    }
+                    ExtensionMode.ANIYOMI -> when (position) {
                         0 -> InstalledAnimeExtensionsFragment()
                         else -> AnimeExtensionsFragment()
                     }
                 }
             }
         }
-        pillTabs = if (cloudStreamMode) {
-            listOf(
+        pillTabs = when (extensionMode) {
+            ExtensionMode.CLOUDSTREAM -> listOf(
                 LibraryStatusTab(label = "Installed Plugins", count = 0),
                 LibraryStatusTab(label = "Available Plugins", count = 0),
             )
-        } else {
-            listOf(
+            ExtensionMode.STREMIO -> listOf(
+                LibraryStatusTab(label = "Installed Add-ons", count = 0),
+                LibraryStatusTab(label = "Available Add-ons", count = 0),
+            )
+            ExtensionMode.ANIYOMI -> listOf(
                 LibraryStatusTab(label = "Installed Extensions", count = 0),
                 LibraryStatusTab(label = "Available Extensions", count = 0),
             )
@@ -424,7 +459,9 @@ class ExtensionsActivity : AppCompatActivity() {
     }
 
     private fun setupModeButtons() {
+        binding.openSettingsButton.visibility = if (stremioMode) View.GONE else View.VISIBLE
         binding.openSettingsButton.setOnClickListener {
+            if (stremioMode) return@setOnClickListener
             val repos = if (cloudStreamMode) {
                 CsRepos.repos().toList()
             } else {

@@ -19,6 +19,9 @@ import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
 import ani.sanin.parsers.DrmInfo
 import ani.sanin.parsers.VideoType
+import ani.sanin.settings.StremioAddon
+import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioStream
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.util.Logger
@@ -53,6 +56,7 @@ object TmdbStreamResolver {
             val drm: DrmInfo? = null,
             val audioTracks: List<AudioFile> = emptyList(),
             val host: String = "",
+            val externalUrl: String? = null,
         )
 
         data class Success(val links: List<PlayableLink>, val matchName: String? = null) : StreamResult()
@@ -60,6 +64,33 @@ object TmdbStreamResolver {
     }
 
     fun syntheticId(mediaId: Int): Int = -1000000000 - (mediaId % 1000000)
+
+    suspend fun resolveStremio(
+        addon: StremioAddon,
+        mediaType: String,
+        mediaId: Int,
+        detail: TmdbDetail,
+        season: Int?,
+        episodeNumber: Int?,
+    ): StreamResult {
+        if (!StremioAddonClient.supports(addon, "stream", mediaType)) {
+            return StreamResult.Error("${addon.manifest.name} does not provide streams")
+        }
+        val streams = StremioAddonClient.loadStreams(
+            addon = addon,
+            tmdbType = mediaType,
+            tmdbId = mediaId,
+            imdbId = detail.externalIds?.imdbId,
+            season = season,
+            episode = episodeNumber,
+        )
+        val links = stremioLinks(streams, addon.manifest.name)
+        return if (links.isEmpty()) {
+            StreamResult.Error("No playable streams found in ${addon.manifest.name}")
+        } else {
+            StreamResult.Success(links, detail.displayTitle)
+        }
+    }
 
     suspend fun resolveAuto(
         context: Context,
@@ -459,7 +490,8 @@ object TmdbStreamResolver {
         val detail: TmdbDetail,
         val source: CsInstalledSource,
         val load: LoadResponse? = null,
-        val isLive: Boolean = load is LiveStreamLoadResponse
+        val isLive: Boolean = load is LiveStreamLoadResponse,
+        val stremioAddon: StremioAddon? = null,
     )
 
     private val episodeShells = mutableMapOf<String, Map<String, Episode>>()
@@ -496,6 +528,32 @@ object TmdbStreamResolver {
         url.contains(".m3u8", ignoreCase = true) -> VideoType.M3U8
         url.contains(".mpd", ignoreCase = true) -> VideoType.DASH
         else -> VideoType.CONTAINER
+    }
+
+    fun stremioLinks(
+        streams: List<StremioStream>,
+        sourceName: String,
+    ): List<StreamResult.PlayableLink> = streams.mapNotNull { stream ->
+        val url = stream.url?.takeIf { it.isNotBlank() }
+        val external = stream.externalUrl?.takeIf { it.isNotBlank() }
+        val label = buildString {
+            append(stream.name?.takeIf { it.isNotBlank() } ?: sourceName)
+            stream.description?.takeIf { it.isNotBlank() }?.let { append(" · ").append(it) }
+        }
+        when {
+            url != null -> StreamResult.PlayableLink(
+                label = label,
+                url = url,
+                host = runCatching { java.net.URI(url).host }.getOrNull().orEmpty(),
+            )
+            external != null -> StreamResult.PlayableLink(
+                label = if (stream.name.isNullOrBlank()) "External" else "${stream.name} (external)",
+                url = "",
+                host = "External",
+                externalUrl = external,
+            )
+            else -> null
+        }
     }
 
     private fun audioLanguage(audio: AudioFile): String {
@@ -684,8 +742,13 @@ object TmdbStreamResolver {
             val season = ep.extra?.get("season")?.toIntOrNull()
             val episodeNum = ep.extra?.get("episode")?.toIntOrNull()
             val cached = cachedLinks(session.mediaId, session.source.name, season, episodeNum)
+            val stremioAddon = session.stremioAddon
             val result = cached
-                ?: if (session.load != null) {
+                ?: if (stremioAddon != null) {
+                    (resolveStremio(stremioAddon, session.mediaType, session.mediaId, session.detail, season, episodeNum)
+                        as? StreamResult.Success)
+                        ?.also { cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
+                } else if (session.load != null) {
                     (resolvePluginStreams(context, session.source, session.load, season, episodeNum)
                         as? StreamResult.Success)
                         .also { if (it != null) cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
@@ -718,10 +781,11 @@ object TmdbStreamResolver {
         links: List<StreamResult.PlayableLink>,
         pickedLabel: String,
         episodesOverride: Map<String, Episode>? = null,
-        load: LoadResponse? = null
+        load: LoadResponse? = null,
+        stremioAddon: StremioAddon? = null,
     ) {
         val id = syntheticId(mediaId)
-        sessions[id] = SyntheticSession(mediaId, mediaType, d, source, load)
+        sessions[id] = SyntheticSession(mediaId, mediaType, d, source, load, stremioAddon = stremioAddon)
         if (sessions.size > 24) {
             sessions.entries.take(sessions.size - 24).forEach { sessions.remove(it.key) }
         }

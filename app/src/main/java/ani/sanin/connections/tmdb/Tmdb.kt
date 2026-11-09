@@ -54,6 +54,12 @@ data class TmdbPage<T>(
 )
 
 @Serializable
+data class TmdbFindResult(
+    @SerialName("movie_results") val movieResults: List<TmdbMedia> = emptyList(),
+    @SerialName("tv_results") val tvResults: List<TmdbMedia> = emptyList(),
+)
+
+@Serializable
 data class TmdbProvider(
     @SerialName("provider_id") val id: Int = 0,
     @SerialName("provider_name") val name: String? = null,
@@ -411,6 +417,18 @@ object Tmdb {
         return runCatching { json.decodeFromString<TmdbPage<TmdbMedia>>(body).results }
             .getOrDefault(emptyList())
             .filter { it.mediaType != "person" }
+    }
+
+    suspend fun findByImdb(imdbId: String, mediaType: String? = null): TmdbMedia? {
+        val normalized = imdbId.trim()
+        if (normalized.isEmpty()) return null
+        val body = get("/find/$normalized", "external_source" to "imdb_id") ?: return null
+        val parsed = runCatching { json.decodeFromString<TmdbFindResult>(body) }.getOrNull() ?: return null
+        return when (mediaType) {
+            "movie" -> parsed.movieResults.firstOrNull()
+            "tv" -> parsed.tvResults.firstOrNull()
+            else -> parsed.movieResults.firstOrNull() ?: parsed.tvResults.firstOrNull()
+        }
     }
 
     suspend fun trending(mediaType: String = "all", timeWindow: String = "week"): List<TmdbMedia> {

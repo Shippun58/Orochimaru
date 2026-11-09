@@ -47,10 +47,15 @@ import ani.sanin.getThemeColor
 import ani.sanin.loadImage
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
+import ani.sanin.settings.StremioAddon
+import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioAddonManager
+import ani.sanin.settings.StremioCatalogCard
 import ani.sanin.settings.SettingsAccountActivity
 import ani.sanin.sizeBannerCard
 import ani.sanin.px
 import ani.sanin.util.FocusEffectUtil
+import ani.sanin.util.Logger
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.LiveSearchResponse
 import com.lagradost.cloudstream3.SearchResponse
@@ -320,6 +325,7 @@ class TmdbHomeFragment : Fragment() {
 
     private fun load() {
         val sourceId = PrefManager.getVal<String>(PrefName.ContentSource)
+        val stremioAddon = StremioAddonManager.addonForSourceId(sourceId)
         val plugin = if (sourceId == "simkl" || sourceId == "tmdb") null
             else CsRepos.installed(requireContext()).firstOrNull { it.id == sourceId }
         loadJob?.cancel()
@@ -327,6 +333,13 @@ class TmdbHomeFragment : Fragment() {
         loggedOutCtaButton = null
         binding.tmdbHomeSpinner.isVisible = true
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
+
+            if (stremioAddon != null) {
+                val loaded = loadStremioHome(stremioAddon)
+                if (!loaded) loadPublicSections()
+                binding.tmdbHomeSpinner.isVisible = false
+                return@launch
+            }
 
             loadBanner(plugin)
 
@@ -346,6 +359,62 @@ class TmdbHomeFragment : Fragment() {
             }
             binding.tmdbHomeSpinner.isVisible = false
         }
+    }
+
+    private suspend fun loadStremioHome(addon: StremioAddon): Boolean {
+        val shelves = withContext(Dispatchers.IO) {
+            val movieShelves = runCatching { StremioAddonClient.loadCatalogShelves(addon, "movie") }
+                .getOrDefault(emptyList())
+            val tvShelves = runCatching { StremioAddonClient.loadCatalogShelves(addon, "tv") }
+                .getOrDefault(emptyList())
+            movieShelves + tvShelves
+        }
+        if (shelves.isEmpty()) {
+            Logger.log("TMDB_HOME: no catalog shelves for ${addon.manifest.name}")
+            return false
+        }
+        val distinctCards = LinkedHashMap<String, StremioCatalogCard>()
+        shelves.forEach { shelf ->
+            shelf.cards.take(20).forEach { card ->
+                val key = "${card.type}:${card.id}"
+                if (!distinctCards.containsKey(key)) distinctCards[key] = card
+            }
+        }
+        val mapping = distinctCards.entries.toList().limitedAsyncMap(6) { (key, card) ->
+            key to mapStremioCardToTmdb(card)
+        }.toMap()
+        val resolvedShelves = shelves.mapNotNull { shelf ->
+            val items = shelf.cards.take(20)
+                .mapNotNull { card -> mapping["${card.type}:${card.id}"] }
+                .distinctBy { "${it.type}:${it.id}" }
+            if (items.isEmpty()) null else shelf.name to items
+        }
+        if (resolvedShelves.isEmpty()) {
+            Logger.log("TMDB_HOME: no TMDB matches for ${addon.manifest.name}")
+            return false
+        }
+        bannerItems.clear()
+        bannerItems.addAll(resolvedShelves.first().second.take(10).map { BannerItem.Tmdb(it) })
+        resolvedShelves.forEach { (name, items) -> addSection(name, items) }
+        if (bannerItems.isNotEmpty()) {
+            bannerIndex = 0
+            showBanner(0)
+        }
+        applyTmdbBannerFocusChain()
+        return true
+    }
+
+    private suspend fun mapStremioCardToTmdb(card: StremioCatalogCard): TmdbMedia? {
+        val hint = if (card.type == "series" || card.type == "tv") "tv" else "movie"
+        if (card.id.startsWith("tt")) {
+            runCatching { Tmdb.findByImdb(card.id, hint) }.getOrNull()?.let { return it }
+        }
+        val title = card.name.takeIf { it.isNotBlank() } ?: return null
+        val year = card.releaseInfo?.take(4)?.toIntOrNull()
+        val results = runCatching { Tmdb.search(title) }.getOrDefault(emptyList())
+        return results.firstOrNull { it.type == hint && (year == null || it.year == year.toString()) }
+            ?: results.firstOrNull { it.type == hint }
+            ?: results.firstOrNull()
     }
 
     private fun isSimklLoggedOut(): Boolean =

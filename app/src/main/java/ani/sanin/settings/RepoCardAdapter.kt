@@ -27,12 +27,20 @@ data class RepoUi(
     val count: Int,
     val iconUrl: String? = null,
     val contentTypes: List<String> = emptyList(),
-    val languages: List<String> = emptyList()
+    val languages: List<String> = emptyList(),
+    val countText: String? = null,
+    val scopeLabel: String = "languages",
+    val description: String? = null,
+    val watermarkRes: Int? = null,
 ) {
     fun matches(q: String): Boolean {
         if (q.isBlank()) return true
-        return name.lowercase(Locale.ROOT).contains(q.lowercase(Locale.ROOT)) ||
-            url.lowercase(Locale.ROOT).contains(q.lowercase(Locale.ROOT))
+        val needle = q.lowercase(Locale.ROOT)
+        return name.lowercase(Locale.ROOT).contains(needle) ||
+            url.lowercase(Locale.ROOT).contains(needle) ||
+            description.orEmpty().lowercase(Locale.ROOT).contains(needle) ||
+            contentTypes.any { it.lowercase(Locale.ROOT).contains(needle) } ||
+            languages.any { it.lowercase(Locale.ROOT).contains(needle) }
     }
 }
 
@@ -50,7 +58,8 @@ class RepoCardAdapter(
     private val onOpen: (RepoUi) -> Unit,
     private val onLongClick: (RepoUi) -> Unit,
     private val countLabel: String = "plugins",
-    private val onExitTop: (() -> Boolean)? = null
+    private val onExitTop: (() -> Boolean)? = null,
+    private val actionLabel: String = "Browse",
 ) : ListAdapter<RepoUi, RepoCardAdapter.VH>(DIFF) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -66,7 +75,8 @@ class RepoCardAdapter(
 
         holder.binding.repoName.text = item.name
 
-        holder.binding.repoCount.text = "${item.count} $countLabel"
+        holder.binding.repoCount.text = item.countText ?: "${item.count} $countLabel"
+        holder.binding.repoWatermark.setImageResource(item.watermarkRes ?: R.drawable.ic_github)
 
         holder.binding.repoContentTypes.removeAllViews()
         val chipTextColor = ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
@@ -95,8 +105,9 @@ class RepoCardAdapter(
         holder.binding.repoLanguages.removeAllViews()
         val languageCount = item.languages.size
         holder.binding.repoLanguages.addView(com.google.android.material.chip.Chip(ctx).apply {
-            text = languageCount.toString()
-            contentDescription = "$languageCount languages"
+            text = if (item.scopeLabel == "languages") languageCount.toString()
+                else "$languageCount ${item.scopeLabel}"
+            contentDescription = "$languageCount ${item.scopeLabel}"
             isClickable = false
             isFocusable = false
             textSize = 11f
@@ -121,6 +132,7 @@ class RepoCardAdapter(
 
         val skipIcons = PrefManager.getVal<Boolean>(PrefName.SkipExtensionIcons)
         if (!skipIcons && !item.iconUrl.isNullOrBlank()) {
+            holder.binding.repoLogo.setImageResource(R.drawable.ic_extension)
             Glide.with(ctx)
                 .asBitmap()
                 .load(item.iconUrl)
@@ -145,8 +157,8 @@ class RepoCardAdapter(
         }
 
         with(holder.binding.repoBrowseButton) {
-            text = "Browse"
-            contentDescription = "Browse ${item.name}"
+            text = actionLabel
+            contentDescription = "$actionLabel ${item.name}"
             setOnClickListener { onOpen(item) }
             isFocusable = true
 

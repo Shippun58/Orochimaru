@@ -71,6 +71,7 @@ import ani.sanin.settings.AddRepositoryBottomSheet
 import ani.sanin.settings.MediaTrackerBottomSheet
 import ani.sanin.settings.ExtensionsActivity
 import ani.sanin.settings.FirstTimeProviderDialog
+import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefManager.asLiveBool
 import ani.sanin.settings.saving.PrefName
@@ -686,7 +687,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             val src = PrefManager.getVal<String>(PrefName.ContentSource)
             if (src == "simkl" || src == "tmdb") "Simkl"
-            else CsRepos.installed(this).firstOrNull { it.id == src }?.name ?: "Movie & TV"
+            else StremioAddonManager.addonForSourceId(src)?.manifest?.name
+                ?: CsRepos.installed(this).firstOrNull { it.id == src }?.name
+                ?: "Movie & TV"
         }
         binding.mainModeText.text = text
     }

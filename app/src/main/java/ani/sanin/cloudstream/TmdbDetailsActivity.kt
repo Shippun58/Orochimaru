@@ -32,6 +32,7 @@ import ani.sanin.isDarkTheme
 import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.tmdb.TmdbCast
 import ani.sanin.connections.tmdb.TmdbDetail
+import ani.sanin.connections.tmdb.TmdbGenre
 import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.cloudstream.TmdbCards
 import ani.sanin.connections.simkl.Simkl
@@ -56,6 +57,9 @@ import ani.sanin.util.GlassEffectManager
 import ani.sanin.util.GlassComponent
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
+import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioAddonManager
+import ani.sanin.settings.StremioMetaDetails
 import ani.sanin.ui.components.EchoNavPillController
 import com.google.android.material.card.MaterialCardView
 import com.lagradost.cloudstream3.CommonActivity
@@ -299,6 +303,46 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    private suspend fun withStremioFallback(base: TmdbDetail?): TmdbDetail? {
+        if (base != null && !base.overview.isNullOrBlank() && base.posterPath != null) return base
+        val sourceId = PrefManager.getVal<String>(PrefName.ContentSource)
+        val candidates = buildList {
+            StremioAddonManager.addonForSourceId(sourceId)?.let { add(it) }
+            addAll(StremioAddonManager.metadataSources())
+        }.distinctBy { it.transportUrl }
+        val imdb = base?.externalIds?.imdbId
+        var meta: StremioMetaDetails? = null
+        for (addon in candidates) {
+            if (!StremioAddonClient.supports(addon, "meta", mediaType)) continue
+            meta = runCatching {
+                StremioAddonClient.loadMeta(addon, mediaType, mediaId, imdb)
+            }.getOrNull()
+            if (meta != null) break
+        }
+        val found = meta ?: return base
+        val fallbackGenres = found.genres.mapIndexed { i, name -> TmdbGenre(i + 1, name) }
+        if (base == null) {
+            return TmdbDetail(
+                id = mediaId,
+                title = if (mediaType == "movie") found.name else null,
+                name = if (mediaType == "movie") null else found.name,
+                overview = found.description,
+                posterPath = found.poster,
+                backdropPath = found.background,
+                voteAverage = found.imdbRating?.toDoubleOrNull() ?: 0.0,
+                releaseDate = if (mediaType == "movie") found.releaseInfo else null,
+                firstAirDate = if (mediaType == "movie") null else found.releaseInfo,
+                genres = fallbackGenres,
+            )
+        }
+        return base.copy(
+            overview = base.overview?.takeIf { it.isNotBlank() } ?: found.description,
+            posterPath = base.posterPath ?: found.poster,
+            backdropPath = base.backdropPath ?: found.background,
+            genres = if (base.genres.isEmpty()) fallbackGenres else base.genres,
+        )
+    }
+
     private fun load() {
         if (pluginMode) {
             loadPlugin()
@@ -307,7 +351,7 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         lifecycleScope.launch {
             binding.mediaInfoProgressBar.visibility = View.VISIBLE
             binding.mediaInfoContainer.visibility = View.GONE
-            val d = Tmdb.detail(mediaType, mediaId) ?: run {
+            val d = withStremioFallback(Tmdb.detail(mediaType, mediaId)) ?: run {
                 binding.mediaInfoProgressBar.visibility = View.GONE
                 snackString("Could not load details"); return@launch
             }
