@@ -145,7 +145,7 @@ object StremioAddonClient {
         withContext(Dispatchers.IO) {
             if (!supports(addon, "catalog", tmdbType)) return@withContext emptyList()
             val type = stremioType(tmdbType)
-            catalogDefinitions(addon).asSequence()
+            catalogDefinitions(addon)
                 .filter { it.type == type || it.type == "all" }
                 .filterNot { it.hasRequiredExtras }
                 .take(4)

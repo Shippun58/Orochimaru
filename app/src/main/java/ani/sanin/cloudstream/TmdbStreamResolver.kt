@@ -743,7 +743,7 @@ object TmdbStreamResolver {
             val episodeNum = ep.extra?.get("episode")?.toIntOrNull()
             val cached = cachedLinks(session.mediaId, session.source.name, season, episodeNum)
             val stremioAddon = session.stremioAddon
-            val result = cached
+            val result = (cached
                 ?: if (stremioAddon != null) {
                     (resolveStremio(stremioAddon, session.mediaType, session.mediaId, session.detail, season, episodeNum)
                         as? StreamResult.Success)
@@ -756,7 +756,7 @@ object TmdbStreamResolver {
                     (resolveStreams(context, session.source, session.detail, season, episodeNum)
                         as? StreamResult.Success)
                         .also { if (it != null) cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
-                }
+                })
                 ?: return@withContext false
             val extractors = buildExtractors(result.links)
             if (extractors.isEmpty()) return@withContext false
