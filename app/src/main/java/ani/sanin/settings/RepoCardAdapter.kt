@@ -32,6 +32,7 @@ data class RepoUi(
     val scopeLabel: String = "languages",
     val description: String? = null,
     val watermarkRes: Int? = null,
+    val configUrl: String? = null,
 ) {
     fun matches(q: String): Boolean {
         if (q.isBlank()) return true
@@ -60,6 +61,7 @@ class RepoCardAdapter(
     private val countLabel: String = "plugins",
     private val onExitTop: (() -> Boolean)? = null,
     private val actionLabel: String = "Browse",
+    private val onConfigure: ((RepoUi) -> Unit)? = null,
 ) : ListAdapter<RepoUi, RepoCardAdapter.VH>(DIFF) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -199,6 +201,16 @@ class RepoCardAdapter(
                         KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1)
                         else -> false
                     }
+                }
+            }
+        }
+
+        with(holder.binding.repoConfigButton) {
+            visibility = if (item.configUrl != null && onConfigure != null) View.VISIBLE else View.GONE
+            contentDescription = "Configure ${item.name}"
+            setOnClickListener {
+                if (item.configUrl != null) {
+                    onConfigure?.invoke(item)
                 }
             }
         }

@@ -74,8 +74,13 @@ object TmdbStreamResolver {
         episodeNumber: Int?,
     ): StreamResult {
         if (!StremioAddonClient.supports(addon, "stream", mediaType)) {
+            Logger.log("STREMIO: resolve skipped addon='${addon.manifest.name}' type=$mediaType (no stream)")
             return StreamResult.Error("${addon.manifest.name} does not provide streams")
         }
+        Logger.log(
+            "STREMIO: resolve addon='${addon.manifest.name}' type=$mediaType tmdb=$mediaId " +
+                "imdb=${detail.externalIds?.imdbId} S$season E$episodeNumber"
+        )
         val streams = StremioAddonClient.loadStreams(
             addon = addon,
             tmdbType = mediaType,
@@ -85,6 +90,9 @@ object TmdbStreamResolver {
             episode = episodeNumber,
         )
         val links = stremioLinks(streams, addon.manifest.name)
+        Logger.log(
+            "STREMIO: resolve result addon='${addon.manifest.name}' streams=${streams.size} playable=${links.size}"
+        )
         return if (links.isEmpty()) {
             StreamResult.Error("No playable streams found in ${addon.manifest.name}")
         } else {

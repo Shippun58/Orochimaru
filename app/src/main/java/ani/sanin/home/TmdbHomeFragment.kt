@@ -133,7 +133,7 @@ class TmdbHomeFragment : Fragment() {
         binding.tmdbBannerFrame.setOnClickListener {
             val item = bannerItems.getOrNull(bannerIndex) ?: return@setOnClickListener
             when (item) {
-                is BannerItem.Tmdb -> openDetails(item.media.type, item.media.id)
+                is BannerItem.Tmdb -> openMedia(item.media)
                 is BannerItem.Plugin -> {
                     if (item.tmdbId != null && item.tmdbType != null) {
                         openDetails(item.tmdbType, item.tmdbId)
@@ -361,7 +361,38 @@ class TmdbHomeFragment : Fragment() {
         }
     }
 
+    private fun openMedia(media: TmdbMedia) {
+        if (media.id > 0) {
+            openDetails(media.type, media.id)
+            return
+        }
+        val title = media.displayTitle
+        if (title.isBlank()) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val results = withContext(Dispatchers.IO) {
+                runCatching { Tmdb.search(title) }.getOrDefault(emptyList())
+            }
+            val match = results.firstOrNull { it.type == media.type } ?: results.firstOrNull()
+            if (match != null) {
+                Logger.log("TMDB_HOME: resolved '${media.displayTitle}' to tmdb=${match.id} (${match.type})")
+                openDetails(match.type, match.id)
+            } else {
+                Logger.log("TMDB_HOME: no TMDB match for '${media.displayTitle}'")
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "No TMDB match for $title",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
     private suspend fun loadStremioHome(addon: StremioAddon): Boolean {
+        Logger.log(
+            "TMDB_HOME: stremio addon='${addon.manifest.name}' types=${addon.manifest.types} " +
+                "capabilities=${StremioAddonClient.capabilities(addon)} " +
+                "resources=${addon.manifest.resources.size} catalogs=${addon.manifest.catalogs.size}"
+        )
         val shelves = withContext(Dispatchers.IO) {
             val movieShelves = runCatching { StremioAddonClient.loadCatalogShelves(addon, "movie") }
                 .getOrDefault(emptyList())
@@ -373,9 +404,13 @@ class TmdbHomeFragment : Fragment() {
             Logger.log("TMDB_HOME: no catalog shelves for ${addon.manifest.name}")
             return false
         }
+        Logger.log(
+            "TMDB_HOME: shelves for ${addon.manifest.name}: " +
+                shelves.joinToString(" | ") { "${it.name}=${it.cards.size}" }
+        )
         val distinctCards = LinkedHashMap<String, StremioCatalogCard>()
         shelves.forEach { shelf ->
-            shelf.cards.take(20).forEach { card ->
+            shelf.cards.take(6).forEach { card ->
                 val key = "${card.type}:${card.id}"
                 if (!distinctCards.containsKey(key)) distinctCards[key] = card
             }
@@ -385,23 +420,60 @@ class TmdbHomeFragment : Fragment() {
         }.toMap()
         val resolvedShelves = shelves.mapNotNull { shelf ->
             val items = shelf.cards.take(20)
-                .mapNotNull { card -> mapping["${card.type}:${card.id}"] }
-                .distinctBy { "${it.type}:${it.id}" }
+                .mapNotNull { card ->
+                    val hint = if (card.type == "series" || card.type == "tv") "tv" else "movie"
+                    enrichCard(card, mapping["${card.type}:${card.id}"], hint)
+                }
+                .distinctBy { "${it.type}:${it.id}:${it.displayTitle}" }
             if (items.isEmpty()) null else shelf.name to items
         }
         if (resolvedShelves.isEmpty()) {
-            Logger.log("TMDB_HOME: no TMDB matches for ${addon.manifest.name}")
+            Logger.log("TMDB_HOME: no cards for ${addon.manifest.name}")
             return false
         }
+        val allItems = resolvedShelves.flatMap { it.second }
+        val bannerCandidates = allItems.filter { it.id > 0 }
         bannerItems.clear()
-        bannerItems.addAll(resolvedShelves.first().second.take(10).map { BannerItem.Tmdb(it) })
-        resolvedShelves.forEach { (name, items) -> addSection(name, items) }
+        bannerItems.addAll(bannerCandidates.take(10).map { BannerItem.Tmdb(it) })
+        resolvedShelves.forEach { (name, items) ->
+            addSection(name, items, onClick = ::openMedia, showMore = false)
+        }
+        Logger.log(
+            "TMDB_HOME: stremio '${addon.manifest.name}' shelves=${resolvedShelves.size} " +
+                "cards=${allItems.size} mapped=${mapping.values.count { it != null }}"
+        )
         if (bannerItems.isNotEmpty()) {
             bannerIndex = 0
             showBanner(0)
         }
         applyTmdbBannerFocusChain()
         return true
+    }
+
+    private fun enrichCard(card: StremioCatalogCard, mapped: TmdbMedia?, hint: String): TmdbMedia? {
+        if (mapped != null) {
+            return mapped.copy(
+                posterPath = mapped.posterPath ?: card.poster,
+                backdropPath = mapped.backdropPath ?: card.background,
+                overview = mapped.overview?.takeIf { it.isNotBlank() } ?: card.description,
+                voteAverage = if (mapped.voteAverage > 0) mapped.voteAverage
+                else card.imdbRating?.toDoubleOrNull() ?: 0.0,
+                mediaType = mapped.mediaType ?: hint,
+            )
+        }
+        val title = card.name.takeIf { it.isNotBlank() } ?: return null
+        return TmdbMedia(
+            id = 0,
+            title = if (hint == "movie") title else null,
+            name = if (hint == "movie") null else title,
+            posterPath = card.poster,
+            backdropPath = card.background,
+            voteAverage = card.imdbRating?.toDoubleOrNull() ?: 0.0,
+            releaseDate = if (hint == "movie") card.releaseInfo else null,
+            firstAirDate = if (hint == "movie") null else card.releaseInfo,
+            overview = card.description,
+            mediaType = hint,
+        )
     }
 
     private suspend fun mapStremioCardToTmdb(card: StremioCatalogCard): TmdbMedia? {
@@ -720,7 +792,7 @@ class TmdbHomeFragment : Fragment() {
     private fun openBannerItem(item: BannerItem) {
         when (item) {
 
-            is BannerItem.Tmdb -> openDetails(item.media.type, item.media.id)
+            is BannerItem.Tmdb -> openMedia(item.media)
             is BannerItem.Plugin -> {
                 if (item.tmdbId != null && item.tmdbType != null) {
                     openDetails(item.tmdbType, item.tmdbId)
@@ -995,7 +1067,12 @@ class TmdbHomeFragment : Fragment() {
         binding.tmdbHomeSections.addView(list)
     }
 
-    private fun addSection(title: String, items: List<TmdbMedia>) {
+    private fun addSection(
+        title: String,
+        items: List<TmdbMedia>,
+        onClick: ((TmdbMedia) -> Unit)? = null,
+        showMore: Boolean = true,
+    ) {
         if (items.isEmpty()) return
         val ctx = requireContext()
         val header = TextView(ctx).apply {
@@ -1008,17 +1085,22 @@ class TmdbHomeFragment : Fragment() {
         val list = RecyclerView(ctx).apply {
             setTag(R.id.section_row_tag, true)
             layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
-            val exploreList = ArrayList(items.map { it.toExploreMedia() })
-            adapter = ConcatAdapter(
-                TmdbRowAdapter(items) { media -> openDetails(media.type, media.id) },
-                SectionMoreAdapter {
-                    MediaListViewActivity.passedMedia = exploreList
-                    startActivity(
-                        Intent(requireContext(), MediaListViewActivity::class.java)
-                            .putExtra("title", title)
-                    )
-                }
-            )
+            val row = TmdbRowAdapter(items) { media ->
+                if (onClick != null) onClick(media) else openDetails(media.type, media.id)
+            }
+            adapter = if (showMore) {
+                val exploreList = ArrayList(items.map { it.toExploreMedia() })
+                ConcatAdapter(
+                    row,
+                    SectionMoreAdapter {
+                        MediaListViewActivity.passedMedia = exploreList
+                        startActivity(
+                            Intent(requireContext(), MediaListViewActivity::class.java)
+                                .putExtra("title", title)
+                        )
+                    }
+                )
+            } else row
             isNestedScrollingEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             setPadding(24, 0, 24, 0)

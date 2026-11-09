@@ -12,6 +12,7 @@ import android.text.TextWatcher
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.AutoCompleteTextView
+import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import ani.sanin.R
@@ -40,6 +42,8 @@ import ani.sanin.themes.ThemeManager
 import ani.sanin.ui.LensButtonBackground
 import ani.sanin.ui.components.LibraryStatusTab
 import ani.sanin.util.FocusEffectUtil
+import ani.sanin.util.Logger
+import ani.sanin.util.customAlertDialog
 import ani.sanin.util.TvKeyboardUtil
 
 class ExtensionsActivity : AppCompatActivity() {
@@ -459,9 +463,17 @@ class ExtensionsActivity : AppCompatActivity() {
     }
 
     private fun setupModeButtons() {
-        binding.openSettingsButton.visibility = if (stremioMode) View.GONE else View.VISIBLE
+        binding.openSettingsButton.visibility = View.VISIBLE
+        binding.openSettingsButton.setImageResource(
+            if (stremioMode) R.drawable.ic_add else R.drawable.ic_round_menu_book_24
+        )
+        binding.openSettingsButton.contentDescription =
+            if (stremioMode) "Add add-on" else getString(R.string.sort_by)
         binding.openSettingsButton.setOnClickListener {
-            if (stremioMode) return@setOnClickListener
+            if (stremioMode) {
+                showAddStremioAddonDialog()
+                return@setOnClickListener
+            }
             val repos = if (cloudStreamMode) {
                 CsRepos.repos().toList()
             } else {
@@ -477,6 +489,57 @@ class ExtensionsActivity : AppCompatActivity() {
         }
         FocusEffectUtil.applyFocusListener(binding.openSettingsButton)
         LensButtonBackground.apply(binding.openSettingsButton)
+    }
+
+    private fun showAddStremioAddonDialog() {
+        val input = EditText(this).apply {
+            hint = "https://example.com/manifest.json"
+            setSingleLine(true)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
+            setPadding(32, 24, 32, 24)
+            setMinWidth((280 * resources.displayMetrics.density).toInt())
+        }
+        customAlertDialog().apply {
+            setTitle("Add Stremio add-on")
+            setMessage("Enter the add-on manifest URL")
+            setCustomView(input)
+            setOnShowListener {
+                TvKeyboardUtil.setupTvInput(input)
+                input.requestFocus()
+            }
+            setPosButton("Add") {
+                val url = input.text.toString().trim()
+                if (url.isBlank()) {
+                    ani.sanin.toast("Enter an add-on URL")
+                    return@setPosButton
+                }
+                lifecycleScope.launch {
+                    Logger.log("STREMIO: add-on URL submitted url=$url")
+                    val installed = StremioAddonManager.installFromUrl(url)
+                    if (installed == null) {
+                        Logger.log("STREMIO: add-on URL failed url=$url")
+                        ani.sanin.toast("Could not add add-on (invalid manifest or already installed)")
+                    } else {
+                        val detail = listOf(
+                            StremioAddonClient.capabilities(installed).joinToString(),
+                            StremioAddonClient.supportedTypes(installed).joinToString(),
+                        ).filter { it.isNotBlank() }.joinToString(" · ")
+                        ani.sanin.toast(
+                            if (detail.isBlank()) "${installed.manifest.name} installed"
+                            else "${installed.manifest.name} installed ($detail)"
+                        )
+                        refreshCurrentList()
+                    }
+                }
+            }
+            setNegButton("Cancel")
+            show()
+        }
+    }
+
+    private fun refreshCurrentList() {
+        val fragment = supportFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        (fragment as? SearchQueryHandler)?.notifyDataChanged()
     }
 }
 

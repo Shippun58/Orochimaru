@@ -73,6 +73,19 @@
                 android:textColor="?attr/colorOnSurface"
                 android:textSize="11sp"
                 tools:text="12 plugins" />
+
+            <ImageView
+                android:id="@+id/repoConfigButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="6dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Configure add-on"
+                android:focusable="true"
+                android:padding="6dp"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_round_settings_24"
+                app:tint="?attr/colorOnSurface" />
         </LinearLayout>
 
         <HorizontalScrollView

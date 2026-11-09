@@ -1,5 +1,7 @@
 package ani.sanin.settings
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -8,6 +10,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.sanin.databinding.FragmentExtensionsBinding
+import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
 
 class StremioInstalledFragment : Fragment(), SearchQueryHandler {
@@ -20,6 +23,7 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
         countLabel = "catalogs",
         onExitTop = { (activity as? ExtensionsActivity)?.focusPill() == true },
         actionLabel = "Uninstall",
+        onConfigure = ::openConfiguration,
     )
     private var addons: List<StremioAddon> = emptyList()
     private var query = ""
@@ -42,6 +46,7 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
 
     private fun loadInstalled() {
         addons = StremioAddonManager.installed()
+        Logger.log("STREMIO: installed list count=${addons.size}")
         submitFiltered()
     }
 
@@ -61,6 +66,16 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
             }
             setNegButton("Cancel")
             show()
+        }
+    }
+
+    private fun openConfiguration(card: RepoUi) {
+        val url = card.configUrl ?: return
+        Logger.log("STREMIO: opening configuration for '${card.name}' url=$url")
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            Toast.makeText(requireContext(), "Could not open configuration", Toast.LENGTH_SHORT).show()
         }
     }
 

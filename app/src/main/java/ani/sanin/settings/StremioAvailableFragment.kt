@@ -1,5 +1,7 @@
 package ani.sanin.settings
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -9,6 +11,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.sanin.databinding.FragmentExtensionsBinding
+import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
 import kotlinx.coroutines.launch
 
@@ -22,6 +25,7 @@ class StremioAvailableFragment : Fragment(), SearchQueryHandler {
         countLabel = "catalogs",
         onExitTop = { (activity as? ExtensionsActivity)?.focusPill() == true },
         actionLabel = "Install",
+        onConfigure = ::openConfiguration,
     )
     private var addons: List<StremioAddon> = emptyList()
     private var query = ""
@@ -46,13 +50,17 @@ class StremioAvailableFragment : Fragment(), SearchQueryHandler {
         val appContext = requireContext().applicationContext
         viewLifecycleOwner.lifecycleScope.launch {
             val cached = StremioAddonManager.cachedCommunity(appContext)
+            Logger.log("STREMIO: available cache count=${cached.size}")
             if (cached.isNotEmpty()) {
                 addons = cached
                 submitFiltered()
             }
             val fresh = runCatching {
                 StremioAddonManager.fetchCommunity(appContext)
-            }.getOrNull() ?: return@launch
+            }.getOrNull() ?: run {
+                Logger.log("STREMIO: community fetch failed, keeping cached=${addons.size}")
+                return@launch
+            }
             addons = fresh
             submitFiltered()
         }
@@ -75,6 +83,7 @@ class StremioAvailableFragment : Fragment(), SearchQueryHandler {
     private fun install(card: RepoUi) {
         val addon = addons.firstOrNull { it.transportUrl == card.url } ?: return
         viewLifecycleOwner.lifecycleScope.launch {
+            Logger.log("STREMIO: install requested '${addon.manifest.name}' url=${addon.transportUrl}")
             val installed = StremioAddonManager.installWithManifest(addon)
             if (!isAdded) return@launch
             if (installed == null) {
@@ -93,6 +102,16 @@ class StremioAvailableFragment : Fragment(), SearchQueryHandler {
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
             }
             submitFiltered()
+        }
+    }
+
+    private fun openConfiguration(card: RepoUi) {
+        val url = card.configUrl ?: return
+        Logger.log("STREMIO: opening configuration for '${card.name}' url=$url")
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            Toast.makeText(requireContext(), "Could not open configuration", Toast.LENGTH_SHORT).show()
         }
     }
 

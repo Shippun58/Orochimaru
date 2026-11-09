@@ -2,6 +2,7 @@ package ani.sanin.settings
 
 import android.content.Context
 import ani.sanin.R
+import ani.sanin.util.Logger
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -46,6 +47,8 @@ data class StremioAddonManifest(
     val catalogs: List<JsonElement> = emptyList(),
     val idPrefixes: List<String> = emptyList(),
     @SerialName("addonCatalogs") val addonCatalogs: List<JsonElement> = emptyList(),
+    val config: List<JsonElement> = emptyList(),
+    @SerialName("behaviorHints") val behaviorHints: JsonObject? = null,
 )
 
 object StremioAddonManager {
@@ -80,25 +83,54 @@ object StremioAddonManager {
     fun install(addon: StremioAddon): Boolean {
         val current = PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons)
         if (installed().any { it.transportUrl.equals(addon.transportUrl, ignoreCase = true) }) {
+            Logger.log("STREMIO: install skipped (already installed) url=${addon.transportUrl}")
             return false
         }
         PrefManager.setVal(
             PrefName.StremioInstalledAddons,
             current + json.encodeToString(addon),
         )
+        Logger.log("STREMIO: installed name='${addon.manifest.name}' url=${addon.transportUrl}")
         return true
     }
 
     suspend fun installWithManifest(addon: StremioAddon): StremioAddon? {
-        if (isInstalled(addon.transportUrl)) return null
-        val resolved = StremioAddonClient.fetchManifest(addon.transportUrl) ?: addon
-        if (isInstalled(resolved.transportUrl)) return null
+        if (isInstalled(addon.transportUrl)) {
+            Logger.log("STREMIO: installWithManifest skipped (already installed) url=${addon.transportUrl}")
+            return null
+        }
+        val resolved = StremioAddonClient.fetchManifest(addon.transportUrl)
+        if (resolved == null) {
+            Logger.log("STREMIO: installWithManifest fetch failed, using provided manifest url=${addon.transportUrl}")
+        }
+        val target = resolved ?: addon
+        return persistInstall(target)
+    }
+
+    suspend fun installFromUrl(url: String): StremioAddon? {
+        val resolved = StremioAddonClient.fetchManifest(url)
+        if (resolved == null) {
+            Logger.log("STREMIO: installFromUrl failed to fetch manifest url=$url")
+            return null
+        }
+        return persistInstall(resolved)
+    }
+
+    private fun persistInstall(addon: StremioAddon): StremioAddon? {
+        if (isInstalled(addon.transportUrl)) {
+            Logger.log("STREMIO: persistInstall skipped (already installed) url=${addon.transportUrl}")
+            return null
+        }
         val current = PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons)
         PrefManager.setVal(
             PrefName.StremioInstalledAddons,
-            current + json.encodeToString(resolved),
+            current + json.encodeToString(addon),
         )
-        return resolved
+        Logger.log(
+            "STREMIO: installed name='${addon.manifest.name}' url=${addon.transportUrl} " +
+                "types=${addon.manifest.types} capabilities=${StremioAddonClient.capabilities(addon)}"
+        )
+        return addon
     }
 
     fun uninstall(transportUrl: String) {
@@ -108,6 +140,7 @@ object StremioAddonManager {
                 .getOrNull()?.equals(transportUrl, ignoreCase = true) == true
         }
         PrefManager.setVal(PrefName.StremioInstalledAddons, remaining)
+        Logger.log("STREMIO: uninstalled url=$transportUrl remaining=${remaining.size}")
     }
 
     suspend fun cachedCommunity(context: Context): List<StremioAddon> = withContext(Dispatchers.IO) {
@@ -122,6 +155,8 @@ object StremioAddonManager {
     }
 
     suspend fun fetchCommunity(context: Context): List<StremioAddon> = withContext(Dispatchers.IO) {
+        Logger.log("STREMIO: fetching community catalog url=$COMMUNITY_CATALOG_URL")
+        val startedAt = System.currentTimeMillis()
         val request = Request.Builder()
             .url(COMMUNITY_CATALOG_URL)
             .header("Accept", "application/json")
@@ -141,7 +176,12 @@ object StremioAddonManager {
         runCatching {
             cacheFile(context).apply { parentFile?.mkdirs() }.writeText(responseText)
         }
-        catalog.addons.distinctBy { it.transportUrl.lowercase() }
+        val distinct = catalog.addons.distinctBy { it.transportUrl.lowercase() }
+        Logger.log(
+            "STREMIO: community catalog ok count=${catalog.addons.size} distinct=${distinct.size} " +
+                "elapsedMs=${System.currentTimeMillis() - startedAt}"
+        )
+        distinct
     }
 
     fun toRepoUi(addon: StremioAddon): RepoUi {
@@ -159,6 +199,7 @@ object StremioAddonManager {
             scopeLabel = "types",
             description = manifest.description,
             watermarkRes = R.drawable.ic_extension,
+            configUrl = StremioAddonClient.configureUrl(addon),
         )
     }
 

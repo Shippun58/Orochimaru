@@ -183,6 +183,10 @@ class TmdbWatchFragment : Fragment() {
                 StremioAddonClient.supports(addon, "meta", mediaType) ||
                 StremioAddonClient.supports(addon, "catalog", mediaType)
         }
+        Logger.log(
+            "TMDB_WATCH: stremio sources for type=$mediaType: " +
+                stremioSources.joinToString { "${it.manifest.name}(${StremioAddonClient.capabilities(it)})" }
+        )
 
         val hideScrollTop = PrefManager.getVal<Boolean>(PrefName.HideScrollTopButtons)
         binding.tmdbWatchBack.setOnClickListener { goBack() }

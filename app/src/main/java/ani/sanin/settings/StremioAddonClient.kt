@@ -1,6 +1,7 @@
 package ani.sanin.settings
 
 import android.net.Uri
+import ani.sanin.util.Logger
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -94,6 +95,25 @@ object StremioAddonClient {
 
     fun supportedTypes(addon: StremioAddon): List<String> = addon.manifest.types.distinct()
 
+    fun isConfigurable(addon: StremioAddon): Boolean {
+        val config = addon.manifest.config
+        if (config.isNotEmpty()) return true
+        val hint = (addon.manifest.behaviorHints?.get("configurable") as? JsonPrimitive)?.contentOrNull
+        return hint?.toBooleanStrictOrNull() == true
+    }
+
+    fun configureUrl(addon: StremioAddon): String? {
+        if (!isConfigurable(addon)) return null
+        return runCatching {
+            val uri = Uri.parse(addon.transportUrl)
+            val path = uri.path.orEmpty()
+                .removeSuffix("/manifest.json")
+                .trimEnd('/')
+            val configurePath = if (path.isBlank()) "/configure" else "$path/configure"
+            uri.buildUpon().path(configurePath).build().toString()
+        }.getOrNull()
+    }
+
     suspend fun fetchManifest(transportUrl: String): StremioAddon? = withContext(Dispatchers.IO) {
         if (transportUrl.isBlank()) return@withContext null
         val manifestUrl = runCatching {
@@ -103,7 +123,9 @@ object StremioAddonClient {
             else "$path/manifest.json"
             uri.buildUpon().path(manifestPath).build().toString()
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: return@withContext null
-        runCatching {
+        Logger.log("STREMIO: fetching manifest url=$manifestUrl")
+        val startedAt = System.currentTimeMillis()
+        val result = runCatching {
             val request = Request.Builder()
                 .url(manifestUrl)
                 .header("Accept", "application/json")
@@ -122,7 +144,21 @@ object StremioAddonClient {
                 transportName = "http",
                 manifest = json.decodeFromString<StremioAddonManifest>(body),
             )
-        }.getOrNull()
+        }
+        val elapsed = System.currentTimeMillis() - startedAt
+        result.onSuccess { addon ->
+            Logger.log(
+                "STREMIO: manifest ok name='${addon.manifest.name}' id=${addon.manifest.id} " +
+                    "types=${addon.manifest.types} capabilities=${capabilities(addon)} " +
+                    "catalogs=${addon.manifest.catalogs.size} elapsedMs=$elapsed"
+            )
+        }.onFailure { ex ->
+            Logger.log(
+                "STREMIO: manifest FAILED url=$manifestUrl elapsedMs=$elapsed " +
+                    "error=${ex.message ?: ex.javaClass.simpleName}"
+            )
+        }
+        result.getOrNull()
     }
 
     suspend fun loadMeta(
@@ -131,30 +167,49 @@ object StremioAddonClient {
         tmdbId: Int,
         imdbId: String?,
     ): StremioMetaDetails? = withContext(Dispatchers.IO) {
-        if (!supports(addon, "meta", tmdbType)) return@withContext null
-        for (id in metaIdCandidates(addon, tmdbType, tmdbId, imdbId)) {
+        if (!supports(addon, "meta", tmdbType)) {
+            Logger.log("STREMIO: meta skipped addon='${addon.manifest.name}' type=$tmdbType (unsupported)")
+            return@withContext null
+        }
+        val candidates = metaIdCandidates(addon, tmdbType, tmdbId, imdbId)
+        Logger.log("STREMIO: meta request addon='${addon.manifest.name}' type=$tmdbType candidates=$candidates")
+        for (id in candidates) {
             if (!idMatches(addon, "meta", tmdbType, id)) continue
             val root = request(addon, listOf("meta", stremioType(tmdbType), id)) ?: continue
             val meta = root["meta"] as? JsonObject ?: continue
-            parseMeta(meta)?.let { return@withContext it }
+            val parsed = parseMeta(meta)
+            if (parsed != null) {
+                Logger.log("STREMIO: meta ok addon='${addon.manifest.name}' id=$id videos=${parsed.videos.size}")
+                return@withContext parsed
+            }
         }
+        Logger.log("STREMIO: meta none addon='${addon.manifest.name}' type=$tmdbType id=$tmdbId")
         null
     }
 
     suspend fun loadCatalogShelves(addon: StremioAddon, tmdbType: String): List<StremioCatalogShelf> =
         withContext(Dispatchers.IO) {
-            if (!supports(addon, "catalog", tmdbType)) return@withContext emptyList()
+            if (!supports(addon, "catalog", tmdbType)) {
+                Logger.log("STREMIO: catalog skipped addon='${addon.manifest.name}' type=$tmdbType (unsupported)")
+                return@withContext emptyList()
+            }
             val type = stremioType(tmdbType)
-            catalogDefinitions(addon)
+            val definitions = catalogDefinitions(addon)
                 .filter { it.type == type || it.type == "all" }
                 .filterNot { it.hasRequiredExtras }
                 .take(4)
-                .mapNotNull { catalog ->
-                    val root = request(addon, listOf("catalog", catalog.type, catalog.id)) ?: return@mapNotNull null
-                    val cards = (root["metas"] as? JsonArray).orEmpty().mapNotNull { it.asObject()?.let(::parseCard) }
-                    cards.takeIf { it.isNotEmpty() }?.let { StremioCatalogShelf(catalog.name, it) }
-                }
-                .toList()
+            Logger.log(
+                "STREMIO: catalog request addon='${addon.manifest.name}' type=$type " +
+                    "catalogs=${definitions.map { it.id }}"
+            )
+            definitions.mapNotNull { catalog ->
+                val root = request(addon, listOf("catalog", catalog.type, catalog.id)) ?: return@mapNotNull null
+                val cards = (root["metas"] as? JsonArray).orEmpty().mapNotNull { it.asObject()?.let(::parseCard) }
+                Logger.log(
+                    "STREMIO: catalog '${catalog.name}' (${catalog.type}/${catalog.id}) cards=${cards.size}"
+                )
+                cards.takeIf { it.isNotEmpty() }?.let { StremioCatalogShelf(catalog.name, it) }
+            }
         }
 
     suspend fun loadStreams(
@@ -166,14 +221,21 @@ object StremioAddonClient {
         episode: Int?,
         metadataVideoId: String? = null,
     ): List<StremioStream> = withContext(Dispatchers.IO) {
-        if (!supports(addon, "stream", tmdbType)) return@withContext emptyList()
+        if (!supports(addon, "stream", tmdbType)) {
+            Logger.log("STREMIO: stream skipped addon='${addon.manifest.name}' type=$tmdbType (unsupported)")
+            return@withContext emptyList()
+        }
         val videoId = metadataVideoId?.takeIf { idMatches(addon, "stream", tmdbType, it) }
             ?: streamVideoId(addon, tmdbType, tmdbId, imdbId, season, episode)
-            ?: return@withContext emptyList()
+            ?: run {
+                Logger.log("STREMIO: stream no id addon='${addon.manifest.name}' tmdb=$tmdbId imdb=$imdbId S$season E$episode")
+                return@withContext emptyList()
+            }
         if (!idMatches(addon, "stream", tmdbType, videoId)) return@withContext emptyList()
+        Logger.log("STREMIO: stream request addon='${addon.manifest.name}' type=$tmdbType id=$videoId")
         val root = request(addon, listOf("stream", stremioType(tmdbType), videoId))
             ?: return@withContext emptyList()
-        (root["streams"] as? JsonArray).orEmpty().mapNotNull { element ->
+        val streams = (root["streams"] as? JsonArray).orEmpty().mapNotNull { element ->
             val item = element.asObject() ?: return@mapNotNull null
             StremioStream(
                 name = item.string("name"),
@@ -184,6 +246,8 @@ object StremioAddonClient {
                 ytId = item.string("ytId"),
             )
         }
+        Logger.log("STREMIO: stream ok addon='${addon.manifest.name}' id=$videoId streams=${streams.size}")
+        streams
     }
 
     private fun metaIdCandidates(
@@ -266,27 +330,39 @@ object StremioAddonClient {
         else -> null
     }
 
-    private suspend fun request(addon: StremioAddon, path: List<String>): JsonObject? = runCatching {
+    private suspend fun request(addon: StremioAddon, path: List<String>): JsonObject? {
         val manifestUrl = addon.transportUrl.substringBefore('?')
         val rootUrl = if (manifestUrl.endsWith("/manifest.json", ignoreCase = true)) {
             manifestUrl.dropLast("/manifest.json".length)
         } else manifestUrl.trimEnd('/')
         val pathSuffix = path.joinToString("/") { Uri.encode(it) }
-        val request = Request.Builder()
-            .url("$rootUrl/$pathSuffix.json")
-            .header("Accept", "application/json")
-            .build()
-        val body = client.newBuilder()
-            .callTimeout(15, TimeUnit.SECONDS)
-            .build()
-            .newCall(request)
-            .execute()
-            .use { response ->
-                if (!response.isSuccessful) throw IOException("Add-on returned HTTP ${response.code}")
-                response.body?.string() ?: throw IOException("Add-on returned an empty response")
-            }
-        json.parseToJsonElement(body).asObject()
-    }.getOrNull()
+        val url = "$rootUrl/$pathSuffix.json"
+        val startedAt = System.currentTimeMillis()
+        val result = runCatching {
+            val request = Request.Builder()
+                .url(url)
+                .header("Accept", "application/json")
+                .build()
+            val body = client.newBuilder()
+                .callTimeout(15, TimeUnit.SECONDS)
+                .build()
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    if (!response.isSuccessful) throw IOException("Add-on returned HTTP ${response.code}")
+                    response.body?.string() ?: throw IOException("Add-on returned an empty response")
+                }
+            json.parseToJsonElement(body).asObject()
+        }
+        val elapsed = System.currentTimeMillis() - startedAt
+        result.onFailure { ex ->
+            Logger.log(
+                "STREMIO: request FAILED addon='${addon.manifest.name}' url=$url " +
+                    "elapsedMs=$elapsed error=${ex.message ?: ex.javaClass.simpleName}"
+            )
+        }
+        return result.getOrNull()
+    }
 
     private fun parseMeta(obj: JsonObject): StremioMetaDetails? {
         val id = obj.string("id") ?: return null

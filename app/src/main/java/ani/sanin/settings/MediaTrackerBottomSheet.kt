@@ -327,6 +327,8 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
 
         fun showSourcePicker() {
             val savedSource = PrefManager.getVal<String>(PrefName.ContentSource)
+            Logger.log("MEDIA_TRACKER: picker sources=${pluginIds}")
+            Logger.log("MEDIA_TRACKER: current ContentSource=$savedSource")
             val restoreIdx = pluginIds.indexOfFirst { it.equals(savedSource, ignoreCase = true) }
             val currentIdx = if (restoreIdx >= 0) restoreIdx else 0
             pluginNameView.text = pluginNames[currentIdx]
@@ -354,6 +356,9 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
                     picker.setChecked(pos)
                     PrefManager.setVal(PrefName.ContentSource, pluginIds[idx])
                     pluginNameView.text = pluginNames[idx]
+                    Logger.log(
+                        "MEDIA_TRACKER: selected '${pluginNames[idx]}' id=${pluginIds[idx]}"
+                    )
                     (activity as? MainActivity)?.setContentMode("movie_tv")
                 }
                 show()
