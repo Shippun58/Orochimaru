@@ -57,6 +57,8 @@ import ani.sanin.blurImage
 import ani.sanin.connections.anilist.Anilist
 import ani.sanin.connections.anizip.AniZip
 import ani.sanin.connections.kitsu.Kitsu
+import ani.sanin.connections.LogoApi
+import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.mal.MAL
 import ani.sanin.connections.anilist.AnilistHomeViewModel
 import ani.sanin.connections.anilist.getUserId
@@ -94,7 +96,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
@@ -112,6 +117,7 @@ class HomeFragment : Fragment() {
     private var catalogueMode = false
 
     private var catalogueJob: Job? = null
+    private var catalogueBannerJob: Job? = null
 
     private var loggedOutMode = false
     private var homeLoading = false
@@ -1805,6 +1811,7 @@ class HomeFragment : Fragment() {
         if (_binding == null) return
         val ctx = requireContext()
         binding.homeCatalogueSections.removeAllViews()
+        catalogueBannerJob?.cancel()
         if (rows.isEmpty()) {
             val label = when {
                 sourceId.startsWith("native:", true) -> sourceId.substringAfter(':')
@@ -1821,6 +1828,169 @@ class HomeFragment : Fragment() {
                 setTextColor(ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface))
             })
             return
+        }
+        val bannerItems = rows.first().items.take(20).map {
+            AnimeCatalogueHome.displayMedia(sourceId, it)
+        }
+        if (bannerItems.isNotEmpty()) {
+            val banner = RecyclerView(ctx).apply {
+                layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
+                isNestedScrollingEnabled = false
+                overScrollMode = View.OVER_SCROLL_NEVER
+                clipToPadding = false
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    catalogueBannerHeight()
+                ).apply { bottomMargin = 14f.px }
+            }
+            binding.homeCatalogueSections.addView(banner, 0)
+            val modern = isModernBanner()
+            banner.adapter = BannerCarouselAdapter(
+                bannerItems,
+                viewLifecycleOwner.lifecycleScope,
+                { media ->
+                    val item = rows.first().items.firstOrNull {
+                        AnimeCatalogueHome.displayMedia(sourceId, it).id == media.id
+                    }
+                    val act = activity as? AppCompatActivity
+                    if (item != null && act != null) {
+                        AnimeCatalogueHome.openItem(act, sourceId, item) {
+                            ContextCompat.startActivity(
+                                ctx,
+                                Intent(ctx, ani.sanin.media.MediaDetailsActivity::class.java)
+                                    .putExtra("media", it)
+                                    .putExtra("anime", true),
+                                null
+                            )
+                        }
+                    }
+                },
+                nextFocusDownId = View.NO_ID,
+                layoutRes = layoutForBannerType(modern),
+                cardMode = !modern && !isClassicBanner(),
+                hideDescription = !modern,
+                modernMode = modern,
+            )
+            val snap = PagerSnapHelper()
+            snap.attachToRecyclerView(banner)
+            val start = Int.MAX_VALUE / 2 - (Int.MAX_VALUE / 2 % bannerItems.size)
+            banner.scrollToPosition(start)
+            catalogueBannerJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                fun normalizeTitle(value: String) = value.lowercase().filter { it.isLetterOrDigit() }
+                val resolvedIds = coroutineScope {
+                    val gate = Semaphore(4)
+                    bannerItems.map { media -> async(Dispatchers.IO) {
+                      gate.withPermit {
+                    val title = media.userPreferredName.ifBlank { media.nameRomaji }
+                    var anilistId = media.id.takeIf { it > 0 }
+
+                    val tmdbResults = runCatching { Tmdb.search(title) }.getOrDefault(emptyList())
+                    val wantedTitle = normalizeTitle(title)
+                    val tmdb = tmdbResults.firstOrNull {
+                        normalizeTitle(it.displayTitle) == wantedTitle
+                    } ?: tmdbResults.firstOrNull()
+                    if (media.banner.isNullOrBlank()) {
+                        tmdb?.backdropPath?.let { Tmdb.imageUrl(it, 1280) }?.let { media.banner = it }
+                    }
+                    if (media.description.isNullOrBlank()) media.description = tmdb?.overview
+                    if (media.meanScore == null && tmdb != null && tmdb.voteAverage > 0) {
+                        media.meanScore = (tmdb.voteAverage * 10).toInt()
+                    }
+                    if (media.format.isNullOrBlank() && tmdb != null) {
+                        media.format = if (tmdb.type == "movie") "MOVIE" else "TV"
+                    }
+                    if (media.startDate == null) {
+                        val year = tmdb?.year?.toIntOrNull()
+                        if (year != null) media.startDate = ani.sanin.connections.anilist.api.FuzzyDate(year = year)
+                    }
+                    if (media.genres.isEmpty() && tmdb != null && tmdb.genreIds.isNotEmpty()) {
+                        val genreMap = runCatching { Tmdb.detailGenres(tmdb.type, tmdb.id) }
+                            .getOrDefault(emptyList()).associate { it.id to it.name }
+                        media.genres = ArrayList(tmdb.genreIds.mapNotNull { genreMap[it] })
+                    }
+
+                    val kitsuResults = runCatching { Kitsu.search(title, limit = 5) }
+                        .getOrDefault(emptyList())
+                    val kitsu = kitsuResults.firstOrNull {
+                        normalizeTitle(it.userPreferredName) == wantedTitle ||
+                            normalizeTitle(it.nameRomaji) == wantedTitle
+                    } ?: kitsuResults.firstOrNull()
+                    if (anilistId == null) anilistId = kitsu?.id
+                    if (media.banner.isNullOrBlank()) media.banner = kitsu?.banner
+                    if (media.description.isNullOrBlank()) media.description = kitsu?.description
+                    if (media.format.isNullOrBlank()) media.format = kitsu?.format
+                    if (media.startDate == null) media.startDate = kitsu?.startDate
+                    media.anime?.let { anime ->
+                        if (anime.season.isNullOrBlank()) anime.season = kitsu?.anime?.season
+                        if (anime.seasonYear == null) anime.seasonYear = kitsu?.anime?.seasonYear
+                    }
+
+                    var aniListMedia: Media? = null
+                    if (anilistId != null) {
+                        runCatching { AniZip.getImages(anilistId!!) }.getOrNull()
+                            ?.backdropUrl?.takeIf { it.isNotBlank() }?.let {
+                                if (media.banner.isNullOrBlank()) media.banner = it
+                            }
+                        aniListMedia = runCatching {
+                            Anilist.query.searchAniManga(
+                                type = "ANIME", page = 1, perPage = 1,
+                                id = anilistId, isAdult = false
+                            )?.results?.firstOrNull()
+                        }.getOrNull()
+                    } else {
+                        val aniListMatches = runCatching {
+                            Anilist.query.searchAniManga(
+                                type = "ANIME", page = 1, perPage = 10, search = title, isAdult = false
+                            )?.results.orEmpty()
+                        }.getOrDefault(emptyList())
+                        aniListMedia = aniListMatches.firstOrNull {
+                            normalizeTitle(it.userPreferredName) == wantedTitle ||
+                                normalizeTitle(it.nameRomaji) == wantedTitle
+                        } ?: aniListMatches.firstOrNull()
+                        anilistId = aniListMedia?.id
+                        if (anilistId != null) {
+                            runCatching { AniZip.getImages(anilistId!!) }.getOrNull()
+                                ?.backdropUrl?.takeIf { it.isNotBlank() }?.let {
+                                    if (media.banner.isNullOrBlank()) media.banner = it
+                                }
+                            if (aniListMedia == null) {
+                                aniListMedia = runCatching {
+                                    Anilist.query.searchAniManga(
+                                        type = "ANIME", page = 1, perPage = 1,
+                                        id = anilistId, isAdult = false
+                                    )?.results?.firstOrNull()
+                                }.getOrNull()
+                            }
+                        }
+                    }
+                    if (media.banner.isNullOrBlank()) media.banner = aniListMedia?.banner
+                    if (media.description.isNullOrBlank()) media.description = aniListMedia?.description
+                    if (media.format.isNullOrBlank()) media.format = aniListMedia?.format
+                    if (media.status.isNullOrBlank()) media.status = aniListMedia?.status
+                    if (media.meanScore == null) media.meanScore = aniListMedia?.meanScore
+                    if (media.genres.isEmpty()) media.genres = aniListMedia?.genres ?: arrayListOf()
+                    media.anime?.let { anime ->
+                        if (anime.season.isNullOrBlank()) anime.season = aniListMedia?.anime?.season
+                        if (anime.seasonYear == null) anime.seasonYear = aniListMedia?.anime?.seasonYear
+                    }
+                    anilistId?.let { media.id to it }
+                      }
+                    } }.awaitAll().filterNotNull()
+                }
+                val logoIdsByMedia = resolvedIds.toMap()
+                val backdropUrls = bannerItems.associate { it.id to it.banner }
+                val logos = runCatching {
+                    LogoApi.getLogosBatch(logoIdsByMedia.values.toList())
+                }.getOrDefault(emptyMap())
+                val displayLogos = logoIdsByMedia.mapNotNull { (mediaId, apiId) ->
+                    logos[apiId]?.let { mediaId to it }
+                }.toMap()
+                withContext(Dispatchers.Main) {
+                    if (_binding != null && banner.adapter != null) {
+                        (banner.adapter as? BannerCarouselAdapter)?.updateUrls(backdropUrls, displayLogos)
+                    }
+                }
+            }
         }
         rows.forEach { row ->
             val mediaToItem = LinkedHashMap<Int, CatalogueItem>()
@@ -1878,6 +2048,12 @@ class HomeFragment : Fragment() {
             header?.let(binding.homeCatalogueSections::addView)
             binding.homeCatalogueSections.addView(recycler)
         }
+    }
+
+    private fun catalogueBannerHeight(): Int = when {
+        isModernBanner() -> resources.getDimensionPixelSize(R.dimen.banner_modern_height)
+        isClassicBanner() -> resources.getDimensionPixelSize(R.dimen.banner_classic_height)
+        else -> (resources.displayMetrics.widthPixels * 9f / 16f).toInt()
     }
 
     override fun onResume() {
@@ -1947,6 +2123,8 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         catalogueJob?.cancel()
+        catalogueBannerJob?.cancel()
+        catalogueBannerJob = null
         loggedOutJob?.cancel()
         loggedOutJob = null
         loggedOutCtaView = null
