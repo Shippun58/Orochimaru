@@ -1973,18 +1973,30 @@ class HomeFragment : Fragment() {
                         if (anime.season.isNullOrBlank()) anime.season = aniListMedia?.anime?.season
                         if (anime.seasonYear == null) anime.seasonYear = aniListMedia?.anime?.seasonYear
                     }
-                    anilistId?.let { media.id to it }
+                    anilistId?.let { Triple(media.id, it, tmdb) }
                       }
                     } }.awaitAll().filterNotNull()
                 }
-                val logoIdsByMedia = resolvedIds.toMap()
+                val logoIdsByMedia = resolvedIds.associate { it.first to it.second }
+                val tmdbByMedia = resolvedIds.mapNotNull { result ->
+                    result.third?.let { result.first to it }
+                }.toMap()
                 val backdropUrls = bannerItems.associate { it.id to it.banner }
                 val logos = runCatching {
                     LogoApi.getLogosBatch(logoIdsByMedia.values.toList())
                 }.getOrDefault(emptyMap())
-                val displayLogos = logoIdsByMedia.mapNotNull { (mediaId, apiId) ->
-                    logos[apiId]?.let { mediaId to it }
-                }.toMap()
+                val displayLogos = coroutineScope {
+                    val gate = Semaphore(4)
+                    logoIdsByMedia.map { (mediaId, apiId) -> async(Dispatchers.IO) {
+                        gate.withPermit {
+                            val fanartLogo = logos[apiId]
+                            val logo = fanartLogo ?: tmdbByMedia[mediaId]?.let { tmdb ->
+                                runCatching { Tmdb.logoUrl(tmdb.type, tmdb.id) }.getOrNull()
+                            }
+                            logo?.let { mediaId to it }
+                        }
+                    } }.awaitAll().filterNotNull().toMap()
+                }
                 withContext(Dispatchers.Main) {
                     if (_binding != null && banner.adapter != null) {
                         (banner.adapter as? BannerCarouselAdapter)?.updateUrls(backdropUrls, displayLogos)
