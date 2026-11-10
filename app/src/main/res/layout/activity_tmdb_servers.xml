@@ -81,6 +81,17 @@
                         android:padding="10dp"
                         app:srcCompat="@drawable/ic_round_refresh_24"
                         tools:ignore="ContentDescription" />
+
+                    <ImageButton
+                        android:id="@+id/tmdbServersMenu"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="6dp"
+                        android:background="@color/nav_bg_inv"
+                        android:focusable="true"
+                        android:padding="10dp"
+                        app:srcCompat="@drawable/ic_round_dots_vertical_24"
+                        tools:ignore="ContentDescription" />
                 </LinearLayout>
             </FrameLayout>
 
@@ -199,6 +210,20 @@
                         app:singleLine="true"
                         app:chipSpacingHorizontal="10dp" />
                 </HorizontalScrollView>
+
+                <CheckBox
+                    android:id="@+id/tmdbServersMakeDefault"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginEnd="14dp"
+                    android:layout_marginBottom="8dp"
+                    android:buttonTint="?attr/colorPrimaryContainer"
+                    android:fontFamily="@font/poppins"
+                    android:text="@string/make_default"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
             </LinearLayout>
 
             <androidx.recyclerview.widget.RecyclerView

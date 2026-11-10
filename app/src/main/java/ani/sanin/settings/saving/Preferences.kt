@@ -240,6 +240,7 @@ enum class PrefName(val data: Pref) {
     GlassEffectTextColor(Pref(Location.UI, Int::class, Color.WHITE)),
 
     HomeBannerMode(Pref(Location.UI, Int::class, 0)),
+    TmdbServersLoadMode(Pref(Location.UI, Int::class, 0)),
     BannerType(Pref(Location.UI, Int::class, 0)),
     ShowContinueWatching(Pref(Location.UI, Boolean::class, true)),
     ShowPlanned(Pref(Location.UI, Boolean::class, true)),

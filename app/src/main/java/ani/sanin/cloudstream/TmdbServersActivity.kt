@@ -34,6 +34,7 @@ import com.google.android.material.chip.Chip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.widget.PopupMenu
 
 class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
@@ -126,8 +127,16 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         serversBinding.tmdbStreamsRows.adapter = rowsAdapter
         serversBinding.tmdbStreamsBack.setOnClickListener { finish() }
         serversBinding.tmdbServersRefreshAll.setOnClickListener { refreshAll() }
+        serversBinding.tmdbServersMenu.setOnClickListener { showLoadModeMenu(it) }
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbStreamsBack)
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbServersRefreshAll)
+        FocusEffectUtil.applyFocusListener(serversBinding.tmdbServersMenu)
+        serversBinding.tmdbServersMakeDefault.isChecked =
+            PrefManager.getVal<Boolean>(PrefName.MakeDefault)
+        serversBinding.tmdbServersMakeDefault.setOnCheckedChangeListener { _, checked ->
+            PrefManager.setVal(PrefName.MakeDefault, checked)
+            if (!checked) PrefManager.setCustomVal("tmdb_source_$mediaId", "")
+        }
         serversBinding.tmdbServersScroll.post { setupCollapse() }
 
         lifecycleScope.launch {
@@ -148,12 +157,12 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             }
             detail = pluginDetail ?: detail
             if (isFinishing || isDestroyed) return@launch
-            bindHeader(detail!!)
-            buildGroups()
-            buildChips()
-            selectedIndex = 0
-            refreshRows()
-            resolveAll()
+        bindHeader(detail!!)
+        buildGroups()
+        selectedIndex = applyDefaultSelection()
+        buildChips()
+        refreshRows()
+        resolveAll()
         }
     }
 
@@ -478,9 +487,40 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private suspend fun resolveAll() {
         val d = detail ?: return
-        Logger.log("TMDB_SERVERS: resolveAll total=${groups.size}")
-        groups.indices.forEach { launchGroupResolution(it) }
+        val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        val targets = if (mode == 1) listOf(selectedIndex) else groups.indices
+        if (mode == 1) {
+            groups.forEachIndexed { i, g ->
+                if (i != selectedIndex) {
+                    groupJobs.remove(i)?.cancel()
+                    g.state = GroupState.Loading
+                }
+            }
+        }
+        Logger.log("TMDB_SERVERS: resolveAll mode=$mode targets=$targets")
+        targets.forEach { launchGroupResolution(it) }
         groupJobs.values.forEach { it.join() }
+    }
+
+    private fun showLoadModeMenu(anchor: android.view.View) {
+        val menu = android.widget.PopupMenu(this, anchor, android.view.Gravity.END)
+        menu.menuInflater.inflate(R.menu.menu_tmdb_servers_load, menu.menu)
+        val current = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        menu.menu.findItem(R.id.tmdbServersLoadModeParallel).isChecked = current == 0
+        menu.menu.findItem(R.id.tmdbServersLoadModeOnSelect).isChecked = current == 1
+        menu.setOnMenuItemClickListener { item ->
+            val mode = when (item.itemId) {
+                R.id.tmdbServersLoadModeParallel -> 0
+                R.id.tmdbServersLoadModeOnSelect -> 1
+                else -> return@setOnMenuItemClickListener true
+            }
+            if (mode != current) {
+                PrefManager.setVal(PrefName.TmdbServersLoadMode, mode)
+                lifecycleScope.launch { resolveAll() }
+            }
+            true
+        }
+        menu.show()
     }
 
     private fun launchGroupResolution(index: Int) {
@@ -493,6 +533,44 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 group.addon != null -> resolveStremioGroup(group, d)
                 else -> resolveCsGroup(group)
             }
+        }
+    }
+
+    private fun applyDefaultSelection(): Int {
+        val savedId = PrefManager.getNullableCustomVal("tmdb_source_$mediaId", null, String::class.java)
+        if (!savedId.isNullOrEmpty()) {
+            val idx = groups.indexOfFirst { it.key.equals(savedId, ignoreCase = true) }
+            if (idx >= 0) return idx
+        }
+        if (pluginSourceId != null) {
+            val idx = groups.indexOfFirst { it.pluginLoad != null }
+            if (idx >= 0) return idx
+        }
+        return 0
+    }
+
+    private fun saveDefaultSelection(index: Int) {
+        val group = groups.getOrNull(index) ?: return
+        PrefManager.setCustomVal("tmdb_source_$mediaId", group.key)
+    }
+
+    private fun selectGroup(index: Int) {
+        if (index !in groups.indices) return
+        val changed = selectedIndex != index
+        selectedIndex = index
+        if (PrefManager.getVal<Boolean>(PrefName.MakeDefault)) saveDefaultSelection(index)
+        renderChipStates()
+        refreshRows()
+        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 && changed) {
+            groups.forEachIndexed { i, g ->
+                if (i != index) {
+                    groupJobs.remove(i)?.cancel()
+                    g.state = GroupState.Loading
+                }
+            }
+            launchGroupResolution(index)
+        } else if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
+            if (groups[index].state is GroupState.Loading) launchGroupResolution(index)
         }
     }
 
