@@ -63,7 +63,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val logoUrl: String?,
         val source: CsInstalledSource,
         val addon: StremioAddon? = null,
-        var pluginLoad: LoadResponse? = null,
+        val pluginLoad: LoadResponse? = null,
     ) {
         var state: GroupState = GroupState.Loading
     }
@@ -88,7 +88,6 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var epNumber: Int? = null
     private var pluginSourceId: String? = null
     private var pluginUrl: String? = null
-    private var pluginLoad: LoadResponse? = null
     private val pluginEpisodes = mutableMapOf<Int, List<TmdbEpisode>>()
 
     private lateinit var serversBinding: ActivityTmdbServersBinding
@@ -355,13 +354,14 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private fun buildGroups() {
         groups.clear()
         chipByIndex.clear()
-        pluginLoad?.let { load ->
+        pluginSourceId?.let { pluginSourceId ->
             val source = CsRepos.installed(this).firstOrNull { it.id == pluginSourceId }
             if (source != null) {
-                groups.add(Group(source.id, source.name, source.iconUrl, source, pluginLoad = load))
+                groups.add(Group(source.id, source.name, source.iconUrl, source, pluginLoad = pluginLoad))
+                Logger.log("TMDB_SERVERS: groups total=1 (plugin mode)")
+                return
             }
-            Logger.log("TMDB_SERVERS: groups total=${groups.size} (plugin mode)")
-            return
+            Logger.log("TMDB_SERVERS: plugin source '$pluginSourceId' not installed")
         }
         val csSources = CsRepos.installed(this)
         csSources.forEach { source ->
@@ -369,19 +369,26 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
         val stremio = StremioAddonManager.installed()
         stremio.forEach { addon ->
+            val syntheticSource = CsInstalledSource(
+                id = StremioAddonManager.sourceId(addon),
+                name = addon.manifest.name,
+                version = 1,
+                type = "movie",
+                lang = "en",
+                url = addon.transportUrl,
+                repoUrl = "",
+                iconUrl = addon.manifest.logo,
+            )
             groups.add(
                 Group(
-                    StremioAddonManager.sourceId(addon),
-                    addon.manifest.name,
-                    addon.manifest.logo,
-                    stremioCsSource(addon),
+                    syntheticSource.id,
+                    syntheticSource.name,
+                    syntheticSource.iconUrl,
+                    syntheticSource,
                     addon = addon,
                 )
             )
         }
-        Logger.log(
-            "TMDB_SERVERS: groups cs=${csSources.size} stremio=${stremio.size} total=${groups.size}"
-        )
     }
 
     private fun buildChips() {
@@ -399,7 +406,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             chip.isClickable = true
             chip.isFocusable = true
             chip.setTextColor(
-                androidx.core.content.ContextCompat.getColorStateList(this, R.color.chip_text_color)
+                resources.getColorStateList(R.color.chip_text_color)
             )
             chip.isChecked = index == selectedIndex
             chip.setOnClickListener { selectGroup(index) }
@@ -420,14 +427,6 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 is GroupState.Ready -> group.name
             }
         }
-    }
-
-    private fun selectGroup(index: Int) {
-        if (index !in groups.indices) return
-        selectedIndex = index
-        Logger.log("TMDB_SERVERS: chip -> '${groups[index].name}'")
-        renderChipStates()
-        refreshRows()
     }
 
     private fun refreshRows() {
@@ -582,16 +581,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         groups.forEach { it.state = GroupState.Loading }
         renderChipStates()
         refreshRows()
-        lifecycleScope.launch {
-            if (pluginUrl != null) {
-                val freshLoad = withContext(Dispatchers.IO) { loadPlugin(pluginUrl!!) }
-                val pluginGroup = groups.firstOrNull { it.pluginLoad != null }
-                if (pluginGroup != null && freshLoad != null) {
-                    pluginGroup.pluginLoad = freshLoad
-                }
-            }
-            resolveAll()
-        }
+        lifecycleScope.launch { resolveAll() }
     }
 
     private fun refreshGroup(index: Int) {
@@ -649,7 +639,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 }
                 val canCard = { link: TmdbStreamResolver.StreamResult.PlayableLink ->
                     parseStremioTarget(link.externalUrl) != null ||
-                        parseExtraDescription(link.rawDetails ?: link.details).isTemplateMatch
+                        parseExtraDescription(link.rawDetails ?: link.details)
+                            ?.isTemplateMatch == true
                 }
                 val infos = external.filter { !canCard(it) }
                 val extras = external - infos.toSet()
