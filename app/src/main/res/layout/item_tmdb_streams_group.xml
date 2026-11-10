@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="6dp">
+
+    <ImageView
+        android:id="@+id/tmdbStreamsGroupLogo"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:importantForAccessibility="no"
+        tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/tmdbStreamsGroupName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:fontFamily="@font/poppins_bold"
+        android:textSize="16sp"
+        android:textColor="#FFFFFFFF"
+        android:maxLines="1"
+        android:ellipsize="end"
+        tools:text="Watch Next" />
+
+    <TextView
+        android:id="@+id/tmdbStreamsGroupState"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="10dp"
+        android:fontFamily="@font/poppins"
+        android:textSize="12sp"
+        android:textColor="#FFFFFFFF"
+        android:alpha="0.5"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:gravity="end"
+        tools:text="Loading…" />
+</LinearLayout>
