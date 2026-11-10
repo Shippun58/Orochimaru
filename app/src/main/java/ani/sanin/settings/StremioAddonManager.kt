@@ -33,6 +33,8 @@ data class StremioAddon(
     val transportUrl: String,
     val transportName: String = "http",
     val manifest: StremioAddonManifest,
+    // null = not probed yet, true = only info/recommendation cards, false = playable streams
+    val extrasOnly: Boolean? = null,
 )
 
 @Serializable
@@ -56,7 +58,7 @@ object StremioAddonManager {
     const val COMMUNITY_CATALOG_URL =
         "https://v3-cinemeta.strem.io/addon_catalog/all/community.json"
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val client get() = Injekt.get<NetworkHelper>().client
 
     fun installed(): List<StremioAddon> =
@@ -120,22 +122,53 @@ object StremioAddonManager {
         return persistInstall(resolved)
     }
 
-    private fun persistInstall(addon: StremioAddon): StremioAddon? {
+    private suspend fun persistInstall(addon: StremioAddon): StremioAddon? {
         if (isInstalled(addon.transportUrl)) {
             Logger.log("STREMIO: persistInstall skipped (already installed) url=${addon.transportUrl}")
             return null
         }
+        val classified = if (addon.extrasOnly == null) {
+            val extras = StremioAddonClient.detectExtras(addon)
+            Logger.log(
+                "STREMIO: classified name='${addon.manifest.name}' extrasOnly=$extras"
+            )
+            addon.copy(extrasOnly = extras)
+        } else addon
         val current = PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons)
         PrefManager.setVal(
             PrefName.StremioInstalledAddons,
-            current + json.encodeToString(addon),
+            current + json.encodeToString(classified),
         )
         Logger.log(
-            "STREMIO: installed name='${addon.manifest.name}' url=${addon.transportUrl} " +
-                "types=${addon.manifest.types} capabilities=${StremioAddonClient.capabilities(addon)}"
+            "STREMIO: installed name='${classified.manifest.name}' url=${classified.transportUrl} " +
+                "types=${classified.manifest.types} capabilities=${StremioAddonClient.capabilities(classified)} " +
+                "extrasOnly=${classified.extrasOnly}"
         )
-        return addon
+        return classified
     }
+
+    fun setExtrasOnly(transportUrl: String, extrasOnly: Boolean) {
+        val current = PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons)
+        var changed = false
+        val updated = current.map { encoded ->
+            val addon = runCatching { json.decodeFromString<StremioAddon>(encoded) }.getOrNull()
+                ?: return@map encoded
+            if (!addon.transportUrl.equals(transportUrl, ignoreCase = true) ||
+                addon.extrasOnly == extrasOnly
+            ) {
+                encoded
+            } else {
+                changed = true
+                json.encodeToString(addon.copy(extrasOnly = extrasOnly))
+            }
+        }
+        if (changed) {
+            PrefManager.setVal(PrefName.StremioInstalledAddons, updated)
+            Logger.log("STREMIO: set extrasOnly=$extrasOnly url=$transportUrl")
+        }
+    }
+
+    fun extrasSources(): List<StremioAddon> = installed().filter { it.extrasOnly == true }
 
     fun uninstall(transportUrl: String) {
         val current = PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons)

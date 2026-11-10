@@ -41,7 +41,8 @@ import kotlin.math.roundToLong
 data class SyncCue(
     val text: String,
     val startTimeMs: Long,
-    val durationMs: Long = 3000L
+    val durationMs: Long = 3000L,
+    val isTop: Boolean = false,
 )
 
 private const val PROGRESS_PAYLOAD = "sync_progress"

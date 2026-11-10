@@ -34,6 +34,13 @@ data class StremioCatalogShelf(
     val cards: List<StremioCatalogCard>,
 )
 
+data class StremioSubtitleTrack(
+    val id: String,
+    val url: String,
+    val lang: String,
+    val label: String? = null,
+)
+
 data class StremioVideo(
     val id: String,
     val title: String? = null,
@@ -60,6 +67,7 @@ data class StremioMetaDetails(
 
 data class StremioStream(
     val name: String? = null,
+    val title: String? = null,
     val description: String? = null,
     val url: String? = null,
     val externalUrl: String? = null,
@@ -68,7 +76,7 @@ data class StremioStream(
 )
 
 object StremioAddonClient {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val client get() = Injekt.get<NetworkHelper>().client
 
     fun stremioType(tmdbType: String): String = when (tmdbType) {
@@ -94,11 +102,96 @@ object StremioAddonClient {
     fun providerSupportsMedia(addon: StremioAddon, tmdbType: String): Boolean =
         listOf("stream", "meta", "catalog").any { supports(addon, it, tmdbType) }
 
+    fun supportsStreams(addon: StremioAddon, tmdbType: String): Boolean =
+        streamResources(addon, tmdbType).isNotEmpty()
+
+    fun canResolveTmdbIds(addon: StremioAddon, tmdbType: String): Boolean {
+        val definitions = streamResources(addon, tmdbType)
+        if (definitions.isEmpty()) return false
+        return definitions.any { definition ->
+            val prefixes = definition.idPrefixes ?: addon.manifest.idPrefixes
+            prefixes.isEmpty() || prefixes.any { it.startsWith("tt") || it.startsWith("tmdb") }
+        }
+    }
+
+    private fun streamResources(addon: StremioAddon, tmdbType: String): List<ResourceDescription> {
+        val type = stremioType(tmdbType)
+        return addon.manifest.resources.mapNotNull { it.resourceDescription() }
+            .filter { it.name.equals("stream", ignoreCase = true) }
+            .filter { definition ->
+                val types = definition.types ?: addon.manifest.types
+                types.any { it.equals(type, ignoreCase = true) || (type == "series" && it.equals("tv", true)) }
+            }
+    }
+
+    fun supportsSubtitles(addon: StremioAddon, tmdbType: String): Boolean {
+        val type = stremioType(tmdbType)
+        val definitions = addon.manifest.resources.mapNotNull { it.resourceDescription() }
+            .filter { it.name.equals("subtitles", ignoreCase = true) }
+        if (definitions.isEmpty()) return false
+        return definitions.any { definition ->
+            val types = definition.types ?: addon.manifest.types
+            types.isEmpty() || types.any { it.equals(type, ignoreCase = true) }
+        }
+    }
+
+    suspend fun loadSubtitles(
+        addon: StremioAddon,
+        tmdbType: String,
+        imdbId: String,
+        season: Int,
+        episode: Int,
+    ): List<StremioSubtitleTrack> = withContext(Dispatchers.IO) {
+        if (!supportsSubtitles(addon, tmdbType)) {
+            Logger.log("STREMIO: subtitles skipped addon='${addon.manifest.name}' type=$tmdbType (unsupported)")
+            return@withContext emptyList()
+        }
+        val videoId = if (stremioType(tmdbType) == "series") "$imdbId:$season:$episode" else imdbId
+        if (!idMatches(addon, "subtitles", tmdbType, videoId)) {
+            Logger.log("STREMIO: subtitles skipped addon='${addon.manifest.name}' id=$videoId (prefix mismatch)")
+            return@withContext emptyList()
+        }
+        val root = request(addon, listOf("subtitles", stremioType(tmdbType), videoId), timeoutSeconds = 10)
+        val items = (root?.get("subtitles") as? JsonArray).orEmpty()
+        val tracks = items.mapNotNull { element ->
+            val item = element.asObject() ?: return@mapNotNull null
+            val url = item.string("url")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val release = item.string("subtitleFileName")?.takeIf { it.isNotBlank() }
+                ?: item.string("movieReleaseName")?.takeIf { it.isNotBlank() }
+            val explicit = item.string("label")?.takeIf { it.isNotBlank() }
+                ?: item.string("name")?.takeIf { it.isNotBlank() }
+            StremioSubtitleTrack(
+                id = item.string("id") ?: url,
+                url = url,
+                lang = item.string("lang") ?: "und",
+                label = explicit ?: release,
+            )
+        }
+        Logger.log(
+            "STREMIO: subtitles addon='${addon.manifest.name}' id=$videoId tracks=${tracks.size}"
+        )
+        tracks
+    }
+
+    suspend fun detectExtras(addon: StremioAddon): Boolean = withContext(Dispatchers.IO) {
+        if (!supports(addon, "stream", "movie") || !canResolveTmdbIds(addon, "movie")) return@withContext false
+        val probeId = "tt0111161"
+        val root = request(addon, listOf("stream", "movie", probeId), timeoutSeconds = 10)
+            ?: return@withContext false
+        val streams = (root["streams"] as? JsonArray).orEmpty()
+        if (streams.isEmpty()) return@withContext false
+        val playable = streams.any { element ->
+            val item = element.asObject() ?: return@any false
+            listOf("url", "infoHash", "ytId").any { !item.string(it).isNullOrBlank() }
+        }
+        !playable
+    }
+
     fun capabilities(addon: StremioAddon): List<String> {
         val names = addon.manifest.resources
             .mapNotNull { it.resourceDescription()?.name?.lowercase() }
             .toSet()
-        return listOf("catalog", "meta", "stream").filter { it in names }
+        return listOf("catalog", "meta", "stream", "subtitles").filter { it in names }
     }
 
     fun supportedTypes(addon: StremioAddon): List<String> = addon.manifest.types.distinct()
@@ -247,6 +340,7 @@ object StremioAddonClient {
             val item = element.asObject() ?: return@mapNotNull null
             StremioStream(
                 name = item.string("name"),
+                title = item.string("title"),
                 description = item.string("description"),
                 url = item.string("url"),
                 externalUrl = item.string("externalUrl"),

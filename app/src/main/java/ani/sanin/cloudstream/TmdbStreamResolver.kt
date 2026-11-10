@@ -57,6 +57,7 @@ object TmdbStreamResolver {
             val audioTracks: List<AudioFile> = emptyList(),
             val host: String = "",
             val externalUrl: String? = null,
+            val details: String? = null,
         )
 
         data class Success(val links: List<PlayableLink>, val matchName: String? = null) : StreamResult()
@@ -544,25 +545,40 @@ object TmdbStreamResolver {
     ): List<StreamResult.PlayableLink> = streams.mapNotNull { stream ->
         val url = stream.url?.takeIf { it.isNotBlank() }
         val external = stream.externalUrl?.takeIf { it.isNotBlank() }
-        val label = buildString {
-            append(stream.name?.takeIf { it.isNotBlank() } ?: sourceName)
-            stream.description?.takeIf { it.isNotBlank() }?.let { append(" · ").append(it) }
+        val detailText = stream.description?.takeIf { it.isNotBlank() }
+            ?: stream.title?.takeIf { it.isNotBlank() }
+        val name = stream.name?.takeIf { it.isNotBlank() } ?: sourceName
+        val sameAsName = detailText?.trim()?.equals(name.trim(), ignoreCase = true) == true
+        val hint = detailText?.takeUnless { sameAsName }?.let { cleanStreamText(it) }
+        val labelHint = hint?.let {
+            if (it.length > 120) it.take(117).trimEnd() + "…" else it
         }
         when {
             url != null -> StreamResult.PlayableLink(
-                label = label,
+                label = if (labelHint.isNullOrBlank()) name else "$name · $labelHint",
                 url = url,
                 host = runCatching { java.net.URI(url).host }.getOrNull().orEmpty(),
+                details = hint,
             )
             external != null -> StreamResult.PlayableLink(
-                label = if (stream.name.isNullOrBlank()) "External" else "${stream.name} (external)",
+                label = name,
                 url = "",
                 host = "External",
                 externalUrl = external,
+                details = hint,
+            )
+            hint != null -> StreamResult.PlayableLink(
+                label = name,
+                url = "",
+                host = "External",
+                details = hint,
             )
             else -> null
         }
     }
+
+    private fun cleanStreamText(text: String): String =
+        text.replace('\u200b', ' ').replace(Regex("\\s+"), " ").trim()
 
     private fun audioLanguage(audio: AudioFile): String {
         val hay = audio.url.lowercase()

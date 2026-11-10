@@ -2774,7 +2774,7 @@ class ExoplayerView :
                         exoSubtitleView.visibility = View.GONE
 
                         if (syncActive || hasOverlappingCues) {
-                            renderCustomSubtitleTexts(activeCues.map { it.text })
+                            renderCustomSubtitleCues(activeCues)
                             return
                         }
 
@@ -3402,7 +3402,34 @@ class ExoplayerView :
     }
 
     private fun parseVTT(content: String): List<SyncCue> {
-        return parseSRT(content)
+        val cues = mutableListOf<SyncCue>()
+        for (block in content.split(Regex("\n\n+"))) {
+            val lines = block.trim().lines()
+            if (lines.size < 2) continue
+            val timeIdx = lines.indexOfFirst { it.contains("-->") }
+            if (timeIdx == -1) continue
+            val m = timeLineRegex.find(lines[timeIdx]) ?: continue
+            val start = parseSRTTime("${m.groupValues[1]},${m.groupValues[2]}")
+            val end = parseSRTTime("${m.groupValues[3]},${m.groupValues[4]}")
+            val text = lines.drop(timeIdx + 1).joinToString("\n").trim()
+            if (text.isBlank()) continue
+            val settings = lines[timeIdx].substringAfter("-->", "").trim().substringAfter(' ', "")
+            cues.add(
+                SyncCue(
+                    text = cleanSubtitleText(text),
+                    startTimeMs = start,
+                    durationMs = (end - start).coerceAtLeast(1000),
+                    isTop = vttCueIsTop(settings),
+                )
+            )
+        }
+        return cues
+    }
+
+    private fun vttCueIsTop(settings: String): Boolean {
+        val line = Regex("""line:(\d+(?:\.\d+)?)%""").find(settings)?.groupValues?.getOrNull(1)
+            ?.toFloatOrNull()
+        return line != null && line <= 40f
     }
 
     private fun parseASS(content: String): List<SyncCue> {
@@ -3492,6 +3519,12 @@ class ExoplayerView :
             if (posMs < cue.startTimeMs + cue.durationMs) active.add(cue)
         }
         return active
+    }
+
+    private fun renderCustomSubtitleCues(cues: List<SyncCue>) {
+        val top = cues.filter { it.isTop }.map { it.text.trim() }.filter { it.isNotEmpty() }
+        val bottom = cues.filterNot { it.isTop }.map { it.text.trim() }.filter { it.isNotEmpty() }
+        renderCustomSubtitle(top.joinToString("\n"), bottom.joinToString("\n"))
     }
 
     private fun renderCustomSubtitleTexts(texts: List<String>) {

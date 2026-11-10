@@ -6,6 +6,8 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import okhttp3.Request
 import ani.sanin.media.Media
+import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.util.Logger
@@ -36,7 +38,15 @@ object StremioSubtitles {
             if (providers.contains("SubSource")) totalProviders.add("SubSource")
             if (providers.contains("SubDL")) totalProviders.add("SubDL")
 
+            val subtitleAddons = StremioAddonManager.installed().filter { addon ->
+                StremioAddonClient.supportsSubtitles(addon, if (isTvSeries) "tv" else "movie")
+            }
+            if (subtitleAddons.isNotEmpty()) totalProviders.add("Stremio Add-ons")
+
             if (totalProviders.isEmpty()) return@channelFlow
+            Logger.log(
+                "StremioSubtitles: providers=$totalProviders addons=${subtitleAddons.map { it.manifest.name }}"
+            )
 
             val completed = java.util.concurrent.atomic.AtomicInteger(0)
             val totalCount = totalProviders.size
@@ -104,6 +114,33 @@ object StremioSubtitles {
             if (providers.contains("OpenSubtitles")) {
                 launchProvider("OpenSubtitles") {
                     OpenSubtitles.search(imdbId, season, episode, isTvSeries, queryText)
+                }
+            }
+
+            if (subtitleAddons.isNotEmpty()) {
+                launchProvider("Stremio Add-ons") {
+                    val type = if (isTvSeries) "tv" else "movie"
+                    val tracks = mutableListOf<StremioSub>()
+                    subtitleAddons.forEach { addon ->
+                        val loaded = runCatching {
+                            StremioAddonClient.loadSubtitles(addon, type, imdbId, season, episode)
+                        }.onFailure {
+                            Logger.log("StremioSubtitles(add-on '${addon.manifest.name}'): ${it.message}")
+                        }.getOrDefault(emptyList())
+                        loaded.forEach { track ->
+                            tracks.add(
+                                StremioSub(
+                                    id = "${addon.manifest.id}:${track.id}",
+                                    url = track.url,
+                                    lang = track.lang,
+                                    source = "stremio",
+                                    label = track.label?.takeIf { it.isNotBlank() }
+                                        ?: "${addon.manifest.name} (${track.lang})",
+                                )
+                            )
+                        }
+                    }
+                    tracks
                 }
             }
 

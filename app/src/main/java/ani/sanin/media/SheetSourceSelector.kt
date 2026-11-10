@@ -35,6 +35,8 @@ class SheetSourceSelector : DialogFragment() {
     private var onDismiss: (() -> Unit)? = null
     private var adapter: RecyclerView.Adapter<RecyclerView.ViewHolder>? = null
     private var pendingSources: List<String>? = null
+    private var pendingHeaderTitle: String? = null
+    private var pendingHeaderSubtitle: String? = null
     private var groupedMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +75,7 @@ class SheetSourceSelector : DialogFragment() {
         binding.selectorProgressBar.visibility = View.GONE
         binding.selectorMakeDefault.visibility = View.GONE
         binding.selectorRecyclerView.layoutManager = LinearLayoutManager(requireActivity())
+        applyHeader()
         if (groupedMode) {
             val groupedAdapter = GroupedAdapter()
             binding.selectorRecyclerView.adapter = groupedAdapter
@@ -156,6 +159,22 @@ class SheetSourceSelector : DialogFragment() {
 
     fun setOnSelect(cb: (Int) -> Unit) {
         onSelect = cb
+    }
+
+    fun setHeader(title: String?, subtitle: String? = null) {
+        pendingHeaderTitle = title
+        pendingHeaderSubtitle = subtitle
+        if (_binding != null) applyHeader()
+    }
+
+    private fun applyHeader() {
+        pendingHeaderTitle?.takeIf { it.isNotBlank() }?.let {
+            binding.selectorHeaderTitle.text = it
+        }
+        pendingHeaderSubtitle?.takeIf { it.isNotBlank() }?.let {
+            binding.selectorProviderName.text = it
+            binding.selectorProviderName.visibility = View.VISIBLE
+        }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
