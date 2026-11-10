@@ -16,7 +16,6 @@ import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
 import ani.sanin.bannerFallbackColor
@@ -40,8 +39,6 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import ani.sanin.stripDividerGradient
 import ani.sanin.databinding.ItemTmdbWatchHeaderBinding
-import ani.sanin.databinding.ItemTmdbExtrasCardBinding
-import ani.sanin.databinding.ItemUrlBinding
 import ani.sanin.databinding.ItemCountDownBinding
 import ani.sanin.media.SheetSourceSelector
 import ani.sanin.loadImage
@@ -159,10 +156,10 @@ class TmdbWatchFragment : Fragment() {
 
     private lateinit var episodeAdapter: EpisodeListAdapter
 
-    private var extrasMode = false
-    private var extrasInfoStart = -1
+    private var extrasSheetActive = false
+    private var extrasSheet: SheetSourceSelector? = null
+    private var extrasSheetRows: List<ExtrasItem> = emptyList()
     private var extrasJob: Job? = null
-    private var extrasAdapter: ExtrasAdapter? = null
     private var gridSpan = 4
 
     override fun onCreateView(
@@ -217,8 +214,7 @@ class TmdbWatchFragment : Fragment() {
         binding.tmdbWatchBack.setOnClickListener { goBack() }
         FocusEffectUtil.applyFocusListener(binding.tmdbWatchBack)
         binding.tmdbWatchScrollTop.setOnClickListener {
-            if (extrasMode) binding.tmdbWatchExtrasRecycler.scrollToPosition(0)
-            else binding.tmdbWatchRecycler.scrollToPosition(0)
+            binding.tmdbWatchRecycler.scrollToPosition(0)
         }
         FocusEffectUtil.applyFocusListener(binding.tmdbWatchScrollTop, binding.tmdbWatchScrollTop)
 
@@ -228,7 +224,6 @@ class TmdbWatchFragment : Fragment() {
         binding.tmdbWatchRecycler.layoutManager = GridLayoutManager(requireContext(), maxGridSize).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int = when {
-                    extrasMode -> if (position == extrasInfoStart) maxGridSize else 1
                     position == 0 -> maxGridSize
                     episodeStyle == 3 -> 1
                     else -> maxGridSize
@@ -259,9 +254,9 @@ class TmdbWatchFragment : Fragment() {
         cancelHeaderCountdown()
         extrasJob?.cancel()
         extrasJob = null
-        extrasMode = false
-        extrasInfoStart = -1
-        extrasAdapter = null
+        extrasSheetActive = false
+        extrasSheet = null
+        extrasSheetRows = emptyList()
         headerContainer = null
         super.onDestroyView()
     }
@@ -666,17 +661,17 @@ class TmdbWatchFragment : Fragment() {
                 refreshChips(h.tmdbWatchSourceChips)
                 centerOn(h.tmdbWatchSourceScroll, chip)
                 if (!nowChecked) {
-                    exitExtrasMode()
+                    exitExtrasSheet()
                     setSourceStatus(getString(R.string.tmdb_watch_sources))
                     autoSearchOnOpen()
                 } else if (addon.extrasOnly == true) {
-                    enterExtrasMode(addon)
+                    startExtrasSheet(addon)
                 } else if (StremioAddonClient.supports(addon, "stream", mediaType)) {
-                    exitExtrasMode()
+                    exitExtrasSheet()
                     setSourceStatus(getString(R.string.tmdb_watch_sources))
                     refreshSelected()
                 } else {
-                    exitExtrasMode()
+                    exitExtrasSheet()
                     showStremioInfo(addon)
                 }
             }
@@ -1257,25 +1252,21 @@ class TmdbWatchFragment : Fragment() {
         }
     }
 
-    private fun enterExtrasMode(addon: StremioAddon) {
+    private fun startExtrasSheet(addon: StremioAddon) {
         if (!isAdded || !::episodeAdapter.isInitialized || !::headerBinding.isInitialized) return
         val d = detail ?: return
-        extrasMode = true
+        extrasSheetActive = true
         extrasJob?.cancel()
-        extrasInfoStart = -1
-        val adapter = extrasAdapter ?: ExtrasAdapter(
-            onMedia = { openExtrasMedia(it) },
-            onInfoClick = { openExternalLink(it) },
-        ).also { extrasAdapter = it }
-        binding.tmdbWatchExtrasRecycler.layoutManager =
-            LinearLayoutManager(requireContext(), LinearLayoutManager.VERTICAL, false)
-        binding.tmdbWatchExtrasRecycler.adapter = adapter
-        binding.tmdbWatchExtrasRecycler.isVisible = true
-        binding.tmdbWatchExtrasRecycler.scrollToPosition(0)
-        adapter.submit(emptyList(), emptyList())
         episodeAdapter.submitEpisodes(emptyList())
         setSourceStatus("Searching extras from ${addon.manifest.name}…")
-        binding.tmdbWatchRecycler.post { updateExtrasTopMargin() }
+        extrasSheet?.takeIf { it.isAdded }?.dismissAllowingStateLoss()
+        val picker = SheetSourceSelector.newInstanceLoading(
+            getString(R.string.tmdb_watch_fetching, addon.manifest.name),
+            grouped = false
+        )
+        extrasSheet = picker
+        picker.setHeader("More like this", addon.manifest.name)
+        picker.show(childFragmentManager, "tmdbWatchExtrasSheet")
         extrasJob = lifecycleScope.launch {
             val extras = StremioAddonManager.extrasSources()
                 .let { list ->
@@ -1314,48 +1305,65 @@ class TmdbWatchFragment : Fragment() {
                 .filterNot { it.id == mediaId && it.mediaType == mediaType }
                 .distinctBy { "${it.mediaType}:${it.id}" }
             if (!isAdded) return@launch
-            extrasInfoStart = recommendations.size
-            adapter.submit(recommendations, infos)
-            binding.tmdbWatchExtrasRecycler.post { updateExtrasTopMargin() }
+            extrasSheetRows = buildList {
+                recommendations.forEach { add(ExtrasItem.Recommendation(it)) }
+                infos.forEach { add(it) }
+            }
             val status = when {
                 recommendations.isNotEmpty() && infos.isNotEmpty() ->
                     "${recommendations.size} recommendations · ${infos.size} info"
                 recommendations.isNotEmpty() -> "${recommendations.size} recommendations"
-                infos.isNotEmpty() -> "${infos.size} info cards"
+                infos.isNotEmpty() -> "${infos.size} info"
                 else -> "No extras found"
             }
             setSourceStatus(status)
             Logger.log(
                 "TMDB_WATCH: extras addons=${extras.size} recs=${recommendations.size} infos=${infos.size}"
             )
+            Logger.log("TMDB_WATCH: extras sheet rows=${extrasSheetRows.size} addon=${addon.manifest.name}")
+            picker.setOnSelect { idx ->
+                val row = extrasSheetRows.getOrNull(idx) ?: return@setOnSelect
+                when (row) {
+                    is ExtrasItem.Recommendation -> {
+                        Logger.log(
+                            "TMDB_WATCH: extras sheet -> open '${row.media.displayTitle}' " +
+                                "(${row.media.mediaType}:${row.media.id})"
+                        )
+                        openExtrasMedia(row.media)
+                    }
+                    is ExtrasItem.Info -> row.url?.let { openExternalLink(it) }
+                }
+            }
+            picker.updateSources(extrasSheetRows.map { row ->
+                when (row) {
+                    is ExtrasItem.Recommendation -> {
+                        val m = row.media
+                        val year = m.year
+                        val genres = Tmdb.genreNames(m).joinToString(", ")
+                        val meta = listOf(
+                            year.takeIf { it.isNotBlank() },
+                            genres.takeIf { it.isNotBlank() },
+                        ).filterNotNull().joinToString(" · ")
+                        if (meta.isBlank()) m.displayTitle else "${m.displayTitle}  •  $meta"
+                    }
+                    is ExtrasItem.Info -> listOfNotNull(
+                        row.label,
+                        row.details?.lines()?.firstOrNull()?.takeIf(String::isNotBlank)
+                    ).joinToString("  •  ")
+                }
+            })
         }
     }
 
-    private fun exitExtrasMode() {
-        if (!extrasMode) return
-        extrasMode = false
+    private fun exitExtrasSheet() {
+        if (!extrasSheetActive) return
+        extrasSheetActive = false
         extrasJob?.cancel()
         extrasJob = null
-        extrasInfoStart = -1
-        binding.tmdbWatchExtrasRecycler.isVisible = false
+        extrasSheetRows = emptyList()
+        extrasSheet?.takeIf { it.isAdded }?.dismissAllowingStateLoss()
+        extrasSheet = null
         if (::episodeAdapter.isInitialized) episodeAdapter.submitEpisodes(episodesOrMovie())
-    }
-
-    private fun updateExtrasTopMargin() {
-        if (!::headerBinding.isInitialized || !extrasMode) return
-        val headerView = headerContainer ?: headerBinding.root
-        val rootLoc = IntArray(2)
-        binding.root.getLocationInWindow(rootLoc)
-        val headerLoc = IntArray(2)
-        headerView.getLocationInWindow(headerLoc)
-        val margin = (headerLoc[1] - rootLoc[1] + headerView.height +
-            (8 * resources.displayMetrics.density).toInt()).coerceAtLeast(0)
-        val lp = binding.tmdbWatchExtrasRecycler.layoutParams
-            as? android.widget.FrameLayout.LayoutParams ?: return
-        if (lp.topMargin != margin) {
-            lp.topMargin = margin
-            binding.tmdbWatchExtrasRecycler.layoutParams = lp
-        }
     }
 
     private fun parseStremioTarget(url: String?): Pair<String, String>? {
@@ -1416,7 +1424,7 @@ class TmdbWatchFragment : Fragment() {
 
     private fun onEpisodeClick(episode: TmdbEpisode) {
 
-        if (extrasMode) return
+        if (extrasSheetActive) return
         if (isResolving && autoSearchJob?.isActive != true) return
 
         if (!isAdded || childFragmentManager.isStateSaved) return
@@ -1453,7 +1461,7 @@ class TmdbWatchFragment : Fragment() {
                 )
                 if (picker.isAdded) picker.dismissAllowingStateLoss()
                 StremioAddonManager.setExtrasOnly(extrasAddon.transportUrl, true)
-                enterExtrasMode(extrasAddon)
+                startExtrasSheet(extrasAddon)
                 return false
             }
             if (extrasOnly && !recommendations) {
@@ -1587,11 +1595,11 @@ class TmdbWatchFragment : Fragment() {
 
     private fun autoSearchOnOpen() {
         autoSearchJob?.cancel()
-        if (isResolving || extrasMode) return
+        if (isResolving || extrasSheetActive) return
         val d = detail ?: return
         selectedStremio?.let { addon ->
             if (addon.extrasOnly == true) {
-                enterExtrasMode(addon)
+                startExtrasSheet(addon)
                 return
             }
             if (!StremioAddonClient.supports(addon, "stream", mediaType)) {
@@ -1671,11 +1679,11 @@ class TmdbWatchFragment : Fragment() {
                         it.externalUrl?.startsWith("stremio://", ignoreCase = true) == true
                     }
                     if (infoOnly) {
-                        Logger.log("TMDB_WATCH: $foundName is info-only, switching to extras view")
+                        Logger.log("TMDB_WATCH: $foundName is info-only, switching to extras sheet")
                         val addon = selectedStremio
                         if (addon != null) {
                             StremioAddonManager.setExtrasOnly(addon.transportUrl, true)
-                            enterExtrasMode(addon)
+                            startExtrasSheet(addon)
                         } else {
                             snackString("Extra info from $foundName is ready — tap an episode")
                         }
@@ -1751,7 +1759,7 @@ class TmdbWatchFragment : Fragment() {
         if (stremioExtrasOnly) {
             selectedStremio?.let { addon ->
                 Logger.log("TMDB_WATCH: refresh in extras mode for ${addon.manifest.name}")
-                enterExtrasMode(addon)
+                startExtrasSheet(addon)
             }
             return
         }
@@ -1982,90 +1990,6 @@ class TmdbWatchFragment : Fragment() {
     private sealed class ExtrasItem {
         data class Recommendation(val media: TmdbMedia) : ExtrasItem()
         data class Info(val label: String, val details: String?, val url: String?) : ExtrasItem()
-    }
-
-    private class ExtrasAdapter(
-        private val onMedia: (TmdbMedia) -> Unit,
-        private val onInfoClick: (String) -> Unit,
-    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-        private val items = mutableListOf<ExtrasItem>()
-
-        fun submit(recommendations: List<TmdbMedia>, infos: List<ExtrasItem.Info>) {
-            items.clear()
-            recommendations.forEach { items.add(ExtrasItem.Recommendation(it)) }
-            items.addAll(infos)
-            notifyDataSetChanged()
-        }
-
-        override fun getItemCount(): Int = items.size
-
-        override fun getItemViewType(position: Int): Int =
-            if (items[position] is ExtrasItem.Info) 1 else 0
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder =
-            if (viewType == 1) {
-                InfoVH(ItemUrlBinding.inflate(LayoutInflater.from(parent.context), parent, false))
-            } else {
-                RecVH(ItemTmdbExtrasCardBinding.inflate(LayoutInflater.from(parent.context), parent, false))
-            }
-
-        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            when (val item = items[position]) {
-                is ExtrasItem.Recommendation -> {
-                    val b = (holder as RecVH).binding
-                    val m = item.media
-                    b.extrasCardPoster.loadImage(
-                        Tmdb.imageUrl(m.posterPath ?: m.backdropPath, 300)
-                    )
-                    b.extrasCardTitle.text = m.displayTitle
-                    val year = m.year
-                    val genres = Tmdb.genreNames(m).joinToString(", ")
-                    b.extrasCardMeta.text = listOf(
-                        year.takeIf { it.isNotBlank() },
-                        genres.takeIf { it.isNotBlank() },
-                    ).filterNotNull().joinToString(" · ")
-                    b.extrasCardMeta.isVisible = b.extrasCardMeta.text.isNotBlank()
-                    b.extrasCardOverview.text = m.overview?.trim().orEmpty()
-                    b.extrasCardOverview.isVisible = b.extrasCardOverview.text.isNotBlank()
-                    b.root.contentDescription = m.displayTitle
-                    b.root.setOnClickListener { onMedia(m) }
-                    FocusEffectUtil.applyFocusListener(b.root)
-                }
-                is ExtrasItem.Info -> {
-                    val b = (holder as InfoVH).binding
-                    b.urlQuality.text = buildString {
-                        append(item.label)
-                        item.details?.takeIf { it.isNotBlank() }?.let {
-                            append("\n").append(it)
-                        }
-                    }
-                    b.urlQuality.setTextColor(
-                        b.root.context.getThemeColor(
-                            com.google.android.material.R.attr.colorOnSurface
-                        )
-                    )
-                    b.urlQuality.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
-                    b.urlNote.visibility = View.GONE
-                    b.urlSize.visibility = View.GONE
-                    b.urlSub.visibility = View.GONE
-                    b.urlDownload.visibility = View.GONE
-                    val url = item.url
-                    if (url != null && url.startsWith("http", ignoreCase = true)) {
-                        b.root.isFocusable = true
-                        b.root.isClickable = true
-                        b.root.setOnClickListener { onInfoClick(url) }
-                        FocusEffectUtil.applyFocusListener(b.root)
-                    } else {
-                        b.root.isFocusable = false
-                        b.root.isClickable = false
-                        b.root.setOnClickListener(null)
-                    }
-                }
-            }
-        }
-
-        class RecVH(val binding: ItemTmdbExtrasCardBinding) : RecyclerView.ViewHolder(binding.root)
-        class InfoVH(val binding: ItemUrlBinding) : RecyclerView.ViewHolder(binding.root)
     }
 
     private class EpisodeListAdapter(
