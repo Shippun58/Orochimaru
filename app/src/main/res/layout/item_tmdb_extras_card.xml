@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="10dp">
+
+        <ImageView
+            android:id="@+id/extrasCardPoster"
+            android:layout_width="84dp"
+            android:layout_height="120dp"
+            android:scaleType="centerCrop"
+            android:importantForAccessibility="no"
+            tools:ignore="ContentDescription" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/extrasCardTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="16sp"
+                tools:text="Terminator 2: Judgment Day" />
+
+            <TextView
+                android:id="@+id/extrasCardMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:alpha="0.7"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:fontFamily="@font/poppins"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="12sp"
+                tools:text="1991 · Action, Thriller, Sci-Fi" />
+
+            <TextView
+                android:id="@+id/extrasCardOverview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:alpha="0.85"
+                android:ellipsize="end"
+                android:maxLines="3"
+                android:fontFamily="@font/poppins"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="13sp"
+                tools:text="Ten years after the events of the original, a reprogrammed T-800 is sent back in time to protect…" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

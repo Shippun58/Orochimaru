@@ -16,6 +16,7 @@ import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
 import ani.sanin.bannerFallbackColor
@@ -39,7 +40,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import ani.sanin.stripDividerGradient
 import ani.sanin.databinding.ItemTmdbWatchHeaderBinding
-import ani.sanin.databinding.ItemTmdbCardBinding
+import ani.sanin.databinding.ItemTmdbExtrasCardBinding
 import ani.sanin.databinding.ItemUrlBinding
 import ani.sanin.databinding.ItemCountDownBinding
 import ani.sanin.media.SheetSourceSelector
@@ -314,6 +315,7 @@ class TmdbWatchFragment : Fragment() {
                 return@launch
             }
             detail = d
+            applyDefaultProvider()
             if (PrefManager.getVal<Boolean>(PrefName.ShowMediaBanner)) {
                 binding.mediaBg?.loadImage(bannerUrl(d))
             } else {
@@ -333,23 +335,30 @@ class TmdbWatchFragment : Fragment() {
             headerBinding = ItemTmdbWatchHeaderBinding.inflate(LayoutInflater.from(requireContext()))
 
             if (mediaType == "tv") {
-                seasons = Tmdb.seasons(mediaType, mediaId)
-                selectedSeason = restoreSeason()
-                episodes = Tmdb.episodes(mediaType, mediaId, selectedSeason)
+                if (stremioExtrasOnly) {
+                    episodes = emptyList()
+                } else {
+                    seasons = Tmdb.seasons(mediaType, mediaId)
+                    selectedSeason = restoreSeason()
+                    episodes = Tmdb.episodes(mediaType, mediaId, selectedSeason)
+                }
             } else {
-
-                movieEpisodes = listOf(
-                    TmdbEpisode(
-                        id = mediaId,
-                        name = d.displayTitle,
-                        episodeNumber = 1,
-                        seasonNumber = 1,
-                        stillPath = d.backdropPath ?: d.posterPath,
-                        airDate = d.releaseDate,
-                        voteAverage = d.voteAverage
+                if (stremioExtrasOnly) {
+                    movieEpisodes = emptyList()
+                } else {
+                    movieEpisodes = listOf(
+                        TmdbEpisode(
+                            id = mediaId,
+                            name = d.displayTitle,
+                            episodeNumber = 1,
+                            seasonNumber = 1,
+                            stillPath = d.backdropPath ?: d.posterPath,
+                            airDate = d.releaseDate,
+                            voteAverage = d.voteAverage
+                        )
                     )
-                )
-                loadCollectionParts(d)
+                    loadCollectionParts(d)
+                }
             }
 
             buildHeader()
@@ -587,7 +596,6 @@ class TmdbWatchFragment : Fragment() {
     private fun buildHeader() {
         val h = headerBinding
 
-        applyDefaultProvider()
         h.tmdbWatchSourceChips.removeAllViews()
         h.tmdbWatchSourceTitle.text = when {
             sources.isEmpty() && stremioSources.isEmpty() -> getString(R.string.tmdb_watch_no_sources)
@@ -1251,18 +1259,12 @@ class TmdbWatchFragment : Fragment() {
             onInfoClick = { openExternalLink(it) },
         ).also { extrasAdapter = it }
         binding.tmdbWatchExtrasRecycler.layoutManager =
-            GridLayoutManager(requireContext(), gridSpan).apply {
-                spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                    override fun getSpanSize(position: Int): Int =
-                        if (position == extrasInfoStart) gridSpan else 1
-                }
-            }
+            LinearLayoutManager(requireContext(), LinearLayoutManager.VERTICAL, false)
         binding.tmdbWatchExtrasRecycler.adapter = adapter
         binding.tmdbWatchExtrasRecycler.isVisible = true
         binding.tmdbWatchExtrasRecycler.scrollToPosition(0)
         adapter.submit(emptyList(), emptyList())
         episodeAdapter.submitEpisodes(emptyList())
-        headerBinding.tmdbWatchSeasonScroll.isVisible = false
         setSourceStatus("Searching extras from ${addon.manifest.name}…")
         binding.tmdbWatchRecycler.post { updateExtrasTopMargin() }
         extrasJob = lifecycleScope.launch {
@@ -1328,9 +1330,6 @@ class TmdbWatchFragment : Fragment() {
         extrasInfoStart = -1
         binding.tmdbWatchExtrasRecycler.isVisible = false
         if (::episodeAdapter.isInitialized) episodeAdapter.submitEpisodes(episodesOrMovie())
-        if (::headerBinding.isInitialized && mediaType == "tv") {
-            headerBinding.tmdbWatchSeasonScroll.isVisible = seasons.isNotEmpty()
-        }
     }
 
     private fun updateExtrasTopMargin() {
@@ -1995,16 +1994,29 @@ class TmdbWatchFragment : Fragment() {
             if (viewType == 1) {
                 InfoVH(ItemUrlBinding.inflate(LayoutInflater.from(parent.context), parent, false))
             } else {
-                RecVH(ItemTmdbCardBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+                RecVH(ItemTmdbExtrasCardBinding.inflate(LayoutInflater.from(parent.context), parent, false))
             }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             when (val item = items[position]) {
                 is ExtrasItem.Recommendation -> {
                     val b = (holder as RecVH).binding
-                    TmdbCards.applyCardStyle(b, item.media)
-                    b.root.contentDescription = item.media.displayTitle
-                    b.root.setOnClickListener { onMedia(item.media) }
+                    val m = item.media
+                    b.extrasCardPoster.loadImage(
+                        Tmdb.imageUrl(m.posterPath ?: m.backdropPath, 300)
+                    )
+                    b.extrasCardTitle.text = m.displayTitle
+                    val year = m.year
+                    val genres = Tmdb.genreNames(m).joinToString(", ")
+                    b.extrasCardMeta.text = listOf(
+                        year.takeIf { it.isNotBlank() },
+                        genres.takeIf { it.isNotBlank() },
+                    ).filterNotNull().joinToString(" · ")
+                    b.extrasCardMeta.isVisible = b.extrasCardMeta.text.isNotBlank()
+                    b.extrasCardOverview.text = m.overview?.trim().orEmpty()
+                    b.extrasCardOverview.isVisible = b.extrasCardOverview.text.isNotBlank()
+                    b.root.contentDescription = m.displayTitle
+                    b.root.setOnClickListener { onMedia(m) }
                     FocusEffectUtil.applyFocusListener(b.root)
                 }
                 is ExtrasItem.Info -> {
@@ -2040,7 +2052,7 @@ class TmdbWatchFragment : Fragment() {
             }
         }
 
-        class RecVH(val binding: ItemTmdbCardBinding) : RecyclerView.ViewHolder(binding.root)
+        class RecVH(val binding: ItemTmdbExtrasCardBinding) : RecyclerView.ViewHolder(binding.root)
         class InfoVH(val binding: ItemUrlBinding) : RecyclerView.ViewHolder(binding.root)
     }
 
