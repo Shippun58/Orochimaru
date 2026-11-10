@@ -357,6 +357,7 @@ class TmdbHomeFragment : Fragment() {
                     loadSimklHomeSections()
                 }
             }
+            loadExtraAddonSections()
             binding.tmdbHomeSpinner.isVisible = false
         }
     }
@@ -450,6 +451,42 @@ class TmdbHomeFragment : Fragment() {
     private fun cardHint(type: String): String =
         if (type.equals("series", true) || type.equals("tv", true) || type.equals("anime", true)) "tv"
         else "movie"
+
+    private suspend fun loadExtraAddonSections() {
+        val addons = withContext(Dispatchers.IO) { StremioAddonManager.homeSources() }
+        if (addons.isEmpty()) return
+        Logger.log("TMDB_HOME: extra addon sources ${addons.map { it.manifest.name }}")
+        val usedTitles = HashSet<String>()
+        for (addon in addons) {
+            val shelves = withContext(Dispatchers.IO) {
+                runCatching { StremioAddonClient.loadHomeCatalogShelves(addon) }
+                    .onFailure { Logger.log("TMDB_HOME: extra shelves failed for ${addon.manifest.name}: ${it.message}") }
+                    .getOrDefault(emptyList())
+            }
+            val distinctCards = LinkedHashMap<String, StremioCatalogCard>()
+            shelves.forEach { shelf ->
+                shelf.cards.take(20).forEach { card ->
+                    val key = "${card.type}:${card.id}"
+                    if (!distinctCards.containsKey(key)) distinctCards[key] = card
+                }
+            }
+            val mapping = distinctCards.entries.toList().limitedAsyncMap(6) { (key, card) ->
+                key to mapStremioCardToTmdb(card)
+            }.toMap()
+            shelves.forEach { shelf ->
+                val items = shelf.cards.take(20)
+                    .mapNotNull { enrichCard(it, mapping["${it.type}:${it.id}"], cardHint(it.type)) }
+                    .distinctBy { "${it.type}:${it.id}:${it.displayTitle}" }
+                if (items.isEmpty()) return@forEach
+                var title = shelf.name
+                if (!usedTitles.add(title)) title = "$title — ${addon.manifest.name}"
+                Logger.log(
+                    "TMDB_HOME: extra shelf addon='${addon.manifest.name}' title='$title' cards=${items.size}"
+                )
+                addSection(title, items, onClick = ::openMedia, showMore = false)
+            }
+        }
+    }
 
     private fun enrichCard(card: StremioCatalogCard, mapped: TmdbMedia?, hint: String): TmdbMedia? {
         if (mapped != null) {
