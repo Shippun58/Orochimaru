@@ -597,11 +597,15 @@ class TmdbWatchFragment : Fragment() {
         val h = headerBinding
 
         h.tmdbWatchSourceChips.removeAllViews()
-        h.tmdbWatchSourceTitle.text = when {
+        h.tmdbWatchSourceTitle.text = (when {
             sources.isEmpty() && stremioSources.isEmpty() -> getString(R.string.tmdb_watch_no_sources)
             selectedSourceIndex == -1 && selectedStremioIndex == -1 -> getString(R.string.tmdb_watch_auto_search)
             else -> getString(R.string.tmdb_watch_sources)
-        }
+        }) + sourceRowFiller()
+        Logger.log(
+            "TMDB_STATUS: buildHeader titleLen=${h.tmdbWatchSourceTitle.text.length} " +
+                "stremioIdx=$selectedStremioIndex csIdx=$selectedSourceIndex"
+        )
         sources.forEachIndexed { index, source ->
             val chip = LayoutInflater.from(requireContext()).inflate(R.layout.item_tmdb_chip, h.tmdbWatchSourceChips, false) as Chip
             chip.id = View.generateViewId()
@@ -1093,12 +1097,17 @@ class TmdbWatchFragment : Fragment() {
 
     private fun setSourceStatus(text: String) {
 
-        val filler = "\u2800".repeat(120)
+        val filler = sourceRowFiller()
         headerBinding.tmdbWatchSourceTitle.ellipsize = TextUtils.TruncateAt.END
         headerBinding.tmdbWatchSourceTitle.isSelected = false
         headerBinding.tmdbWatchSourceTitle.text = text + filler
         headerBinding.tmdbWatchSpinner.isVisible = text.startsWith("Searching")
+        Logger.log(
+            "TMDB_STATUS: text='$text' fillerLen=${filler.length} fullLen=${(text + filler).length}"
+        )
     }
+
+    private fun sourceRowFiller(): String = "\u2800".repeat(120)
 
     private fun applyStyle(style: Int, rev: Boolean) {
         episodeStyle = style.coerceIn(0, 3)
@@ -1919,9 +1928,12 @@ class TmdbWatchFragment : Fragment() {
             ?: "This add-on provides information only."
         headerBinding.tmdbWatchSourceTitle.ellipsize = TextUtils.TruncateAt.END
         headerBinding.tmdbWatchSourceTitle.isSelected = false
-        headerBinding.tmdbWatchSourceTitle.text = description
+        headerBinding.tmdbWatchSourceTitle.text = description + sourceRowFiller()
         headerBinding.tmdbWatchSpinner.isVisible = false
         headerBinding.tmdbWatchEpisodeCount.text = "Information only"
+        Logger.log(
+            "TMDB_STATUS: info-only text='${description.take(60)}' addon=${addon.manifest.name} filler=ON"
+        )
         if (::episodeAdapter.isInitialized) episodeAdapter.submitEpisodes(emptyList())
         snackString("${addon.manifest.name}: $description")
     }
