@@ -1227,7 +1227,7 @@ class TmdbWatchFragment : Fragment() {
             .firstOrNull { it.startsWith("http", ignoreCase = true) }
         Logger.log("TMDB_WATCH: info card from $addonName rows=${links.size} chars=${body.length}")
         if (!isAdded) return
-        customAlertDialog().apply {
+        requireContext().customAlertDialog().apply {
             setTitle(addonName)
             setMessage(body)
             if (openUrl != null) {

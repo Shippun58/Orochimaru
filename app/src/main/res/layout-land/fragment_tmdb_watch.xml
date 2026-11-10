@@ -63,6 +63,19 @@
         android:paddingBottom="128dp"
         tools:listitem="@layout/item_episode_grid" />
 
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/tmdbWatchExtrasRecycler"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:focusable="false"
+        android:descendantFocusability="afterDescendants"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="128dp"
+        android:visibility="gone"
+        tools:listitem="@layout/item_tmdb_card" />
+
     <androidx.cardview.widget.CardView
         android:id="@+id/tmdbWatchBackCard"
         android:layout_width="32dp"
