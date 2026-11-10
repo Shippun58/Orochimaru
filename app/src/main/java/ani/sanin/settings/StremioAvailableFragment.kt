@@ -106,7 +106,16 @@ class StremioAvailableFragment : Fragment(), SearchQueryHandler {
     }
 
     private fun openConfiguration(card: RepoUi) {
-        val url = card.configUrl ?: return
+        val url = card.configUrl
+        if (url == null) {
+            Logger.log("STREMIO: '${card.name}' is not configurable")
+            Toast.makeText(
+                requireContext(),
+                "${card.name} is not configurable",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
         Logger.log("STREMIO: opening configuration for '${card.name}' url=$url")
         runCatching {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))

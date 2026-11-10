@@ -1,6 +1,7 @@
 package ani.sanin.settings
 
 import android.net.Uri
+import ani.sanin.limitedAsyncMap
 import ani.sanin.util.Logger
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
@@ -70,7 +71,14 @@ object StremioAddonClient {
     private val json = Json { ignoreUnknownKeys = true }
     private val client get() = Injekt.get<NetworkHelper>().client
 
-    fun stremioType(tmdbType: String): String = if (tmdbType == "tv") "series" else "movie"
+    fun stremioType(tmdbType: String): String = when (tmdbType) {
+        "tv" -> "series"
+        "anime" -> "anime"
+        else -> "movie"
+    }
+
+    fun hasHomeCatalogs(addon: StremioAddon): Boolean =
+        catalogDefinitions(addon).any { !it.hasRequiredExtras }
 
     fun supports(addon: StremioAddon, resource: String, tmdbType: String): Boolean {
         val type = stremioType(tmdbType)
@@ -187,29 +195,29 @@ object StremioAddonClient {
         null
     }
 
-    suspend fun loadCatalogShelves(addon: StremioAddon, tmdbType: String): List<StremioCatalogShelf> =
+    suspend fun loadHomeCatalogShelves(addon: StremioAddon): List<StremioCatalogShelf> =
         withContext(Dispatchers.IO) {
-            if (!supports(addon, "catalog", tmdbType)) {
-                Logger.log("STREMIO: catalog skipped addon='${addon.manifest.name}' type=$tmdbType (unsupported)")
+            val definitions = catalogDefinitions(addon)
+                .filterNot { it.hasRequiredExtras }
+                .distinctBy { "${it.type}:${it.id}" }
+                .take(12)
+            if (definitions.isEmpty()) {
+                Logger.log("STREMIO: home catalogs skipped addon='${addon.manifest.name}' (none usable)")
                 return@withContext emptyList()
             }
-            val type = stremioType(tmdbType)
-            val definitions = catalogDefinitions(addon)
-                .filter { it.type == type || it.type == "all" }
-                .filterNot { it.hasRequiredExtras }
-                .take(4)
             Logger.log(
-                "STREMIO: catalog request addon='${addon.manifest.name}' type=$type " +
-                    "catalogs=${definitions.map { it.id }}"
+                "STREMIO: home catalog request addon='${addon.manifest.name}' " +
+                    "catalogs=${definitions.map { "${it.type}/${it.id}" }}"
             )
-            definitions.mapNotNull { catalog ->
-                val root = request(addon, listOf("catalog", catalog.type, catalog.id)) ?: return@mapNotNull null
+            definitions.limitedAsyncMap(4) { catalog ->
+                val root = request(addon, listOf("catalog", catalog.type, catalog.id), timeoutSeconds = 10)
+                    ?: return@limitedAsyncMap null
                 val cards = (root["metas"] as? JsonArray).orEmpty().mapNotNull { it.asObject()?.let(::parseCard) }
                 Logger.log(
                     "STREMIO: catalog '${catalog.name}' (${catalog.type}/${catalog.id}) cards=${cards.size}"
                 )
                 cards.takeIf { it.isNotEmpty() }?.let { StremioCatalogShelf(catalog.name, it) }
-            }
+            }.filterNotNull().distinctBy { "${it.name}:${it.cards.firstOrNull()?.type}" }
         }
 
     suspend fun loadStreams(
@@ -330,7 +338,11 @@ object StremioAddonClient {
         else -> null
     }
 
-    private suspend fun request(addon: StremioAddon, path: List<String>): JsonObject? {
+    private suspend fun request(
+        addon: StremioAddon,
+        path: List<String>,
+        timeoutSeconds: Int = 15,
+    ): JsonObject? {
         val manifestUrl = addon.transportUrl.substringBefore('?')
         val rootUrl = if (manifestUrl.endsWith("/manifest.json", ignoreCase = true)) {
             manifestUrl.dropLast("/manifest.json".length)
@@ -344,7 +356,7 @@ object StremioAddonClient {
                 .header("Accept", "application/json")
                 .build()
             val body = client.newBuilder()
-                .callTimeout(15, TimeUnit.SECONDS)
+                .callTimeout(timeoutSeconds.toLong(), TimeUnit.SECONDS)
                 .build()
                 .newCall(request)
                 .execute()

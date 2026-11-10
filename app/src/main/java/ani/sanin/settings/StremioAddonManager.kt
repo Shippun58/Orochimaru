@@ -72,6 +72,10 @@ object StremioAddonManager {
             .any { it.equals("catalog", ignoreCase = true) || it.equals("meta", ignoreCase = true) }
     }
 
+    fun homeSources(): List<StremioAddon> = installed().filter { addon ->
+        StremioAddonClient.hasHomeCatalogs(addon)
+    }
+
     fun sourceId(addon: StremioAddon): String = SOURCE_PREFIX + addon.transportUrl
 
     fun addonForSourceId(sourceId: String): StremioAddon? {

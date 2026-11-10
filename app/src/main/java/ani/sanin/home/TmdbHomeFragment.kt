@@ -304,7 +304,7 @@ class TmdbHomeFragment : Fragment() {
         super.onResume()
         startAutoAdvance()
 
-        val live = Refresh.activity.getOrPut(requireActivity().hashCode()) { androidx.lifecycle.MutableLiveData(true) }
+        val live = Refresh.activity.getOrPut(requireActivity().hashCode()) { androidx.lifecycle.MutableLiveData(false) }
         live.observe(viewLifecycleOwner) { if (it == true) { load(); live.postValue(false) } }
     }
 
@@ -394,11 +394,9 @@ class TmdbHomeFragment : Fragment() {
                 "resources=${addon.manifest.resources.size} catalogs=${addon.manifest.catalogs.size}"
         )
         val shelves = withContext(Dispatchers.IO) {
-            val movieShelves = runCatching { StremioAddonClient.loadCatalogShelves(addon, "movie") }
+            runCatching { StremioAddonClient.loadHomeCatalogShelves(addon) }
+                .onFailure { Logger.log("TMDB_HOME: stremio catalog load failed: ${it.message}") }
                 .getOrDefault(emptyList())
-            val tvShelves = runCatching { StremioAddonClient.loadCatalogShelves(addon, "tv") }
-                .getOrDefault(emptyList())
-            movieShelves + tvShelves
         }
         if (shelves.isEmpty()) {
             Logger.log("TMDB_HOME: no catalog shelves for ${addon.manifest.name}")
@@ -410,7 +408,7 @@ class TmdbHomeFragment : Fragment() {
         )
         val distinctCards = LinkedHashMap<String, StremioCatalogCard>()
         shelves.forEach { shelf ->
-            shelf.cards.take(6).forEach { card ->
+            shelf.cards.take(3).forEach { card ->
                 val key = "${card.type}:${card.id}"
                 if (!distinctCards.containsKey(key)) distinctCards[key] = card
             }
@@ -421,8 +419,7 @@ class TmdbHomeFragment : Fragment() {
         val resolvedShelves = shelves.mapNotNull { shelf ->
             val items = shelf.cards.take(20)
                 .mapNotNull { card ->
-                    val hint = if (card.type == "series" || card.type == "tv") "tv" else "movie"
-                    enrichCard(card, mapping["${card.type}:${card.id}"], hint)
+                    enrichCard(card, mapping["${card.type}:${card.id}"], cardHint(card.type))
                 }
                 .distinctBy { "${it.type}:${it.id}:${it.displayTitle}" }
             if (items.isEmpty()) null else shelf.name to items
@@ -449,6 +446,10 @@ class TmdbHomeFragment : Fragment() {
         applyTmdbBannerFocusChain()
         return true
     }
+
+    private fun cardHint(type: String): String =
+        if (type.equals("series", true) || type.equals("tv", true) || type.equals("anime", true)) "tv"
+        else "movie"
 
     private fun enrichCard(card: StremioCatalogCard, mapped: TmdbMedia?, hint: String): TmdbMedia? {
         if (mapped != null) {
@@ -477,7 +478,7 @@ class TmdbHomeFragment : Fragment() {
     }
 
     private suspend fun mapStremioCardToTmdb(card: StremioCatalogCard): TmdbMedia? {
-        val hint = if (card.type == "series" || card.type == "tv") "tv" else "movie"
+        val hint = cardHint(card.type)
         if (card.id.startsWith("tt")) {
             runCatching { Tmdb.findByImdb(card.id, hint) }.getOrNull()?.let { return it }
         }

@@ -320,7 +320,7 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
             pluginNames.add(src.name)
             pluginIds.add(src.id)
         }
-        StremioAddonManager.metadataSources().forEach { addon ->
+        StremioAddonManager.homeSources().forEach { addon ->
             pluginNames.add(addon.manifest.name)
             pluginIds.add(StremioAddonManager.sourceId(addon))
         }

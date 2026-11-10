@@ -206,12 +206,10 @@ class RepoCardAdapter(
         }
 
         with(holder.binding.repoConfigButton) {
-            visibility = if (item.configUrl != null && onConfigure != null) View.VISIBLE else View.GONE
+            visibility = if (onConfigure != null) View.VISIBLE else View.GONE
             contentDescription = "Configure ${item.name}"
             setOnClickListener {
-                if (item.configUrl != null) {
-                    onConfigure?.invoke(item)
-                }
+                onConfigure?.invoke(item)
             }
         }
 
