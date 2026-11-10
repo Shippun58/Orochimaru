@@ -58,6 +58,7 @@ object TmdbStreamResolver {
             val host: String = "",
             val externalUrl: String? = null,
             val details: String? = null,
+            val rawDetails: String? = null,
         )
 
         data class Success(val links: List<PlayableLink>, val matchName: String? = null) : StreamResult()
@@ -530,6 +531,10 @@ object TmdbStreamResolver {
         loadResponseCache.keys.removeAll { it.startsWith("$mediaId|") }
     }
 
+    fun invalidateLinks(mediaId: Int, sourceName: String) {
+        linksCache.keys.removeAll { it.startsWith("$mediaId|$sourceName|") }
+    }
+
     private fun qualityFromLabel(label: String): Int? =
         Regex("\\d{3,4}").find(label)?.value?.toIntOrNull()
 
@@ -566,6 +571,9 @@ object TmdbStreamResolver {
                 host = "External",
                 externalUrl = external,
                 details = hint,
+                rawDetails = detailText?.takeUnless { sameAsName }
+                    ?.replace('\u200b', ' ')
+                    ?.trim(),
             )
             hint != null -> StreamResult.PlayableLink(
                 label = name,

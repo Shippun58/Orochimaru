@@ -259,7 +259,8 @@
             android:configChanges="orientation|screenSize|layoutDirection"
             android:parentActivityName=".MainActivity" />
         <activity
-            android:name=".cloudstream.TmdbStreamsActivity"
+            android:name=".cloudstream.TmdbServersActivity"
+            android:label="Servers"
             android:configChanges="orientation|screenSize|layoutDirection"
             android:parentActivityName=".MainActivity" />
         <activity

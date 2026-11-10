@@ -23,4 +23,5 @@
 
     <color name="franchise_list_stroke">#99EEEEEE</color>
     <color name="franchise_list_text">#FFEEEEEE</color>
+    <color name="servers_row_background">#000000</color>
 </resources>

@@ -30,6 +30,7 @@ data class TmdbMedia(
     @SerialName("backdrop_path") val backdropPath: String? = null,
     @SerialName("vote_average") val voteAverage: Double = 0.0,
     @SerialName("vote_count") val voteCount: Int = 0,
+    val popularity: Double = 0.0,
     @SerialName("release_date") val releaseDate: String? = null,
     @SerialName("first_air_date") val firstAirDate: String? = null,
     val overview: String? = null,
@@ -172,12 +173,15 @@ data class TmdbDetail(
     val tagline: String? = null,
     val status: String? = null,
     @SerialName("vote_average") val voteAverage: Double = 0.0,
+    @SerialName("vote_count") val voteCount: Int = 0,
+    val popularity: Double = 0.0,
     @SerialName("backdrop_path") val backdropPath: String? = null,
     @SerialName("poster_path") val posterPath: String? = null,
     @SerialName("release_date") val releaseDate: String? = null,
     @SerialName("first_air_date") val firstAirDate: String? = null,
     @SerialName("number_of_seasons") val numberOfSeasons: Int = 0,
     @SerialName("number_of_episodes") val numberOfEpisodes: Int = 0,
+    val runtime: Int? = null,
         val genres: List<TmdbGenre> = emptyList(),
         @SerialName("production_companies") val productionCompanies: List<TmdbCompany> = emptyList(),
         @SerialName("networks") val networks: List<TmdbCompany> = emptyList(),
@@ -195,7 +199,7 @@ data class TmdbDetail(
 ) {
     val displayTitle: String get() = title ?: name ?: ""
     val year: String get() = (releaseDate ?: firstAirDate ?: "").take(4)
-
+    val runtimeMinutes: Int? get() = runtime?.takeIf { it > 0 }
     val sortDate: String? get() = releaseDate ?: firstAirDate
 }
 
@@ -335,8 +339,11 @@ data class TmdbEpisode(
     @SerialName("season_number") val seasonNumber: Int = 0,
     @SerialName("still_path") val stillPath: String? = null,
     @SerialName("air_date") val airDate: String? = null,
-    @SerialName("vote_average") val voteAverage: Double = 0.0
-)
+    @SerialName("vote_average") val voteAverage: Double = 0.0,
+    val runtime: Int? = null
+) {
+    val runtimeMinutes: Int? get() = runtime?.takeIf { it > 0 }
+}
 
 @Serializable
 private data class TmdbGenrePage(val genres: List<TmdbGenre> = emptyList())

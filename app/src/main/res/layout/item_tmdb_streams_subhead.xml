@@ -7,7 +7,7 @@
     android:paddingBottom="4dp"
     android:fontFamily="@font/poppins_bold"
     android:textSize="14sp"
-    android:textColor="#FFFFFFFF"
+    android:textColor="?attr/colorOnSurface"
     android:alpha="0.6"
     android:maxLines="1"
     android:ellipsize="end" />

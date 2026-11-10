@@ -22,7 +22,7 @@
         android:layout_marginStart="8dp"
         android:fontFamily="@font/poppins_bold"
         android:textSize="16sp"
-        android:textColor="#FFFFFFFF"
+        android:textColor="?attr/colorOnSurface"
         android:maxLines="1"
         android:ellipsize="end"
         tools:text="Watch Next" />
@@ -35,10 +35,22 @@
         android:layout_marginStart="10dp"
         android:fontFamily="@font/poppins"
         android:textSize="12sp"
-        android:textColor="#FFFFFFFF"
+        android:textColor="?attr/colorOnSurface"
         android:alpha="0.5"
         android:maxLines="1"
         android:ellipsize="end"
         android:gravity="end"
         tools:text="Loading…" />
+
+    <ImageButton
+        android:id="@+id/tmdbStreamsGroupRefresh"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="10dp"
+        android:background="@color/nav_bg_inv"
+        android:focusable="true"
+        android:padding="8dp"
+        app:srcCompat="@drawable/ic_round_refresh_24"
+        android:contentDescription="@null"
+        tools:ignore="SpeakableTextPresentCheck" />
 </LinearLayout>

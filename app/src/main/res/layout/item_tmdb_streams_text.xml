@@ -6,6 +6,6 @@
     android:padding="16dp"
     android:fontFamily="@font/poppins"
     android:textSize="14sp"
-    android:textColor="#FFFFFFFF"
+    android:textColor="?attr/colorOnSurface"
     android:alpha="0.5"
     android:gravity="center" />

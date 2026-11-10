@@ -1407,16 +1407,16 @@ class TmdbWatchFragment : Fragment() {
             "TMDB_WATCH: episode click '${d.displayTitle}' season=$season ep=$ep " +
                 "sourceIdx=$selectedSourceIndex (${currentSourceName()}) -> streams screen"
         )
-        val intent = Intent(requireContext(), TmdbStreamsActivity::class.java)
-            .putExtra(TmdbStreamsActivity.ARG_MEDIA_TYPE, mediaType)
-            .putExtra(TmdbStreamsActivity.ARG_MEDIA_ID, mediaId)
-            .putExtra(TmdbStreamsActivity.ARG_SEASON, season ?: 0)
-            .putExtra(TmdbStreamsActivity.ARG_EPISODE, ep ?: 0)
+        val intent = Intent(requireContext(), TmdbServersActivity::class.java)
+            .putExtra(TmdbServersActivity.ARG_MEDIA_TYPE, mediaType)
+            .putExtra(TmdbServersActivity.ARG_MEDIA_ID, mediaId)
+            .putExtra(TmdbServersActivity.ARG_SEASON, season ?: 0)
+            .putExtra(TmdbServersActivity.ARG_EPISODE, ep ?: 0)
         if (pluginSourceId != null) {
-            intent.putExtra(TmdbStreamsActivity.ARG_PLUGIN_SOURCE, pluginSourceId)
+            intent.putExtra(TmdbServersActivity.ARG_PLUGIN_SOURCE, pluginSourceId)
         }
         if (pluginUrl != null) {
-            intent.putExtra(TmdbStreamsActivity.ARG_PLUGIN_URL, pluginUrl)
+            intent.putExtra(TmdbServersActivity.ARG_PLUGIN_URL, pluginUrl)
         }
         startActivity(intent)
     }

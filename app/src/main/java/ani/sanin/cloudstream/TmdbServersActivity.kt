@@ -9,13 +9,14 @@ import ani.sanin.connections.tmdb.TmdbImage
 import ani.sanin.connections.tmdb.TmdbImages
 import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.connections.tmdb.TmdbSeason
-import ani.sanin.databinding.ActivityTmdbStreamsBinding
+import ani.sanin.databinding.ActivityTmdbServersBinding
 import ani.sanin.databinding.ItemTmdbStreamsGroupBinding
-import ani.sanin.databinding.ItemTmdbStreamsPosterBinding
+import ani.sanin.databinding.ItemTmdbStreamsDetailCardBinding
+import ani.sanin.getThemeColor
 import ani.sanin.databinding.ItemTmdbStreamsRailBinding
 import ani.sanin.databinding.ItemTmdbStreamsSubheadBinding
 import ani.sanin.databinding.ItemTmdbStreamsTextBinding
-import ani.sanin.databinding.ItemUrlBinding
+import ani.sanin.databinding.ItemTmdbServerRowBinding
 import ani.sanin.limitedAsyncMap
 import ani.sanin.loadImage
 import androidx.core.view.isVisible
@@ -34,7 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
+class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
     companion object {
         const val ARG_MEDIA_TYPE = "mediaType"
@@ -61,7 +62,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         val logoUrl: String?,
         val source: CsInstalledSource,
         val addon: StremioAddon? = null,
-        val pluginLoad: LoadResponse? = null,
+        var pluginLoad: LoadResponse? = null,
     ) {
         var state: GroupState = GroupState.Loading
     }
@@ -89,7 +90,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
     private var pluginLoad: LoadResponse? = null
     private val pluginEpisodes = mutableMapOf<Int, List<TmdbEpisode>>()
 
-    private lateinit var streamsBinding: ActivityTmdbStreamsBinding
+    private lateinit var serversBinding: ActivityTmdbServersBinding
     private var detail: TmdbDetail? = null
 
     private val groups = mutableListOf<Group>()
@@ -98,6 +99,8 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
     private var selectedIndex = 0
 
     private val rowsAdapter = RowsAdapter()
+    private var headerCollapseMax = 0
+    private val groupJobs = mutableMapOf<Int, kotlinx.coroutines.Job>()
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,17 +114,21 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         if (epArg > 0) epNumber = epArg
 
         Logger.log(
-            "TMDB_STREAMS: open mediaId=$mediaId type=$mediaType S$season E$epNumber " +
+            "TMDB_SERVERS: open mediaId=$mediaId type=$mediaType S$season E$epNumber " +
                 "plugin=${pluginUrl != null}"
         )
 
-        streamsBinding = ActivityTmdbStreamsBinding.inflate(layoutInflater)
-        setContentView(streamsBinding.root)
-        streamsBinding.tmdbStreamsRows.layoutManager =
+        serversBinding = ActivityTmdbServersBinding.inflate(layoutInflater)
+        setContentView(serversBinding.root)
+        serversBinding.tmdbStreamsRows.layoutManager =
             androidx.recyclerview.widget.LinearLayoutManager(this)
-        streamsBinding.tmdbStreamsRows.adapter = rowsAdapter
-        streamsBinding.tmdbStreamsBack.setOnClickListener { finish() }
-        FocusEffectUtil.applyFocusListener(streamsBinding.tmdbStreamsBack)
+        serversBinding.tmdbStreamsRows.isNestedScrollingEnabled = false
+        serversBinding.tmdbStreamsRows.adapter = rowsAdapter
+        serversBinding.tmdbStreamsBack.setOnClickListener { finish() }
+        serversBinding.tmdbServersRefreshAll.setOnClickListener { refreshAll() }
+        FocusEffectUtil.applyFocusListener(serversBinding.tmdbStreamsBack)
+        FocusEffectUtil.applyFocusListener(serversBinding.tmdbServersRefreshAll)
+        serversBinding.tmdbServersScroll.post { setupCollapse() }
 
         lifecycleScope.launch {
             val pluginDetail = if (pluginUrl != null) {
@@ -139,8 +146,9 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
                 }
                 detail = d
             }
+            detail = pluginDetail ?: detail
             if (isFinishing || isDestroyed) return@launch
-            bindHeader(pluginDetail ?: detail!!)
+            bindHeader(detail!!)
             buildGroups()
             buildChips()
             selectedIndex = 0
@@ -149,27 +157,58 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
+    private fun setupCollapse() {
+        val scroll = serversBinding.tmdbServersScroll
+        scroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            updateCollapse(scrollY)
+        }
+        serversBinding.tmdbServersScroll.post { updateCollapse(serversBinding.tmdbServersScroll.scrollY) }
+    }
+
+    private fun updateCollapse(scrollY: Int) {
+        val scroll = serversBinding.tmdbServersScroll
+        val sticky = serversBinding.tmdbServersStickyBlock
+        val topBar = serversBinding.tmdbServersTopBar
+        val backdrop = serversBinding.tmdbStreamsBackdrop
+        val stickyTop = sticky.top + scroll.scrollY
+        headerCollapseMax = (stickyTop - topBar.height).coerceAtLeast(0)
+        val progress = if (headerCollapseMax > 0) {
+            (scrollY.toFloat() / headerCollapseMax).coerceIn(0f, 1f)
+        } else 0f
+        val pinned = (scrollY - headerCollapseMax).coerceAtLeast(0)
+        sticky.translationY = -pinned.toFloat()
+        backdrop.translationY = scrollY * 0.35f
+        serversBinding.tmdbServersCompactLogo.alpha = progress
+        topBar.background?.alpha = (progress * 255).toInt().coerceIn(0, 255)
+        val fadingViews = listOf(
+            serversBinding.tmdbStreamsLogo,
+            serversBinding.tmdbStreamsTitle,
+            serversBinding.tmdbStreamsEpisode,
+            serversBinding.tmdbStreamsRating,
+            serversBinding.tmdbStreamsMeta,
+            serversBinding.tmdbStreamsOverview,
+        )
+        fadingViews.forEach { it.alpha = 1f - progress }
+    }
+
     private fun bindHeader(d: TmdbDetail) {
         val logo = if (PrefManager.getVal<Boolean>(PrefName.UseClearlogoInPosters)) {
             Tmdb.logoUrl(d)
         } else null
         if (logo != null) {
-            streamsBinding.tmdbStreamsLogo.isVisible = true
-            streamsBinding.tmdbStreamsTitle.isVisible = false
-            streamsBinding.tmdbStreamsLogo.loadImage(logo)
+            serversBinding.tmdbStreamsLogo.isVisible = true
+            serversBinding.tmdbStreamsTitle.isVisible = false
+            serversBinding.tmdbStreamsLogo.loadImage(logo)
+            serversBinding.tmdbServersCompactLogo.loadImage(logo)
         } else {
-            streamsBinding.tmdbStreamsLogo.isVisible = false
-            streamsBinding.tmdbStreamsTitle.isVisible = true
-            streamsBinding.tmdbStreamsTitle.text = d.displayTitle
+            serversBinding.tmdbStreamsLogo.isVisible = false
+            serversBinding.tmdbStreamsTitle.isVisible = true
+            serversBinding.tmdbStreamsTitle.text = d.displayTitle
         }
-        streamsBinding.tmdbStreamsBackdrop.loadImage(Tmdb.imageUrl(d.backdropPath ?: d.posterPath, 780))
-        val genres = d.genres.mapNotNull { it.name }.take(3).joinToString(", ")
-        val meta = listOfNotNull(
-            d.year.takeIf { it.isNotBlank() },
-            genres.takeIf { it.isNotBlank() },
-            String.format(java.util.Locale.US, "★ %.1f", d.voteAverage).takeIf { d.voteAverage > 0 },
-        ).joinToString("  •  ")
-        streamsBinding.tmdbStreamsMeta.text = meta
+        Tmdb.logoUrl(d)?.takeIf { logo != null }?.let { serversBinding.tmdbServersCompactLogo.loadImage(it) }
+            ?: Tmdb.imageUrl(d.posterPath, 342)?.let { serversBinding.tmdbServersCompactLogo.loadImage(it) }
+        applyThemeGradient()
+
         if (mediaType == "tv") {
             val s = season ?: 1
             lifecycleScope.launch {
@@ -181,14 +220,128 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
                 }
                 if (isFinishing || isDestroyed) return@launch
                 val ep = eps.firstOrNull { it.episodeNumber == epNumber }
-                streamsBinding.tmdbStreamsEpisode.text =
-                    "S$s · E${epNumber ?: 1}" +
-                        (ep?.name?.takeIf { it.isNotBlank() }?.let { " — $it" } ?: "")
+                bindEpisode(ep, d)
             }
         } else {
-            streamsBinding.tmdbStreamsEpisode.isVisible = false
+            bindEpisode(null, d)
         }
     }
+
+    private fun bindEpisode(ep: TmdbEpisode?, d: TmdbDetail) {
+        if (ep != null) {
+            val still = runCatching { Tmdb.imageUrl(ep.stillPath, 780) }.getOrNull()
+            serversBinding.tmdbStreamsBackdrop.loadImage(
+                still ?: Tmdb.imageUrl(d.backdropPath ?: d.posterPath, 780)
+            )
+            serversBinding.tmdbStreamsEpisode.isVisible = true
+            serversBinding.tmdbStreamsEpisode.text =
+                "Ssn${season ?: 1} Ep${epNumber ?: 1}" +
+                    (ep.name?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: "")
+            val rating = ep.voteAverage.takeIf { it > 0 } ?: d.voteAverage.takeIf { it > 0 }
+            bindRating(rating)
+            bindMeta(ep.airDate, ep.runtime ?: d.runtimeMinutes)
+            val overview = ep.overview?.takeIf { it.isNotBlank() } ?: d.overview
+            if (overview.isNullOrBlank()) {
+                serversBinding.tmdbStreamsOverview.isVisible = false
+            } else {
+                serversBinding.tmdbStreamsOverview.isVisible = true
+                serversBinding.tmdbStreamsOverview.text = overview
+            }
+        } else {
+            serversBinding.tmdbStreamsBackdrop.loadImage(Tmdb.imageUrl(d.backdropPath ?: d.posterPath, 780))
+            bindRating(d.voteAverage.takeIf { it > 0 })
+            bindMeta(d.releaseDate ?: d.firstAirDate, d.runtimeMinutes)
+            val overview = d.overview?.takeIf { it.isNotBlank() }
+            if (overview == null) {
+                serversBinding.tmdbStreamsOverview.isVisible = false
+            } else {
+                serversBinding.tmdbStreamsOverview.isVisible = true
+                serversBinding.tmdbStreamsOverview.text = overview
+            }
+        }
+        serversBinding.tmdbServersScroll.post {
+            headerCollapseMax = (serversBinding.tmdbStreamsBackdrop.height.coerceAtLeast(1))
+            updateCollapse(serversBinding.tmdbServersScroll.scrollY)
+        }
+        Logger.log(
+            "TMDB_SERVERS: header ep=${ep != null} title='${serversBinding.tmdbStreamsEpisode.text}'"
+        )
+    }
+
+    private fun bindRating(rating: Double?) {
+        if (rating == null || rating <= 0) {
+            serversBinding.tmdbStreamsRating.isVisible = false
+            return
+        }
+        serversBinding.tmdbStreamsRating.isVisible = true
+        serversBinding.tmdbStreamsRating.text = String.format(java.util.Locale.US, "★ %.1f", rating)
+    }
+
+    private fun bindMeta(airRelease: String?, runtimeMinutes: Int?) {
+        val parts = mutableListOf<String>()
+        airRelease?.takeIf { it.isNotBlank() }?.let {
+            runCatching {
+                val parsed = java.time.LocalDate.parse(it)
+                String.format(
+                    java.util.Locale.US,
+                    "%02d/%02d/%d",
+                    parsed.dayOfMonth,
+                    parsed.monthValue,
+                    parsed.year,
+                )
+            }.getOrNull() ?: it
+        }?.let { parts.add(it) }
+        runtimeMinutes?.takeIf { it > 0 }?.let { minutes ->
+            val h = minutes / 60
+            val m = minutes % 60
+            parts.add(
+                when {
+                    h > 0 && m > 0 -> "${h}hr ${m}minutes"
+                    h > 0 -> "${h}hr"
+                    else -> "${m}minutes"
+                }
+            )
+        }
+        if (parts.isEmpty()) {
+            serversBinding.tmdbStreamsMeta.isVisible = false
+        } else {
+            serversBinding.tmdbStreamsMeta.isVisible = true
+            serversBinding.tmdbStreamsMeta.text = parts.joinToString("  ·  ")
+        }
+    }
+
+    private fun applyThemeGradient() {
+        val surface = getThemeColor(com.google.android.material.R.attr.colorSurface)
+        val onSurface = getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+        val gradient = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.argb(
+                    (0.65f * 255).toInt(),
+                    surface.redBits(), surface.greenBits(), surface.blueBits(),
+                ),
+                android.graphics.Color.argb(255, surface.redBits(), surface.greenBits(), surface.blueBits()),
+            ),
+        )
+        serversBinding.tmdbStreamsScrim.background = gradient
+        serversBinding.tmdbServersDivider.background = android.graphics.drawable.ColorDrawable(onSurface)
+        serversBinding.tmdbServersCompactLogo.also { it.alpha = 0f }
+        val topBarBg = android.graphics.drawable.GradientDrawable().apply {
+            setColor(
+                android.graphics.Color.argb(
+                    (0.95f * 255).toInt(),
+                    surface.redBits(), surface.greenBits(), surface.blueBits(),
+                ),
+            )
+        }
+        topBarBg.alpha = 0
+        serversBinding.tmdbServersTopBar.background = topBarBg
+    }
+
+    private fun Int.redBits(): Int = (this shr 16) and 0xFF
+    private fun Int.greenBits(): Int = (this shr 8) and 0xFF
+    private fun Int.blueBits(): Int = this and 0xFF
 
     private fun buildGroups() {
         groups.clear()
@@ -198,7 +351,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
             if (source != null) {
                 groups.add(Group(source.id, source.name, source.iconUrl, source, pluginLoad = load))
             }
-            Logger.log("TMDB_STREAMS: groups total=${groups.size} (plugin mode)")
+            Logger.log("TMDB_SERVERS: groups total=${groups.size} (plugin mode)")
             return
         }
         val csSources = CsRepos.installed(this)
@@ -218,28 +371,32 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
             )
         }
         Logger.log(
-            "TMDB_STREAMS: groups cs=${csSources.size} stremio=${stremio.size} total=${groups.size}"
+            "TMDB_SERVERS: groups cs=${csSources.size} stremio=${stremio.size} total=${groups.size}"
         )
     }
 
     private fun buildChips() {
-        streamsBinding.tmdbStreamsChips.removeAllViews()
+        serversBinding.tmdbStreamsChips.removeAllViews()
         chipByIndex.clear()
         val inflater = android.view.LayoutInflater.from(this)
         groups.forEachIndexed { index, group ->
             val chip = inflater.inflate(
                 R.layout.item_tmdb_chip,
-                streamsBinding.tmdbStreamsChips,
+                serversBinding.tmdbStreamsChips,
                 false,
             ) as Chip
             chip.text = group.name
             chip.isCheckable = true
             chip.isClickable = true
             chip.isFocusable = true
+            chip.setTextColor(
+                androidx.core.content.ContextCompat.getColorStateList(this, R.color.chip_text_color)
+            )
             chip.isChecked = index == selectedIndex
             chip.setOnClickListener { selectGroup(index) }
+            FocusEffectUtil.applyFocusListener(chip)
             chipByIndex.add(chip)
-            streamsBinding.tmdbStreamsChips.addView(chip)
+            serversBinding.tmdbStreamsChips.addView(chip)
         }
         renderChipStates()
     }
@@ -259,7 +416,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
     private fun selectGroup(index: Int) {
         if (index !in groups.indices) return
         selectedIndex = index
-        Logger.log("TMDB_STREAMS: chip -> '${groups[index].name}'")
+        Logger.log("TMDB_SERVERS: chip -> '${groups[index].name}'")
         renderChipStates()
         refreshRows()
     }
@@ -305,9 +462,9 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
             }
         }
         rowsAdapter.notifyDataSetChanged()
-        streamsBinding.tmdbStreamsRows.scrollToPosition(0)
+        serversBinding.tmdbStreamsRows.scrollToPosition(0)
         Logger.log(
-            "TMDB_STREAMS: rows for '${group.name}' count=${rows.size} state=${stateLabel(group.state)}"
+            "TMDB_SERVERS: rows for '${group.name}' count=${rows.size} state=${stateLabel(group.state)}"
         )
     }
 
@@ -321,36 +478,59 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private suspend fun resolveAll() {
         val d = detail ?: return
-        val csGroups = groups.filter { it.addon == null && it.pluginLoad == null }
-        val stremioGroups = groups.filter { it.addon != null }
-        val stremioStreamGroups = stremioGroups.filter { it.addon?.extrasOnly != true }
-        val stremioExtrasGroups = stremioGroups.filter { it.addon?.extrasOnly == true }
-        val pluginGroups = groups.filter { it.pluginLoad != null }
-        Logger.log(
-            "TMDB_STREAMS: resolveAll cs=${csGroups.size} stremioStream=${stremioStreamGroups.size} " +
-                "stremioExtras=${stremioExtrasGroups.size} plugin=${pluginGroups.size}"
-        )
-        val stage1 = pluginGroups.map { g ->
-            lifecycleScope.launch(Dispatchers.IO) { resolvePluginGroup(g) }
-        } + stremioStreamGroups.map { g ->
-            lifecycleScope.launch(Dispatchers.IO) { resolveStremioGroup(g, d) }
+        Logger.log("TMDB_SERVERS: resolveAll total=${groups.size}")
+        groups.indices.forEach { launchGroupResolution(it) }
+        groupJobs.values.forEach { it.join() }
+    }
+
+    private fun launchGroupResolution(index: Int) {
+        val group = groups.getOrNull(index) ?: return
+        val d = detail ?: return
+        groupJobs.remove(index)?.cancel()
+        groupJobs[index] = lifecycleScope.launch(Dispatchers.IO) {
+            when {
+                group.pluginLoad != null -> resolvePluginGroup(group)
+                group.addon != null -> resolveStremioGroup(group, d)
+                else -> resolveCsGroup(group)
+            }
         }
-        stage1.forEach { it.join() }
-        for (group in csGroups) {
-            if (isFinishing || isDestroyed) return
-            resolveCsGroup(group)
+    }
+
+    private fun refreshAll() {
+        Logger.log("TMDB_SERVERS: refresh all")
+        groupJobs.values.forEach { it.cancel() }
+        groupJobs.clear()
+        TmdbStreamResolver.invalidateLinks(mediaId)
+        groups.forEach { it.state = GroupState.Loading }
+        renderChipStates()
+        refreshRows()
+        lifecycleScope.launch {
+            if (pluginUrl != null) {
+                val freshLoad = withContext(Dispatchers.IO) { loadPlugin(pluginUrl!!) }
+                val pluginGroup = groups.firstOrNull { it.pluginLoad != null }
+                if (pluginGroup != null && freshLoad != null) {
+                    pluginGroup.pluginLoad = freshLoad
+                }
+            }
+            resolveAll()
         }
-        val stage3 = stremioExtrasGroups.map { g ->
-            lifecycleScope.launch(Dispatchers.IO) { resolveStremioGroup(g, d) }
-        }
-        stage3.forEach { it.join() }
+    }
+
+    private fun refreshGroup(index: Int) {
+        val group = groups.getOrNull(index) ?: return
+        Logger.log("TMDB_SERVERS: refresh group '${group.name}'")
+        TmdbStreamResolver.invalidateLinks(mediaId, group.name)
+        group.state = GroupState.Loading
+        renderChipStates()
+        if (selectedIndex == index) refreshRows()
+        lifecycleScope.launch { launchGroupResolution(index) }
     }
 
     private suspend fun resolveCsGroup(group: Group) {
         val d = detail ?: return
         val cached = TmdbStreamResolver.cachedLinks(mediaId, group.source.name, season, epNumber)
         if (cached != null) {
-            Logger.log("TMDB_STREAMS: '${group.name}' cached ${cached.links.size} links")
+            Logger.log("TMDB_SERVERS: '${group.name}' cached ${cached.links.size} links")
             group.state = GroupState.Ready(cached.links, emptyList(), emptyList())
             onResolved(group)
             return
@@ -359,14 +539,14 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         when (result) {
             is TmdbStreamResolver.StreamResult.Success -> {
                 Logger.log(
-                    "TMDB_STREAMS: '${group.name}' ok ${result.links.size} links " +
+                    "TMDB_SERVERS: '${group.name}' ok ${result.links.size} links " +
                         "playable=${result.links.count { it.url.isNotBlank() }}"
                 )
                 TmdbStreamResolver.cacheLinks(mediaId, group.source.name, season, epNumber, result)
                 group.state = GroupState.Ready(result.links, emptyList(), emptyList())
             }
             is TmdbStreamResolver.StreamResult.Error -> {
-                Logger.log(android.util.Log.ERROR, "TMDB_STREAMS: '${group.name}' failed: ${result.message}")
+                Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: '${group.name}' failed: ${result.message}")
                 group.state = GroupState.Failed(result.message)
             }
         }
@@ -381,7 +561,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
                 val external = result.links.filter { it.url.isBlank() }
                 if (external.isEmpty()) {
                     Logger.log(
-                        "TMDB_STREAMS: '${group.name}' ok ${result.links.size} links " +
+                        "TMDB_SERVERS: '${group.name}' ok ${result.links.size} links " +
                             "playable=${result.links.count { it.url.isNotBlank() }}"
                     )
                     TmdbStreamResolver.cacheLinks(mediaId, group.name, season, epNumber, result)
@@ -389,22 +569,26 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
                     onResolved(group)
                     return
                 }
-                val targets = external.mapNotNull { parseStremioTarget(it.externalUrl) }.distinct()
-                val infos = external.filter { parseStremioTarget(it.externalUrl) == null }
-                val recommendations = targets.limitedAsyncMap(4) { (type, imdb) ->
-                    runCatching { Tmdb.findByImdb(imdb, type)?.copy(mediaType = type) }.getOrNull()
+                val canCard = { link: TmdbStreamResolver.StreamResult.PlayableLink ->
+                    parseStremioTarget(link.externalUrl) != null ||
+                        parseExtraDescription(link.rawDetails ?: link.details).isTemplateMatch
+                }
+                val infos = external.filter { !canCard(it) }
+                val extras = external - infos.toSet()
+                val recommendations = extras.limitedAsyncMap(4) { link ->
+                    runCatching { resolveExtraMedia(link, mediaType) }.getOrNull()
                 }.filterNotNull()
                     .filterNot { it.id == mediaId && it.type == mediaType }
                     .distinctBy { "${it.type}:${it.id}" }
                 Logger.log(
-                    "TMDB_STREAMS: '${group.name}' extras recs=${recommendations.size} infos=${infos.size}"
+                    "TMDB_SERVERS: '${group.name}' extras recs=${recommendations.size} infos=${infos.size}"
                 )
                 group.state = GroupState.Ready(result.links, recommendations, infos)
             }
             is TmdbStreamResolver.StreamResult.Error -> {
                 Logger.log(
                     android.util.Log.ERROR,
-                    "TMDB_STREAMS: '${group.name}' failed: ${result.message}"
+                    "TMDB_SERVERS: '${group.name}' failed: ${result.message}"
                 )
                 group.state = GroupState.Failed(result.message)
             }
@@ -418,14 +602,14 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         when (result) {
             is TmdbStreamResolver.StreamResult.Success -> {
                 Logger.log(
-                    "TMDB_STREAMS: '${group.name}' ok ${result.links.size} links " +
+                    "TMDB_SERVERS: '${group.name}' ok ${result.links.size} links " +
                         "playable=${result.links.count { it.url.isNotBlank() }}"
                 )
                 TmdbStreamResolver.cacheLinks(mediaId, group.name, season, epNumber, result)
                 group.state = GroupState.Ready(result.links, emptyList(), emptyList())
             }
             is TmdbStreamResolver.StreamResult.Error -> {
-                Logger.log(android.util.Log.ERROR, "TMDB_STREAMS: '${group.name}' failed: ${result.message}")
+                Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: '${group.name}' failed: ${result.message}")
                 group.state = GroupState.Failed(result.message)
             }
         }
@@ -448,7 +632,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         val playable = state.links.filter { it.url.isNotBlank() }
         if (playable.isEmpty()) return
         saveLastPlayed()
-        Logger.log("TMDB_STREAMS: play '${d.displayTitle}' via ${group.name} label='${link.label}'")
+        Logger.log("TMDB_SERVERS: play '${d.displayTitle}' via ${group.name} label='${link.label}'")
         val overrideEpisodes = if (group.pluginLoad != null) {
             if (mediaType == "tv") {
                 TmdbStreamResolver.pluginEpisodeShells(mediaId, pluginEpisodes)
@@ -458,7 +642,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         } else null
         lifecycleScope.launch(Dispatchers.IO) {
             TmdbStreamResolver.launchPlayer(
-                this@TmdbStreamsActivity,
+                this@TmdbServersActivity,
                 mediaId,
                 mediaType,
                 d,
@@ -487,7 +671,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
             return null
         }
         val api = withContext(Dispatchers.IO) {
-            CsRuntime.apisFor(this@TmdbStreamsActivity, source).firstOrNull()
+            CsRuntime.apisFor(this@TmdbServersActivity, source).firstOrNull()
         } ?: run {
             snackString("Could not load ${source.name}")
             finish()
@@ -497,14 +681,14 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
             runCatching { api.load(url) }.getOrNull()
         }
         if (load == null) {
-            Logger.log(android.util.Log.ERROR, "TMDB_STREAMS: plugin load null for $url")
+            Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: plugin load null for $url")
             snackString("Plugin returned nothing for this title")
             finish()
             return null
         }
         pluginLoad = load
         Logger.log(
-            "TMDB_STREAMS: plugin load -> ${load.javaClass.simpleName} '${load.name}' (api=${load.apiName})"
+            "TMDB_SERVERS: plugin load -> ${load.javaClass.simpleName} '${load.name}' (api=${load.apiName})"
         )
 
         val poster = load.posterUrl
@@ -605,22 +789,158 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
     private fun parseStremioTarget(url: String?): Pair<String, String>? {
         if (url == null || !url.startsWith("stremio://", ignoreCase = true)) return null
         val segments = android.net.Uri.parse(url).pathSegments
-        val rawType = segments.getOrNull(1) ?: return null
         val rawId = segments.getOrNull(2) ?: return null
-        val type = if (rawType.equals("series", true) || rawType.equals("tv", true)) "tv" else "movie"
-        val imdbId = rawId.substringBefore(':').takeIf { it.startsWith("tt") } ?: return null
-        return type to imdbId
+        val baseId = rawId.substringBefore(':')
+        return when {
+            baseId.startsWith("tt") -> {
+                val type = segments.getOrNull(1) ?: return null
+                (if (type.equals("series", true) || type.equals("tv", true)) "tv" else "movie") to baseId
+            }
+            baseId.startsWith("tmdb") -> {
+                val numericId = baseId.substringAfter("tmdb:", "")
+                    .takeIf { it.toIntOrNull() != null }
+                    ?: return null
+                val type = segments.getOrNull(1) ?: return null
+                (if (type.equals("series", true) || type.equals("tv", true)) "tv" else "movie") to numericId
+            }
+            else -> null
+        }
+    }
+
+    private data class ExtraDescription(
+        val releaseDate: String? = null,
+        val rating: Double? = null,
+        val genres: List<String> = emptyList(),
+        val popularity: Double? = null,
+        val overview: String? = null,
+    ) {
+        val isTemplateMatch: Boolean
+            get() = releaseDate != null || rating != null || popularity != null
+    }
+
+    private val extraReleaseRx = Regex("Release(?:d)?\\s*:?\\s*(\\d{4}-\\d{1,2}-\\d{1,2})")
+    private val extraRatingRx = Regex("Rating\\s*:?\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(?:/\\s*10|%)?")
+    private val extraPopularityRx = Regex("Popularity\\s*:?\\s*([0-9]+(?:\\.[0-9]+)?)")
+    private val extraOverviewRx = Regex("Overview\\s*:?\\s*", RegexOption.IGNORE_CASE)
+    private val extraGenreSegmentRx = Regex("Genre\\s*:?\\s*([^\\n📈📖◎★]+)", RegexOption.IGNORE_CASE)
+
+    private fun parseExtraDescription(text: String?): ExtraDescription? {
+        if (matchesTorrentQualityText(text)) return null
+        val release = extraReleaseRx.find(text ?: return null)?.groupValues?.getOrNull(1)
+        val rating = extraRatingRx.find(text)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val popularity = extraPopularityRx.find(text)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val overview = extraOverviewRx.find(text)?.let { m ->
+            text.substring(m.range.last + 1).trim().takeIf { it.isNotBlank() }
+        }
+        val genres = extraGenreSegmentRx.find(text)?.groupValues?.getOrNull(1)
+            ?.split("|", ",")
+            ?.mapNotNull { part ->
+                part.replace(Regex("[^\\p{L}\\p{Nd}'\\- ]"), " ")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+                    .takeIf { it.length > 1 }
+            }
+            .orEmpty()
+        if (release == null && rating == null && popularity == null && genres.isEmpty() && overview == null) {
+            return null
+        }
+        return ExtraDescription(release, rating, genres, popularity, overview)
+    }
+
+    private fun matchesTorrentQualityText(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        val hasStructuredExtra = extraReleaseRx.containsMatchIn(text) ||
+            extraRatingRx.containsMatchIn(text) ||
+            extraPopularityRx.containsMatchIn(text)
+        if (hasStructuredExtra) return false
+        return containsStreamQualityTokens(text)
+    }
+
+    private fun containsStreamQualityTokens(text: String): Boolean = listOf(
+        "HDR", "HDR10+", "DV ", "DoVi", "Blocks", "⚠️", "👤", "⚙️",
+        ".mkv", ".mp4", "Torrent", "WebRip", "WEB-DL", "BluRay", "1080p", "2160p", "720p", "4k",
+    ).any { token ->
+        text.contains(token, ignoreCase = true)
+    }
+
+    private suspend fun resolveExtraMedia(
+        link: TmdbStreamResolver.StreamResult.PlayableLink,
+        fallbackType: String,
+    ): TmdbMedia? {
+        val desc = parseExtraDescription(link.rawDetails ?: link.details)
+        val target = parseStremioTarget(link.externalUrl)
+        val addonTitle = link.label.trim().takeIf { it.isNotBlank() }
+        val mediaType = target?.first ?: fallbackType
+        val tmdb = when {
+            target != null && target.second.startsWith("tt") ->
+                Tmdb.findByImdb(target.second, target.first)?.copy(mediaType = target.first)
+            target != null -> resolveTmdbTargetMedia(target.first, target.second.toIntOrNull() ?: 0)
+            !addonTitle.isNullOrBlank() -> {
+                val results = runCatching { Tmdb.search(addonTitle) }.getOrDefault(emptyList())
+                val typed = results.filter { it.type == mediaType }
+                typed.ifEmpty { results }.firstOrNull()
+            }
+            else -> null
+        }
+        if (tmdb == null && addonTitle == null) return null
+        return TmdbMedia(
+            id = tmdb?.id ?: 0,
+            title = tmdb?.title ?: (if (mediaType == "movie") addonTitle else null),
+            name = tmdb?.name ?: (if (mediaType == "tv") addonTitle else null),
+            posterPath = tmdb?.posterPath,
+            backdropPath = tmdb?.backdropPath,
+            voteAverage = desc?.rating?.takeIf { it > 0 } ?: (tmdb?.voteAverage ?: 0.0),
+            popularity = desc?.popularity?.takeIf { it > 0 } ?: (tmdb?.popularity ?: 0.0),
+            releaseDate = desc?.releaseDate ?: tmdb?.releaseDate,
+            firstAirDate = tmdb?.firstAirDate,
+            overview = desc?.overview ?: tmdb?.overview,
+            genreIds = tmdb?.genreIds ?: emptyList(),
+            mediaType = mediaType,
+        )
+    }
+
+    private suspend fun resolveTmdbTargetMedia(type: String, id: Int): TmdbMedia? {
+        if (id <= 0) return null
+        val d = Tmdb.detail(type, id) ?: return null
+        return TmdbMedia(
+            id = d.id,
+            title = if (type == "movie") d.title else null,
+            name = if (type == "tv") d.name else null,
+            posterPath = d.posterPath,
+            backdropPath = d.backdropPath,
+            voteAverage = d.voteAverage,
+            popularity = d.popularity,
+            releaseDate = d.releaseDate,
+            firstAirDate = d.firstAirDate,
+            overview = d.overview,
+            mediaType = type,
+        )
     }
 
     private fun openMedia(media: TmdbMedia) {
-        if (media.id <= 0) return
         val type = if (media.type == "tv") "tv" else "movie"
-        Logger.log("TMDB_STREAMS: opening extras item type=$type id=${media.id} '${media.displayTitle}'")
-        startActivity(
-            android.content.Intent(this, TmdbDetailsActivity::class.java)
-                .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
-                .putExtra(TmdbDetailsActivity.ARG_MEDIA_ID, media.id)
-        )
+        if (media.id > 0) {
+            Logger.log("TMDB_SERVERS: opening extras item type=$type id=${media.id} '${media.displayTitle}'")
+            startActivity(
+                android.content.Intent(this, TmdbDetailsActivity::class.java)
+                    .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
+                    .putExtra(TmdbDetailsActivity.ARG_MEDIA_ID, media.id)
+            )
+            return
+        }
+        val title = media.displayTitle.takeIf { it.isNotBlank() } ?: return
+        lifecycleScope.launch {
+            val results = withContext(Dispatchers.IO) {
+                runCatching { Tmdb.search(title) }.getOrDefault(emptyList())
+            }
+            val match = results.firstOrNull { it.type == type } ?: results.firstOrNull()
+            if (match != null) {
+                Logger.log("TMDB_SERVERS: resolved extras title '$title' to tmdb=${match.id} (${match.type})")
+                openMedia(match)
+            } else {
+                snackString("No TMDB match for $title")
+            }
+        }
     }
 
     private fun openExternal(link: TmdbStreamResolver.StreamResult.PlayableLink) {
@@ -631,29 +951,29 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
                     android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                 )
             }.onFailure {
-                Logger.log("TMDB_STREAMS: external open failed url=$url error=${it.message}")
+                Logger.log("TMDB_SERVERS: external open failed url=$url error=${it.message}")
                 snackString("No app can open this link")
             }
             return
         }
         val target = parseStremioTarget(url) ?: run {
-            Logger.log("TMDB_STREAMS: invalid stremio link url=$url")
+            Logger.log("TMDB_SERVERS: invalid stremio link url=$url")
             return
         }
         val (typeHint, imdbId) = target
-        Logger.log("TMDB_STREAMS: resolving stremio link type=$typeHint imdb=$imdbId")
+        Logger.log("TMDB_SERVERS: resolving stremio link type=$typeHint imdb=$imdbId")
         lifecycleScope.launch {
             val found = withContext(Dispatchers.IO) {
                 runCatching { Tmdb.findByImdb(imdbId, typeHint) }.getOrNull()
             }
             if (isFinishing || isDestroyed) return@launch
             if (found == null) {
-                Logger.log("TMDB_STREAMS: stremio link unresolved id=$imdbId")
+                Logger.log("TMDB_SERVERS: stremio link unresolved id=$imdbId")
                 snackString("Could not resolve $imdbId on TMDB")
                 return@launch
             }
             startActivity(
-                android.content.Intent(this@TmdbStreamsActivity, TmdbDetailsActivity::class.java)
+                android.content.Intent(this@TmdbServersActivity, TmdbDetailsActivity::class.java)
                     .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, found.type)
                     .putExtra(TmdbDetailsActivity.ARG_MEDIA_ID, found.id)
             )
@@ -681,8 +1001,8 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
             val inf = android.view.LayoutInflater.from(parent.context)
             return when (viewType) {
                 0 -> HeadVH(ItemTmdbStreamsGroupBinding.inflate(inf, parent, false))
-                1 -> ItemVH(ItemUrlBinding.inflate(inf, parent, false))
-                2 -> ItemVH(ItemUrlBinding.inflate(inf, parent, false))
+                1 -> ItemVH(ItemTmdbServerRowBinding.inflate(inf, parent, false))
+                2 -> ItemVH(ItemTmdbServerRowBinding.inflate(inf, parent, false))
                 3 -> RailVH(ItemTmdbStreamsRailBinding.inflate(inf, parent, false))
                 4 -> SubHeadVH(ItemTmdbStreamsSubheadBinding.inflate(inf, parent, false))
                 else -> TextVH(ItemTmdbStreamsTextBinding.inflate(inf, parent, false))
@@ -733,10 +1053,15 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
                     is GroupState.Failed -> "Failed — ${st.reason}"
                     is GroupState.Ready -> stateSummary(st)
                 }
+                binding.tmdbStreamsGroupRefresh.setOnClickListener {
+                    val index = groups.indexOfFirst { it === group }
+                    if (index >= 0) refreshGroup(index)
+                }
+                FocusEffectUtil.applyFocusListener(binding.tmdbStreamsGroupRefresh)
             }
         }
 
-        private inner class ItemVH(val binding: ItemUrlBinding) :
+        private inner class ItemVH(val binding: ItemTmdbServerRowBinding) :
             androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
             init {
@@ -798,7 +1123,7 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
                     androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL,
                     false,
                 )
-                rail.adapter = PosterAdapter(media)
+                rail.adapter = DetailCardAdapter(media)
             }
         }
 
@@ -816,15 +1141,15 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
-    private inner class PosterAdapter(
+    private inner class DetailCardAdapter(
         private val items: List<TmdbMedia>
-    ) : androidx.recyclerview.widget.RecyclerView.Adapter<PosterAdapter.PosterVH>() {
+    ) : androidx.recyclerview.widget.RecyclerView.Adapter<DetailCardAdapter.DetailVH>() {
 
         override fun onCreateViewHolder(
             parent: android.view.ViewGroup,
             viewType: Int
-        ): PosterVH = PosterVH(
-            ItemTmdbStreamsPosterBinding.inflate(
+        ): DetailVH = DetailVH(
+            ItemTmdbStreamsDetailCardBinding.inflate(
                 android.view.LayoutInflater.from(parent.context),
                 parent,
                 false
@@ -834,27 +1159,40 @@ class TmdbStreamsActivity : androidx.appcompat.app.AppCompatActivity() {
         override fun getItemCount(): Int = items.size
 
         override fun onBindViewHolder(
-            holder: PosterVH,
+            holder: DetailVH,
             position: Int
         ) {
             val m = items[position]
-            holder.binding.tmdbStreamsPoster.loadImage(Tmdb.imageUrl(m.posterPath ?: m.backdropPath, 300))
-            holder.binding.tmdbStreamsPosterTitle.text = m.displayTitle
+            holder.binding.tmdbRecsCardPoster.loadImage(
+                Tmdb.imageUrl(m.posterPath ?: m.backdropPath, 300)
+                    ?: if (m.posterPath?.startsWith("http") == true) m.posterPath else null
+            )
+            holder.binding.tmdbRecsCardTitle.text = m.displayTitle
             val meta = listOfNotNull(
-                m.year.takeIf { it.isNotBlank() },
-                String.format(java.util.Locale.US, "%.1f", m.voteAverage).takeIf { m.voteAverage > 0 },
+                String.format(java.util.Locale.US, "★ %.1f", m.voteAverage)
+                    .takeIf { m.voteAverage > 0 },
+                (m.releaseDate ?: m.firstAirDate).takeIf { !it.isNullOrBlank() },
+                String.format(java.util.Locale.US, "Popularity %.1f", m.popularity)
+                    .takeIf { m.popularity > 0 },
             ).joinToString("  •  ")
             if (meta.isBlank()) {
-                holder.binding.tmdbStreamsPosterMeta.isVisible = false
+                holder.binding.tmdbRecsCardMeta.isVisible = false
             } else {
-                holder.binding.tmdbStreamsPosterMeta.text = meta
-                holder.binding.tmdbStreamsPosterMeta.isVisible = true
+                holder.binding.tmdbRecsCardMeta.text = meta
+                holder.binding.tmdbRecsCardMeta.isVisible = true
+            }
+            val overview = m.overview?.takeIf { it.isNotBlank() }
+            if (overview == null) {
+                holder.binding.tmdbRecsCardOverview.isVisible = false
+            } else {
+                holder.binding.tmdbRecsCardOverview.text = overview
+                holder.binding.tmdbRecsCardOverview.isVisible = true
             }
             holder.binding.root.setOnClickListener { openMedia(m) }
             FocusEffectUtil.applyFocusListener(holder.binding.root)
         }
 
-        private inner class PosterVH(val binding: ItemTmdbStreamsPosterBinding) :
+        private inner class DetailVH(val binding: ItemTmdbStreamsDetailCardBinding) :
             androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root)
     }
 
