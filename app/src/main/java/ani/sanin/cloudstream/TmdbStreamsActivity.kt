@@ -5,6 +5,7 @@ import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.tmdb.TmdbDetail
 import ani.sanin.connections.tmdb.TmdbEpisode
 import ani.sanin.connections.tmdb.TmdbGenre
+import ani.sanin.connections.tmdb.TmdbImage
 import ani.sanin.connections.tmdb.TmdbImages
 import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.connections.tmdb.TmdbSeason
