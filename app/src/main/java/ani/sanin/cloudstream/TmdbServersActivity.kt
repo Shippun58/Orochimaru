@@ -25,6 +25,7 @@ import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.snackString
+import ani.sanin.themes.ThemeManager
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
 import androidx.lifecycle.lifecycleScope
@@ -105,6 +106,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        ThemeManager(this).applyTheme()
         mediaId = intent.getIntExtra(ARG_MEDIA_ID, 0)
         mediaType = intent.getStringExtra(ARG_MEDIA_TYPE) ?: "movie"
         val seasonArg = intent.getIntExtra(ARG_SEASON, 0)
