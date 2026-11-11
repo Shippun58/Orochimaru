@@ -499,7 +499,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
         Logger.log("TMDB_SERVERS: resolveAll mode=$mode targets=$targets")
         targets.forEach { launchGroupResolution(it) }
-        groupJobs.values.forEach { it.join() }
+        groupJobs.values.toList().forEach { it.join() }
     }
 
     private fun showLoadModeMenu(anchor: android.view.View) {
@@ -576,7 +576,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private fun refreshAll() {
         Logger.log("TMDB_SERVERS: refresh all")
-        groupJobs.values.forEach { it.cancel() }
+        groupJobs.values.toList().forEach { it.cancel() }
         groupJobs.clear()
         TmdbStreamResolver.invalidateLinks(mediaId)
         groups.forEach { it.state = GroupState.Loading }
