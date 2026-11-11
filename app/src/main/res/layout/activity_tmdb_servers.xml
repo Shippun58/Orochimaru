@@ -39,6 +39,37 @@
                     android:layout_height="match_parent"
                     android:importantForAccessibility="no" />
 
+                <ImageView
+                    android:id="@+id/tmdbStreamsLogo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="64dp"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:layout_marginBottom="48dp"
+                    android:adjustViewBounds="true"
+                    android:maxWidth="240dp"
+                    android:scaleType="fitCenter"
+                    android:importantForAccessibility="no"
+                    tools:ignore="ContentDescription" />
+
+                <TextView
+                    android:id="@+id/tmdbStreamsTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="20dp"
+                    android:layout_marginBottom="44dp"
+                    android:gravity="center"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textSize="18sp"
+                    android:textColor="#FFFFFFFF"
+                    android:shadowColor="#99000000"
+                    android:shadowDy="2"
+                    android:shadowRadius="8"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    tools:text="Title" />
+
                 <LinearLayout
                     android:id="@+id/tmdbServersTopBar"
                     android:layout_width="match_parent"
@@ -104,38 +135,15 @@
                 android:paddingEnd="20dp"
                 android:paddingTop="6dp">
 
-                <ImageView
-                    android:id="@+id/tmdbStreamsLogo"
-                    android:layout_width="wrap_content"
-                    android:layout_height="110dp"
-                    android:layout_gravity="center_horizontal"
-                    android:adjustViewBounds="true"
-                    android:maxWidth="320dp"
-                    android:scaleType="fitCenter"
-                    android:importantForAccessibility="no"
-                    tools:ignore="ContentDescription" />
-
-                <TextView
-                    android:id="@+id/tmdbStreamsTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:fontFamily="@font/poppins_bold"
-                    android:textSize="24sp"
-                    android:textColor="#FFFFFFFF"
-                    android:maxLines="2"
-                    android:ellipsize="end"
-                    tools:text="Title" />
-
                 <TextView
                     android:id="@+id/tmdbStreamsEpisode"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:gravity="center"
-                    android:fontFamily="@font/poppins"
-                    android:textSize="13sp"
-                    android:textColor="#F5C518"
+                    android:gravity="start"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textSize="15sp"
+                    android:textColor="?attr/colorOnSurface"
                     android:maxLines="1"
                     android:ellipsize="end"
                     tools:text="Ssn2 Ep3: The Chi" />
@@ -145,10 +153,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:gravity="center"
+                    android:gravity="start"
                     android:fontFamily="@font/poppins"
                     android:textSize="14sp"
-                    android:textColor="#FFFFFFFF"
+                    android:textColor="#F5C518"
                     android:maxLines="1"
                     tools:text="★ 7.9" />
 
@@ -157,10 +165,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:gravity="center"
+                    android:gravity="start"
                     android:fontFamily="@font/poppins"
                     android:textSize="12sp"
-                    android:textColor="#B3FFFFFF"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:maxLines="1"
                     android:ellipsize="end"
                     tools:text="13/11/2026  ·  1hr 2minutes" />
@@ -170,10 +178,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:gravity="center"
+                    android:gravity="start"
                     android:fontFamily="@font/poppins"
                     android:textSize="12sp"
-                    android:textColor="#80FFFFFF"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:alpha="0.85"
                     android:maxLines="6"
                     android:ellipsize="end" />

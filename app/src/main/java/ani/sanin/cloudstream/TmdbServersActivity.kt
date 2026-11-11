@@ -321,6 +321,21 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
+    private fun tintedRowColor(): Int {
+        val dark = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val base = if (dark) 0xFF1C1D21.toInt() else 0xFFFFFFFF.toInt()
+        val primary = getThemeColor(com.google.android.material.R.attr.colorPrimary)
+        val mix = if (dark) 0.15f else 0.09f
+        fun blend(shift: Int): Int {
+            val b = (base shr shift) and 0xFF
+            val p = (primary shr shift) and 0xFF
+            return ((b * (1f - mix)) + (p * mix)).toInt().coerceIn(0, 255)
+        }
+        return android.graphics.Color.rgb(blend(16), blend(8), blend(0))
+    }
+
     private fun applyThemeGradient() {
         val surface = getThemeColor(com.google.android.material.R.attr.colorSurface)
         val onSurface = getThemeColor(com.google.android.material.R.attr.colorOnSurface)
@@ -1137,6 +1152,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
             init {
+                (binding.root as androidx.cardview.widget.CardView)
+                    .setCardBackgroundColor(tintedRowColor())
                 itemView.isFocusable = true
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(
@@ -1265,7 +1282,13 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
 
         private inner class DetailVH(val binding: ItemTmdbStreamsDetailCardBinding) :
-            androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root)
+            androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
+
+            init {
+                (binding.root as androidx.cardview.widget.CardView)
+                    .setCardBackgroundColor(tintedRowColor())
+            }
+        }
     }
 
     private fun stateSummary(status: GroupState.Ready): String {
