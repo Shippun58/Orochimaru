@@ -58,8 +58,19 @@ object ImdbMedia {
 
     private val metaCache = HashMap<String, StremioMetaDetails>()
 
-    private suspend fun loadMeta(mediaType: String, imdbId: String): StremioMetaDetails? {
-        for (addon in StremioAddonManager.metadataSources()) {
+    private suspend fun loadMeta(
+        mediaType: String,
+        imdbId: String,
+        sourceAddonUrl: String?,
+    ): StremioMetaDetails? {
+        val probes = buildList {
+            if (!sourceAddonUrl.isNullOrBlank()) {
+                StremioAddonManager.addonForSourceId("stremio:$sourceAddonUrl")
+                    ?.let { add(it) }
+            }
+            addAll(StremioAddonManager.metadataSources())
+        }.distinctBy { it.transportUrl }
+        for (addon in probes) {
             val meta = runCatching {
                 StremioAddonClient.loadMeta(addon, mediaType, -1, imdbId)
             }.getOrNull()
@@ -70,18 +81,26 @@ object ImdbMedia {
 
     private fun cacheKey(mediaType: String, imdbId: String) = "$mediaType:$imdbId"
 
-    private suspend fun cachedMeta(mediaType: String, imdbId: String): StremioMetaDetails? {
+    private suspend fun cachedMeta(
+        mediaType: String,
+        imdbId: String,
+        sourceAddonUrl: String? = null,
+    ): StremioMetaDetails? {
         val key = cacheKey(mediaType, imdbId)
         val cached = synchronized(metaCache) { metaCache[key] }
         if (cached != null) return cached
-        val meta = loadMeta(mediaType, imdbId) ?: return null
+        val meta = loadMeta(mediaType, imdbId, sourceAddonUrl) ?: return null
         synchronized(metaCache) { metaCache[key] = meta }
         return meta
     }
 
     /** Nuvio-style detail built from the addon/Cinemeta meta for titles absent from TMDB. */
-    suspend fun loadDetail(mediaType: String, imdbId: String): TmdbDetail? {
-        val meta = cachedMeta(mediaType, imdbId) ?: return null
+    suspend fun loadDetail(
+        mediaType: String,
+        imdbId: String,
+        sourceAddonUrl: String? = null,
+    ): TmdbDetail? {
+        val meta = cachedMeta(mediaType, imdbId, sourceAddonUrl) ?: return null
         val year = Regex("\\d{4}").find(meta.releaseInfo.orEmpty())?.value
         val seasons = meta.videos.asSequence()
             .mapNotNull { it.season ?: 1 }
@@ -114,9 +133,14 @@ object ImdbMedia {
     }
 
     /** Episodes for one season from the cached Cinemeta meta (titles absent from TMDB). */
-    suspend fun episodesFor(mediaType: String, imdbId: String, season: Int): List<TmdbEpisode> {
+    suspend fun episodesFor(
+        mediaType: String,
+        imdbId: String,
+        season: Int,
+        sourceAddonUrl: String? = null,
+    ): List<TmdbEpisode> {
         if (mediaType != "tv") return emptyList()
-        val meta = cachedMeta(mediaType, imdbId) ?: return emptyList()
+        val meta = cachedMeta(mediaType, imdbId, sourceAddonUrl) ?: return emptyList()
         return meta.videos
             .filter { (it.season ?: 1) == season && (it.episode ?: 0) > 0 }
             .sortedBy { it.episode ?: 0 }

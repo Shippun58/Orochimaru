@@ -363,8 +363,20 @@ class TmdbHomeFragment : Fragment() {
     }
 
     private fun openMedia(media: TmdbMedia) {
+        val type = if (media.type == "tv") "tv" else "movie"
         if (media.id > 0) {
             openDetails(media.type, media.id)
+            return
+        }
+        if (!media.imdbId.isNullOrBlank()) {
+            Logger.log("TMDB_HOME: no tmdb id for '${media.displayTitle}', opening addon meta id=${media.imdbId} addon=${media.sourceAddonUrl}")
+            startActivity(
+                Intent(requireContext(), TmdbDetailsActivity::class.java)
+                    .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
+                    .putExtra(TmdbDetailsActivity.ARG_IMDB_ID, media.imdbId)
+                    .putExtra(TmdbDetailsActivity.ARG_TITLE, media.displayTitle)
+                    .apply { media.sourceAddonUrl?.let { putExtra(TmdbDetailsActivity.ARG_SOURCE_ADDON, it) } }
+            )
             return
         }
         val title = media.displayTitle
@@ -420,7 +432,7 @@ class TmdbHomeFragment : Fragment() {
         val resolvedShelves = shelves.mapNotNull { shelf ->
             val items = shelf.cards.take(20)
                 .mapNotNull { card ->
-                    enrichCard(card, mapping["${card.type}:${card.id}"], cardHint(card.type))
+                    enrichCard(card, mapping["${card.type}:${card.id}"], cardHint(card.type), addon.transportUrl)
                 }
                 .distinctBy { "${it.type}:${it.id}:${it.displayTitle}" }
             if (items.isEmpty()) null else shelf.name to items
@@ -475,7 +487,7 @@ class TmdbHomeFragment : Fragment() {
             }.toMap()
             shelves.forEach { shelf ->
                 val items = shelf.cards.take(20)
-                    .mapNotNull { enrichCard(it, mapping["${it.type}:${it.id}"], cardHint(it.type)) }
+                    .mapNotNull { enrichCard(it, mapping["${it.type}:${it.id}"], cardHint(it.type), addon.transportUrl) }
                     .distinctBy { "${it.type}:${it.id}:${it.displayTitle}" }
                 if (items.isEmpty()) return@forEach
                 var title = shelf.name
@@ -488,7 +500,7 @@ class TmdbHomeFragment : Fragment() {
         }
     }
 
-    private fun enrichCard(card: StremioCatalogCard, mapped: TmdbMedia?, hint: String): TmdbMedia? {
+    private fun enrichCard(card: StremioCatalogCard, mapped: TmdbMedia?, hint: String, addonUrl: String): TmdbMedia? {
         if (mapped != null) {
             return mapped.copy(
                 posterPath = mapped.posterPath ?: card.poster,
@@ -511,6 +523,8 @@ class TmdbHomeFragment : Fragment() {
             firstAirDate = if (hint == "movie") null else card.releaseInfo,
             overview = card.description,
             mediaType = hint,
+            imdbId = card.id,
+            sourceAddonUrl = addonUrl,
         )
     }
 

@@ -32,6 +32,7 @@ import ani.sanin.isDarkTheme
 import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.tmdb.TmdbCast
 import ani.sanin.connections.tmdb.TmdbDetail
+import ani.sanin.connections.tmdb.TmdbExternalIds
 import ani.sanin.connections.tmdb.TmdbGenre
 import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.cloudstream.TmdbCards
@@ -76,6 +77,8 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         const val ARG_PLUGIN_URL = "pluginUrl"
         const val ARG_OPEN_TAB = "openTab"
         const val ARG_IMDB_ID = "imdbId"
+        const val ARG_SOURCE_ADDON = "sourceAddon"
+        const val ARG_TITLE = "title"
         private const val TAG_WATCH = "tmdbWatch"
 
         const val TAB_INFO = 0
@@ -90,6 +93,8 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
     private var pluginSourceId: String? = null
     private var pluginUrl: String? = null
     private var imdbId: String? = null
+    private var sourceAddonUrl: String? = null
+    private var argTitle: String? = null
     private val pluginMode get() = pluginUrl != null
     private var detail: TmdbDetail? = null
     private var selectedPill = TAB_INFO
@@ -114,11 +119,15 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         pluginSourceId = null
         pluginUrl = null
         imdbId = null
+        sourceAddonUrl = null
+        argTitle = null
         intent.putExtra(ARG_MEDIA_TYPE, type)
         intent.putExtra(ARG_MEDIA_ID, id)
         intent.removeExtra(ARG_PLUGIN_SOURCE)
         intent.removeExtra(ARG_PLUGIN_URL)
         intent.removeExtra(ARG_IMDB_ID)
+        intent.removeExtra(ARG_SOURCE_ADDON)
+        intent.removeExtra(ARG_TITLE)
         recreate()
     }
 
@@ -136,6 +145,8 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
                     pluginSourceId = pluginSourceId,
                     pluginUrl = pluginUrl,
                     imdbId = imdbId,
+                    sourceAddonUrl = sourceAddonUrl,
+                    title = argTitle,
                 ), TAG_WATCH)
                 .commit()
         } else {
@@ -164,6 +175,8 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         pluginSourceId = intent.getStringExtra(ARG_PLUGIN_SOURCE)
         pluginUrl = intent.getStringExtra(ARG_PLUGIN_URL)
         imdbId = intent.getStringExtra(ARG_IMDB_ID)?.takeIf { it.isNotBlank() }
+        sourceAddonUrl = intent.getStringExtra(ARG_SOURCE_ADDON)?.takeIf { it.isNotBlank() }
+        argTitle = intent.getStringExtra(ARG_TITLE)?.takeIf { it.isNotBlank() }
         if (imdbId != null && mediaId == -1) mediaId = ImdbMedia.syntheticMediaId(imdbId!!)
         Logger.log("TMDB_DETAILS: opened mediaType=$mediaType mediaId=$mediaId imdb=$imdbId")
 
@@ -350,6 +363,17 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         )
     }
 
+    private fun emptyImdbDetail(): TmdbDetail {
+        Logger.log("TMDB_DETAILS: meta exhausted for imdb=$imdbId addon=$sourceAddonUrl, showing empty details")
+        snackString("No details found — try the Watch tab")
+        return TmdbDetail(
+            id = mediaId,
+            title = if (mediaType == "movie") argTitle else null,
+            name = if (mediaType == "tv") argTitle else null,
+            externalIds = TmdbExternalIds(imdbId = imdbId),
+        )
+    }
+
     private fun load() {
         if (pluginMode) {
             loadPlugin()
@@ -359,7 +383,7 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
             binding.mediaInfoProgressBar.visibility = View.VISIBLE
             binding.mediaInfoContainer.visibility = View.GONE
             val d = if (imdbId != null) {
-                ImdbMedia.loadDetail(mediaType, imdbId!!)
+                ImdbMedia.loadDetail(mediaType, imdbId!!, sourceAddonUrl) ?: emptyImdbDetail()
             } else {
                 withStremioFallback(Tmdb.detail(mediaType, mediaId))
             } ?: run {

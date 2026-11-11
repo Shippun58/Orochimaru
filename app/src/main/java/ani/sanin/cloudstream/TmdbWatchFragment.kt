@@ -25,6 +25,7 @@ import ani.sanin.connections.simkl.Simkl
 import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.tmdb.TmdbDetail
 import ani.sanin.connections.tmdb.TmdbEpisode
+import ani.sanin.connections.tmdb.TmdbExternalIds
 import ani.sanin.connections.tmdb.TmdbGenre
 import ani.sanin.connections.tmdb.TmdbImage
 import ani.sanin.connections.tmdb.TmdbImages
@@ -84,6 +85,8 @@ class TmdbWatchFragment : Fragment() {
         const val ARG_MEDIA_TYPE = "mediaType"
         const val ARG_MEDIA_ID = "mediaId"
         const val ARG_IMDB_ID = "imdbId"
+        const val ARG_SOURCE_ADDON = "sourceAddon"
+        const val ARG_TITLE = "title"
         const val ARG_PLUGIN_SOURCE = "pluginSource"
         const val ARG_PLUGIN_URL = "pluginUrl"
         private const val EPISODE_CAP = 24
@@ -96,6 +99,8 @@ class TmdbWatchFragment : Fragment() {
             pluginSourceId: String?,
             pluginUrl: String?,
             imdbId: String? = null,
+            sourceAddonUrl: String? = null,
+            title: String? = null,
         ): TmdbWatchFragment = TmdbWatchFragment().apply {
             arguments = Bundle().apply {
                 putString(ARG_MEDIA_TYPE, mediaType)
@@ -103,6 +108,8 @@ class TmdbWatchFragment : Fragment() {
                 pluginSourceId?.let { putString(ARG_PLUGIN_SOURCE, it) }
                 pluginUrl?.let { putString(ARG_PLUGIN_URL, it) }
                 imdbId?.let { putString(ARG_IMDB_ID, it) }
+                sourceAddonUrl?.let { putString(ARG_SOURCE_ADDON, it) }
+                title?.let { putString(ARG_TITLE, it) }
             }
         }
     }
@@ -130,6 +137,8 @@ class TmdbWatchFragment : Fragment() {
     private var pluginSourceId: String? = null
     private var pluginUrl: String? = null
     private var imdbId: String? = null
+    private var sourceAddonUrl: String? = null
+    private var argTitle: String? = null
     private var pluginLoad: LoadResponse? = null
     private val pluginEpisodes = mutableMapOf<Int, List<TmdbEpisode>>()
     private var detail: TmdbDetail? = null
@@ -183,6 +192,8 @@ class TmdbWatchFragment : Fragment() {
         pluginSourceId = arguments?.getString(ARG_PLUGIN_SOURCE)
         pluginUrl = arguments?.getString(ARG_PLUGIN_URL)
         imdbId = arguments?.getString(ARG_IMDB_ID)?.takeIf { it.isNotBlank() }
+        sourceAddonUrl = arguments?.getString(ARG_SOURCE_ADDON)?.takeIf { it.isNotBlank() }
+        argTitle = arguments?.getString(ARG_TITLE)?.takeIf { it.isNotBlank() }
 
         if (pluginUrl != null) mediaId = pluginUrl.hashCode()
         episodeStyle = (PrefManager.getNullableCustomVal("tmdb_style", 2, Int::class.java)
@@ -195,7 +206,7 @@ class TmdbWatchFragment : Fragment() {
         val installedStremio = StremioAddonManager.installed()
         stremioSources = installedStremio.filter { addon ->
             StremioAddonClient.supportsStreams(addon, mediaType) &&
-                StremioAddonClient.canResolveTmdbIds(addon, mediaType)
+                (StremioAddonClient.canResolveTmdbIds(addon, mediaType) || imdbId != null)
         }
         Logger.log(
             "TMDB_WATCH: stremio sources for type=$mediaType: " +
@@ -303,6 +314,16 @@ class TmdbWatchFragment : Fragment() {
         binding.mediaBgGradient?.visibility = View.VISIBLE
     }
 
+    private fun emptyImdbDetail(): TmdbDetail {
+        Logger.log("TMDB_WATCH: meta exhausted for imdb=$imdbId addon=$sourceAddonUrl, showing empty watch tab")
+        return TmdbDetail(
+            id = mediaId,
+            title = if (mediaType == "movie") argTitle else null,
+            name = if (mediaType == "tv") argTitle else null,
+            externalIds = TmdbExternalIds(imdbId = imdbId),
+        )
+    }
+
     private fun load() {
         lifecycleScope.launch {
             if (pluginMode) {
@@ -310,7 +331,7 @@ class TmdbWatchFragment : Fragment() {
                 return@launch
             }
             val d = if (imdbId != null) {
-                ImdbMedia.loadDetail(mediaType, imdbId!!)
+                ImdbMedia.loadDetail(mediaType, imdbId!!, sourceAddonUrl) ?: emptyImdbDetail()
             } else {
                 Tmdb.detail(mediaType, mediaId)
             } ?: run {
@@ -342,9 +363,9 @@ class TmdbWatchFragment : Fragment() {
                 when {
                     stremioExtrasOnly -> episodes = emptyList()
                     imdbId != null -> {
-                        seasons = ImdbMedia.loadDetail(mediaType, imdbId!!)?.seasons.orEmpty()
+                        seasons = ImdbMedia.loadDetail(mediaType, imdbId!!, sourceAddonUrl)?.seasons.orEmpty()
                         selectedSeason = restoreSeason()
-                        episodes = ImdbMedia.episodesFor(mediaType, imdbId!!, selectedSeason)
+                        episodes = ImdbMedia.episodesFor(mediaType, imdbId!!, selectedSeason, sourceAddonUrl)
                     }
                     else -> {
                         seasons = Tmdb.seasons(mediaType, mediaId)
@@ -1432,6 +1453,12 @@ class TmdbWatchFragment : Fragment() {
         }
         if (pluginUrl != null) {
             intent.putExtra(TmdbServersActivity.ARG_PLUGIN_URL, pluginUrl)
+        }
+        if (imdbId != null) {
+            intent.putExtra(TmdbServersActivity.ARG_IMDB_ID, imdbId)
+        }
+        if (sourceAddonUrl != null) {
+            intent.putExtra(TmdbServersActivity.ARG_SOURCE_ADDON, sourceAddonUrl)
         }
         startActivity(intent)
     }
