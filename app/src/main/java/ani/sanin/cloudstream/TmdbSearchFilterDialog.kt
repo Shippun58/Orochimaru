@@ -14,6 +14,8 @@ import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.tmdb.TmdbGenre
 import ani.sanin.databinding.BottomSheetTmdbFilterBinding
 import ani.sanin.media.SheetSourceSelector
+import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioAddonManager
 import ani.sanin.snackString
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.customAlertDialog
@@ -394,6 +396,11 @@ class TmdbSearchFilterDialog : BottomSheetDialogFragment() {
         group.addView(makeSourceChip("TMDB", TMDB_SOURCE))
         CsRepos.installed(requireContext()).forEach { source ->
             group.addView(makeSourceChip(source.name, source.id))
+        }
+        runCatching { StremioAddonManager.installed() }.getOrDefault(emptyList()).forEach { addon ->
+            if (StremioAddonClient.searchCatalogs(addon).isNotEmpty()) {
+                group.addView(makeSourceChip(addon.manifest.name, StremioAddonManager.sourceId(addon)))
+            }
         }
     }
 

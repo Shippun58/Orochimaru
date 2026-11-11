@@ -10,10 +10,9 @@ import ani.sanin.connections.tmdb.TmdbImages
 import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.connections.tmdb.TmdbSeason
 import ani.sanin.databinding.ActivityTmdbServersBinding
+import ani.sanin.databinding.ItemTmdbStreamsExtraBinding
 import ani.sanin.databinding.ItemTmdbStreamsGroupBinding
-import ani.sanin.databinding.ItemTmdbStreamsDetailCardBinding
 import ani.sanin.getThemeColor
-import ani.sanin.databinding.ItemTmdbStreamsRailBinding
 import ani.sanin.databinding.ItemTmdbStreamsSubheadBinding
 import ani.sanin.databinding.ItemTmdbStreamsTextBinding
 import ani.sanin.databinding.ItemTmdbServerRowBinding
@@ -82,7 +81,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         ) : Row()
 
         data class Info(val link: TmdbStreamResolver.StreamResult.PlayableLink) : Row()
-        data class Recs(val media: List<TmdbMedia>) : Row()
+        data class Extra(val media: TmdbMedia) : Row()
         data class SubHead(val label: String) : Row()
         data class Text(val text: String) : Row()
     }
@@ -460,7 +459,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             is GroupState.Failed -> rows.add(Row.Text(state.reason))
             is GroupState.Ready -> {
                 val playable = state.links.filter { it.url.isNotBlank() }
-                if (state.recommendations.isNotEmpty()) rows.add(Row.Recs(state.recommendations))
+                state.recommendations.forEach { rows.add(Row.Extra(it)) }
                 state.infos.forEach { rows.add(Row.Info(it)) }
                 if (playable.isNotEmpty()) {
                     if (groupServersPref && playable.size > 1) {
@@ -1100,7 +1099,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             is Row.Head -> 0
             is Row.Stream -> 1
             is Row.Info -> 2
-            is Row.Recs -> 3
+            is Row.Extra -> 3
             is Row.SubHead -> 4
             is Row.Text -> 5
         }
@@ -1114,7 +1113,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 0 -> HeadVH(ItemTmdbStreamsGroupBinding.inflate(inf, parent, false))
                 1 -> ItemVH(ItemTmdbServerRowBinding.inflate(inf, parent, false))
                 2 -> ItemVH(ItemTmdbServerRowBinding.inflate(inf, parent, false))
-                3 -> RailVH(ItemTmdbStreamsRailBinding.inflate(inf, parent, false))
+                3 -> ExtraVH(ItemTmdbStreamsExtraBinding.inflate(inf, parent, false))
                 4 -> SubHeadVH(ItemTmdbStreamsSubheadBinding.inflate(inf, parent, false))
                 else -> TextVH(ItemTmdbStreamsTextBinding.inflate(inf, parent, false))
             }
@@ -1130,7 +1129,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 is Row.Head -> (holder as HeadVH).bind(row.group)
                 is Row.Stream -> (holder as ItemVH).bindStream(row.link, row.group)
                 is Row.Info -> (holder as ItemVH).bindInfo(row.link)
-                is Row.Recs -> (holder as RailVH).bind(row.media)
+                is Row.Extra -> (holder as ExtraVH).bind(row.media)
                 is Row.SubHead -> (holder as SubHeadVH).bind(row.label)
                 is Row.Text -> (holder as TextVH).bind(row.text)
             }
@@ -1191,8 +1190,9 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 binding.urlQuality.text = quality
                 val note = listOfNotNull(
                     link.host.takeIf { it.isNotBlank() },
-                    hint,
-                ).joinToString("  •  ")
+                    multiLineNote(link.details)
+                        ?: hint?.takeIf { it.isNotBlank() },
+                ).joinToString("\n")
                 if (note.isBlank()) {
                     binding.urlNote.isVisible = false
                 } else {
@@ -1207,7 +1207,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
             fun bindInfo(link: TmdbStreamResolver.StreamResult.PlayableLink) {
                 binding.urlQuality.text = link.label
-                val note = link.details?.lines()?.firstOrNull()?.takeIf(String::isNotBlank)
+                val note = multiLineNote(link.details)
                 if (note.isNullOrBlank()) {
                     binding.urlNote.isVisible = false
                 } else {
@@ -1226,17 +1226,49 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             }
         }
 
-        private inner class RailVH(val binding: ItemTmdbStreamsRailBinding) :
+        private inner class ExtraVH(val binding: ItemTmdbStreamsExtraBinding) :
             androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
-            fun bind(media: List<TmdbMedia>) {
-                val rail = binding.tmdbStreamsRail
-                rail.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
-                    rail.context,
-                    androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL,
-                    false,
+            init {
+                (binding.root as androidx.cardview.widget.CardView)
+                    .setCardBackgroundColor(tintedRowColor())
+                itemView.isFocusable = true
+                val r = 16f * itemView.resources.displayMetrics.density
+                FocusEffectUtil.applyFocusListener(
+                    itemView,
+                    floatArrayOf(r, r, r, r, r, r, r, r),
                 )
-                rail.adapter = DetailCardAdapter(media)
+            }
+
+            fun bind(m: TmdbMedia) {
+                binding.tmdbExtraPoster.loadImage(
+                    Rpdb.posterUrl(m.type, m.id) ?: (
+                        Tmdb.imageUrl(m.posterPath ?: m.backdropPath, 300)
+                            ?: if (m.posterPath?.startsWith("http") == true) m.posterPath else null
+                        )
+                )
+                binding.tmdbExtraTitle.text = m.displayTitle
+                val meta = listOfNotNull(
+                    String.format(java.util.Locale.US, "★ %.1f", m.voteAverage)
+                        .takeIf { m.voteAverage > 0 },
+                    (m.releaseDate ?: m.firstAirDate).takeIf { !it.isNullOrBlank() },
+                    String.format(java.util.Locale.US, "Popularity %.1f", m.popularity)
+                        .takeIf { m.popularity > 0 },
+                ).joinToString("  •  ")
+                if (meta.isBlank()) {
+                    binding.tmdbExtraMeta.isVisible = false
+                } else {
+                    binding.tmdbExtraMeta.text = meta
+                    binding.tmdbExtraMeta.isVisible = true
+                }
+                val overview = m.overview?.takeIf { it.isNotBlank() }
+                if (overview == null) {
+                    binding.tmdbExtraOverview.isVisible = false
+                } else {
+                    binding.tmdbExtraOverview.text = overview
+                    binding.tmdbExtraOverview.isVisible = true
+                }
+                binding.root.setOnClickListener { openMedia(m) }
             }
         }
 
@@ -1250,67 +1282,6 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
             fun bind(text: String) {
                 binding.tmdbStreamsText.text = text
-            }
-        }
-    }
-
-    private inner class DetailCardAdapter(
-        private val items: List<TmdbMedia>
-    ) : androidx.recyclerview.widget.RecyclerView.Adapter<DetailCardAdapter.DetailVH>() {
-
-        override fun onCreateViewHolder(
-            parent: android.view.ViewGroup,
-            viewType: Int
-        ): DetailVH = DetailVH(
-            ItemTmdbStreamsDetailCardBinding.inflate(
-                android.view.LayoutInflater.from(parent.context),
-                parent,
-                false
-            )
-        )
-
-        override fun getItemCount(): Int = items.size
-
-        override fun onBindViewHolder(
-            holder: DetailVH,
-            position: Int
-        ) {
-            val m = items[position]
-            holder.binding.tmdbRecsCardPoster.loadImage(
-                Tmdb.imageUrl(m.posterPath ?: m.backdropPath, 300)
-                    ?: if (m.posterPath?.startsWith("http") == true) m.posterPath else null
-            )
-            holder.binding.tmdbRecsCardTitle.text = m.displayTitle
-            val meta = listOfNotNull(
-                String.format(java.util.Locale.US, "★ %.1f", m.voteAverage)
-                    .takeIf { m.voteAverage > 0 },
-                (m.releaseDate ?: m.firstAirDate).takeIf { !it.isNullOrBlank() },
-                String.format(java.util.Locale.US, "Popularity %.1f", m.popularity)
-                    .takeIf { m.popularity > 0 },
-            ).joinToString("  •  ")
-            if (meta.isBlank()) {
-                holder.binding.tmdbRecsCardMeta.isVisible = false
-            } else {
-                holder.binding.tmdbRecsCardMeta.text = meta
-                holder.binding.tmdbRecsCardMeta.isVisible = true
-            }
-            val overview = m.overview?.takeIf { it.isNotBlank() }
-            if (overview == null) {
-                holder.binding.tmdbRecsCardOverview.isVisible = false
-            } else {
-                holder.binding.tmdbRecsCardOverview.text = overview
-                holder.binding.tmdbRecsCardOverview.isVisible = true
-            }
-            holder.binding.root.setOnClickListener { openMedia(m) }
-            FocusEffectUtil.applyFocusListener(holder.binding.root)
-        }
-
-        private inner class DetailVH(val binding: ItemTmdbStreamsDetailCardBinding) :
-            androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
-
-            init {
-                (binding.root as androidx.cardview.widget.CardView)
-                    .setCardBackgroundColor(tintedRowColor())
             }
         }
     }
@@ -1331,5 +1302,15 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         } else {
             label to null
         }
+    }
+
+    private fun multiLineNote(text: String?): String? {
+        val cleaned = text?.replace('\u200b', ' ')?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: return null
+        val lines = cleaned.split(Regex("\n|\\s*[·•|]\\s*"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        return if (lines.isEmpty()) null else lines.joinToString("\n")
     }
 }

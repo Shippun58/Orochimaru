@@ -36,6 +36,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ani.sanin.loadImage
+import ani.sanin.limitedAsyncMap
+import ani.sanin.settings.StremioAddon
+import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.themes.ThemeManager
@@ -199,6 +203,39 @@ class TmdbSearchActivity : AppCompatActivity() {
         }
     }
 
+    private fun selectedStremioAddons(): List<StremioAddon> {
+        val ids = selectedSourceIds.filter { it.startsWith(StremioAddonManager.SOURCE_PREFIX) }
+        if (ids.isEmpty()) return emptyList()
+        return searchableStremioAddons().filter { StremioAddonManager.sourceId(it) in ids }
+    }
+
+    private fun searchableStremioAddons(): List<StremioAddon> =
+        runCatching { StremioAddonManager.installed() }.getOrDefault(emptyList())
+            .filter { addon -> StremioAddonClient.searchCatalogs(addon).isNotEmpty() }
+
+    private suspend fun searchStremioAddon(addon: StremioAddon, query: String): List<TmdbMedia> =
+        withContext(Dispatchers.IO) {
+            val cards = runCatching { StremioAddonClient.searchAddon(addon, query) }
+                .getOrElse { e ->
+                    android.util.Log.e("TmdbSearch", "${addon.manifest.name} search failed: ${e.message}", e)
+                    emptyList()
+                }
+            cards.limitedAsyncMap(4) { card -> mapStremioCard(card) }.filterNotNull()
+        }
+
+    private suspend fun mapStremioCard(card: ani.sanin.settings.StremioCatalogCard): TmdbMedia? {
+        val hint = if (card.type.equals("series", true) || card.type.equals("tv", true)) "tv" else "movie"
+        if (card.id.startsWith("tt")) {
+            runCatching { Tmdb.findByImdb(card.id, hint) }.getOrNull()?.let { return it }
+        }
+        val title = card.name.takeIf { it.isNotBlank() } ?: return null
+        val year = card.releaseInfo?.take(4)?.toIntOrNull()
+        val results = runCatching { Tmdb.search(title) }.getOrDefault(emptyList())
+        return results.firstOrNull { it.type == hint && (year == null || it.year == year.toString()) }
+            ?: results.firstOrNull { it.type == hint }
+            ?: results.firstOrNull()
+    }
+
     private fun showHistory() {
         val items = history()
         binding.tmdbSearchHistoryLabel.isVisible = items.isNotEmpty()
@@ -258,26 +295,29 @@ class TmdbSearchActivity : AppCompatActivity() {
         binding.tmdbSearchEmpty.isVisible = false
         lifecycleScope.launch {
             val selectedPlugins = selectedPluginApis()
+            val selectedStremio = selectedStremioAddons()
             val includeTmdb = SOURCE_TMDB in selectedSourceIds
-            val sourceCount = selectedPlugins.size + if (includeTmdb) 1 else 0
+            val sourceCount = selectedPlugins.size + selectedStremio.size + if (includeTmdb) 1 else 0
 
             if (sourceCount <= 1) {
-                if (selectedPlugins.isNotEmpty()) {
-                    val (api, name) = selectedPlugins.first()
-                    val results = searchPlugin(api, name, query)
-                    binding.tmdbSearchProgress.isVisible = false
-                    showSingle(pluginAdapter)
-                    pluginAdapter.submit(results)
-                    binding.tmdbSearchEmpty.isVisible = results.isEmpty()
-                    if (results.isEmpty()) snackString("No results for '$query'")
-                } else {
-                    val results = Tmdb.search(query)
-                    binding.tmdbSearchProgress.isVisible = false
-                    showSingle(adapter)
-                    adapter.submit(results)
-                    binding.tmdbSearchEmpty.isVisible = results.isEmpty()
-                    if (results.isEmpty()) snackString("No results for '$query'")
+                val results = when {
+                    selectedPlugins.isNotEmpty() -> {
+                        val (api, name) = selectedPlugins.first()
+                        searchPlugin(api, name, query)
+                    }
+                    selectedStremio.isNotEmpty() -> searchStremioAddon(selectedStremio.first(), query)
+                    else -> Tmdb.search(query)
                 }
+                binding.tmdbSearchProgress.isVisible = false
+                if (selectedPlugins.isNotEmpty()) {
+                    showSingle(pluginAdapter)
+                    pluginAdapter.submit(results as List<com.lagradost.cloudstream3.SearchResponse>)
+                } else {
+                    showSingle(adapter)
+                    adapter.submit(results as List<TmdbMedia>)
+                }
+                binding.tmdbSearchEmpty.isVisible = results.isEmpty()
+                if (results.isEmpty()) snackString("No results for '$query'")
                 return@launch
             }
 
@@ -303,6 +343,17 @@ class TmdbSearchActivity : AppCompatActivity() {
                 fullSpanPositions.add(position)
                 position++
                 val groupAdapter = PluginSearchAdapter { item -> openPluginDetails(item) }
+                groupAdapter.submit(results)
+                sections.add(groupAdapter)
+                position += results.size
+            }
+            for (addon in selectedStremio) {
+                val results = searchStremioAddon(addon, query)
+                if (results.isEmpty()) continue
+                sections.add(SearchSectionHeaderAdapter(addon.manifest.name, results.size))
+                fullSpanPositions.add(position)
+                position++
+                val groupAdapter = TmdbSearchGridAdapter { media -> openDetails(media) }
                 groupAdapter.submit(results)
                 sections.add(groupAdapter)
                 position += results.size
@@ -365,7 +416,12 @@ class TmdbSearchActivity : AppCompatActivity() {
         val installed = runCatching { CsRepos.installed(this) }.getOrNull().orEmpty()
             .associateBy { it.id }
         selectedSourceIds.forEach { id ->
-            val label = if (id == SOURCE_TMDB) "TMDB" else installed[id]?.name ?: id
+            val label = when {
+                id == SOURCE_TMDB -> "TMDB"
+                id.startsWith(StremioAddonManager.SOURCE_PREFIX) ->
+                    StremioAddonManager.addonForSourceId(id)?.manifest?.name ?: "Stremio addon"
+                else -> installed[id]?.name ?: id
+            }
             chips.add(SearchFilterChipsAdapter.ChipSpec("src:$id", label))
         }
         activeFilter?.let { filter ->

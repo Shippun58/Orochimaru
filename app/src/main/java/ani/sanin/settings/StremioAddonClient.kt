@@ -313,6 +313,57 @@ object StremioAddonClient {
             }.filterNotNull().distinctBy { "${it.name}:${it.cards.firstOrNull()?.type}" }
         }
 
+    fun searchCatalogs(addon: StremioAddon): List<CatalogDefinition> =
+        catalogDefinitions(addon).filter { def ->
+            !def.hasRequiredExtras && def.extraSupported.any { it.equals("search", ignoreCase = true) }
+        }
+
+    suspend fun searchAddon(addon: StremioAddon, query: String): List<StremioCatalogCard> =
+        withContext(Dispatchers.IO) {
+            val definitions = searchCatalogs(addon).take(4)
+            if (definitions.isEmpty()) {
+                Logger.log("STREMIO: search skipped addon='${addon.manifest.name}' (no search catalogs)")
+                return@withContext emptyList()
+            }
+            val manifestUrl = addon.transportUrl.substringBefore('?')
+            val rootUrl = if (manifestUrl.endsWith("/manifest.json", ignoreCase = true)) {
+                manifestUrl.dropLast("/manifest.json".length)
+            } else manifestUrl.trimEnd('/')
+            definitions.flatMap { catalog ->
+                val url = "$rootUrl/catalog/${Uri.encode(catalog.type)}/${Uri.encode(catalog.id)}/search=${Uri.encode(query)}.json"
+                val startedAt = System.currentTimeMillis()
+                val cards = runCatching {
+                    val req = Request.Builder()
+                        .url(url)
+                        .header("Accept", "application/json")
+                        .build()
+                    val body = client.newBuilder()
+                        .callTimeout(15, TimeUnit.SECONDS)
+                        .build()
+                        .newCall(req)
+                        .execute()
+                        .use { response ->
+                            if (!response.isSuccessful) throw IOException("Add-on returned HTTP ${response.code}")
+                            response.body?.string() ?: throw IOException("Add-on returned an empty response")
+                        }
+                    val metas = (json.parseToJsonElement(body).asObject()["metas"] as? JsonArray).orEmpty()
+                    metas.mapNotNull { it.asObject()?.let(::parseCard) }
+                }.getOrElse { ex ->
+                    Logger.log(
+                        "STREMIO: search FAILED addon='${addon.manifest.name}' url=$url " +
+                            "elapsedMs=${System.currentTimeMillis() - startedAt} " +
+                            "error=${ex.message ?: ex.javaClass.simpleName}"
+                    )
+                    emptyList<StremioCatalogCard>()
+                }
+                Logger.log(
+                    "STREMIO: search addon='${addon.manifest.name}' " +
+                        "catalog=${catalog.type}/${catalog.id} results=${cards.size}"
+                )
+                cards
+            }.distinctBy { it.id }
+        }
+
     suspend fun loadStreams(
         addon: StremioAddon,
         tmdbType: String,
@@ -412,10 +463,17 @@ object StremioAddonClient {
             val hasRequired = (obj["extra"] as? JsonArray).orEmpty().any { extra ->
                 extra.asObject()?.get("isRequired").asBoolean() == true
             }
-            CatalogDefinition(type, id, name, hasRequired)
+            val extraSupported = obj.stringList("extraSupported").orEmpty()
+            CatalogDefinition(type, id, name, hasRequired, extraSupported)
         }
 
-    private data class CatalogDefinition(val type: String, val id: String, val name: String, val hasRequiredExtras: Boolean)
+    private data class CatalogDefinition(
+        val type: String,
+        val id: String,
+        val name: String,
+        val hasRequiredExtras: Boolean,
+        val extraSupported: List<String> = emptyList(),
+    )
     private data class ResourceDescription(
         val name: String,
         val types: List<String>?,

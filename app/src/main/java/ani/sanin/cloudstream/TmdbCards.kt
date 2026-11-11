@@ -114,7 +114,7 @@ object TmdbCards {
         val image = if (landscape) {
             Tmdb.imageUrl(item.backdropPath ?: item.posterPath, 780)
         } else {
-            Tmdb.imageUrl(item.posterPath, 300)
+            Rpdb.posterUrl(item.type, item.id) ?: Tmdb.imageUrl(item.posterPath, 300)
         }
         binding.tmdbCardPoster.loadImage(image)
 
