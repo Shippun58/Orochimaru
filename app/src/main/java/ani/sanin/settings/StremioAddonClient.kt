@@ -346,7 +346,7 @@ object StremioAddonClient {
                             if (!response.isSuccessful) throw IOException("Add-on returned HTTP ${response.code}")
                             response.body?.string() ?: throw IOException("Add-on returned an empty response")
                         }
-                    val metas = (json.parseToJsonElement(body).asObject()["metas"] as? JsonArray).orEmpty()
+                    val metas = (json.parseToJsonElement(body).asObject()?.get("metas") as? JsonArray).orEmpty()
                     metas.mapNotNull { it.asObject()?.let(::parseCard) }
                 }.getOrElse { ex ->
                     Logger.log(
@@ -467,7 +467,7 @@ object StremioAddonClient {
             CatalogDefinition(type, id, name, hasRequired, extraSupported)
         }
 
-    private data class CatalogDefinition(
+    data class CatalogDefinition(
         val type: String,
         val id: String,
         val name: String,
