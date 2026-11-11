@@ -69,7 +69,7 @@ fun showAddonDetailsDialog(context: Context, card: RepoUi, availableTab: Boolean
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
                     topMargin =
-                        if (childCount > 1) (10 * density).toInt() else (14 * density).toInt()
+                        if (container.childCount > 1) (10 * density).toInt() else (14 * density).toInt()
                 }
                 setOnClickListener {
                     runCatching {
