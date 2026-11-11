@@ -100,6 +100,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private val rowsAdapter = RowsAdapter()
     private var headerCollapseMax = 0
+    private var pluginLoad: LoadResponse? = null
     private val groupJobs = mutableMapOf<Int, kotlinx.coroutines.Job>()
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -139,10 +140,10 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         serversBinding.tmdbServersScroll.post { setupCollapse() }
 
         lifecycleScope.launch {
-            val pluginDetail = if (pluginUrl != null) {
-                withContext(Dispatchers.IO) { loadPlugin(pluginUrl!!) }
+            val pluginLoadRes = if (pluginUrl != null) {
+                loadPlugin(pluginUrl!!)
             } else null
-            if (pluginUrl != null && pluginDetail == null) {
+            if (pluginUrl != null && pluginLoadRes == null) {
                 return@launch
             }
             if (pluginUrl == null) {
@@ -154,14 +155,14 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 }
                 detail = d
             }
-            detail = pluginDetail ?: detail
+            detail = pluginLoadRes ?: detail
             if (isFinishing || isDestroyed) return@launch
-        bindHeader(detail!!)
-        buildGroups()
-        selectedIndex = applyDefaultSelection()
-        buildChips()
-        refreshRows()
-        resolveAll()
+            bindHeader(detail!!)
+            buildGroups()
+            selectedIndex = applyDefaultSelection()
+            buildChips()
+            refreshRows()
+            resolveAll()
         }
     }
 
@@ -170,7 +171,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         scroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
             updateCollapse(scrollY)
         }
-        serversBinding.tmdbServersScroll.post { updateCollapse(serversBinding.tmdbServersScroll.scrollY) }
+        scroll.post { updateCollapse(scroll.scrollY) }
     }
 
     private fun updateCollapse(scrollY: Int) {
