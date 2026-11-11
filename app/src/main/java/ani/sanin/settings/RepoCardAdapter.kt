@@ -32,6 +32,13 @@ data class RepoUi(
     val scopeLabel: String = "languages",
     val description: String? = null,
     val watermarkRes: Int? = null,
+    val watermarkLeft: Boolean = false,
+    val hideCount: Boolean = false,
+    val showInfoButton: Boolean = false,
+    val toggleVisible: Boolean = false,
+    val enabled: Boolean = true,
+    val dragVisible: Boolean = false,
+    val needsConfiguration: Boolean = false,
     val configUrl: String? = null,
 ) {
     fun matches(q: String): Boolean {
@@ -62,7 +69,12 @@ class RepoCardAdapter(
     private val onExitTop: (() -> Boolean)? = null,
     private val actionLabel: String = "Browse",
     private val onConfigure: ((RepoUi) -> Unit)? = null,
+    private val onToggle: ((RepoUi, Boolean) -> Unit)? = null,
+    private val onReorder: ((Int, Int) -> Unit)? = null,
+    private val dragStarter: ((RecyclerView.ViewHolder) -> Unit)? = null,
 ) : ListAdapter<RepoUi, RepoCardAdapter.VH>(DIFF) {
+
+    private var reorderAnchor = RecyclerView.NO_POSITION
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemRepoCardBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -77,8 +89,25 @@ class RepoCardAdapter(
 
         holder.binding.repoName.text = item.name
 
-        holder.binding.repoCount.text = item.countText ?: "${item.count} $countLabel"
+        if (item.hideCount) {
+            holder.binding.repoCount.visibility = View.GONE
+        } else {
+            holder.binding.repoCount.visibility = View.VISIBLE
+            holder.binding.repoCount.text = item.countText ?: "${item.count} $countLabel"
+        }
         holder.binding.repoWatermark.setImageResource(item.watermarkRes ?: R.drawable.ic_github)
+        (holder.binding.repoWatermark.layoutParams as android.widget.FrameLayout.LayoutParams).let { lp ->
+            if (item.watermarkLeft) {
+                lp.gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
+                lp.marginStart = (12 * ctx.resources.displayMetrics.density).toInt()
+                lp.marginEnd = 0
+                lp.bottomMargin = 0
+            } else {
+                lp.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+                lp.marginStart = 0
+            }
+            holder.binding.repoWatermark.layoutParams = lp
+        }
 
         holder.binding.repoContentTypes.removeAllViews()
         val chipTextColor = ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
@@ -158,6 +187,9 @@ class RepoCardAdapter(
             holder.binding.repoLogo.setImageResource(R.drawable.ic_extension)
         }
 
+        val onPrimary = ctx.getThemeColor(com.google.android.material.R.attr.colorOnPrimary)
+        val borderWidth = (3f * ctx.resources.displayMetrics.density).toInt()
+
         with(holder.binding.repoBrowseButton) {
             text = actionLabel
             contentDescription = "$actionLabel ${item.name}"
@@ -165,8 +197,6 @@ class RepoCardAdapter(
             isFocusable = true
 
             backgroundTintList = null
-            val onPrimary = ctx.getThemeColor(com.google.android.material.R.attr.colorOnPrimary)
-            val borderWidth = (3f * resources.displayMetrics.density).toInt()
 
             fun styleBrowse(focused: Boolean) {
                 background = android.graphics.drawable.GradientDrawable().apply {
@@ -205,11 +235,144 @@ class RepoCardAdapter(
             }
         }
 
-        with(holder.binding.repoConfigButton) {
+        with(holder.binding.repoInfoButton) {
+            visibility = if (item.showInfoButton) View.VISIBLE else View.GONE
+            contentDescription = "Info ${item.name}"
+            setOnClickListener { onLongClick(item) }
+            setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) {
+                    false
+                } else {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoInfoButton }
+                        KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoInfoButton }
+                        else -> false
+                    }
+                }
+            }
+        }
+
+        holder.binding.repoCardRoot.alpha = if (item.enabled) 1f else 0.45f
+
+        with(holder.binding.repoEnableToggle) {
+            visibility = if (item.toggleVisible && onToggle != null) View.VISIBLE else View.GONE
+            isChecked = item.enabled
+            jumpDrawablesToCurrentState()
+            contentDescription = if (item.enabled) "Disable ${item.name}" else "Enable ${item.name}"
+            setOnClickListener { onToggle?.invoke(item, !item.enabled) }
+            setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) {
+                    false
+                } else {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoEnableToggle }
+                        KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoEnableToggle }
+                        else -> false
+                    }
+                }
+            }
+        }
+
+        with(holder.binding.repoDragHandle) {
+            visibility = if (item.dragVisible && onReorder != null) View.VISIBLE else View.GONE
+            contentDescription = "Reorder ${item.name}"
+            imageTintList = android.content.res.ColorStateList.valueOf(
+                if (holder.absoluteAdapterPosition == reorderAnchor) primaryColor else chipTextColor
+            )
+            setOnTouchListener { v, event ->
+                if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                    reorderAnchor = RecyclerView.NO_POSITION
+                    dragStarter?.invoke(holder)
+                }
+                v.performClick()
+                false
+            }
+            setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) {
+                    false
+                } else {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                            if (reorderAnchor == RecyclerView.NO_POSITION) {
+                                reorderAnchor = holder.absoluteAdapterPosition
+                                imageTintList = android.content.res.ColorStateList.valueOf(primaryColor)
+                            } else {
+                                reorderAnchor = RecyclerView.NO_POSITION
+                                imageTintList = android.content.res.ColorStateList.valueOf(chipTextColor)
+                            }
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            val from = reorderAnchor
+                            if (from != RecyclerView.NO_POSITION) {
+                                if (from > 0) {
+                                    onReorder?.invoke(from, from - 1)
+                                    reorderAnchor = from - 1
+                                }
+                            } else {
+                                moveBrowseFocus(holder, -1) { it.binding.repoDragHandle }
+                            }
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            val from = reorderAnchor
+                            if (from != RecyclerView.NO_POSITION) {
+                                if (from < itemCount - 1) {
+                                    onReorder?.invoke(from, from + 1)
+                                    reorderAnchor = from + 1
+                                }
+                            } else {
+                                moveBrowseFocus(holder, 1) { it.binding.repoDragHandle }
+                            }
+                            true
+                        }
+                        else -> false
+                    }
+                }
+            }
+        }
+
+        with(holder.binding.repoSettingsButton) {
             visibility = if (onConfigure != null) View.VISIBLE else View.GONE
             contentDescription = "Configure ${item.name}"
+
+            fun styleSettings(focused: Boolean) {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    setColor(if (focused) ctx.getThemeColor(com.google.android.material.R.attr.colorPrimary) else Color.WHITE)
+                    cornerRadius = 24f * ctx.resources.displayMetrics.density
+                }
+                foreground = if (focused) {
+                    android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        setColor(Color.TRANSPARENT)
+                        cornerRadius = 24f * ctx.resources.displayMetrics.density
+                        setStroke(borderWidth, onPrimary)
+                    }
+                } else {
+                    null
+                }
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    if (focused) onPrimary else Color.BLACK
+                )
+            }
+            styleSettings(false)
+            setOnFocusChangeListener { _, hasFocus ->
+                styleSettings(hasFocus)
+            }
             setOnClickListener {
                 onConfigure?.invoke(item)
+            }
+            setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) {
+                    false
+                } else {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoSettingsButton }
+                        KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoSettingsButton }
+                        else -> false
+                    }
+                }
             }
         }
 
@@ -217,7 +380,11 @@ class RepoCardAdapter(
         holder.binding.repoCardRoot.setOnLongClickListener { onLongClick(item); true }
     }
 
-    private fun moveBrowseFocus(holder: VH, delta: Int): Boolean {
+    private fun moveBrowseFocus(
+        holder: VH,
+        delta: Int,
+        request: (VH) -> View = { it.binding.repoBrowseButton },
+    ): Boolean {
         val rv = holder.itemView.parent as? RecyclerView ?: return false
         val current = holder.absoluteAdapterPosition
         if (current == RecyclerView.NO_POSITION) return false
@@ -226,7 +393,7 @@ class RepoCardAdapter(
         if (target >= itemCount) return false
         val vh = rv.findViewHolderForAdapterPosition(target) as? VH ?: return false
         if (vh.itemView.parent == null) return false
-        return vh.binding.repoBrowseButton.requestFocus()
+        return request(vh).requestFocus()
     }
 
     private fun applyGradient(view: View, topColor: Int, bottomColor: Int) {

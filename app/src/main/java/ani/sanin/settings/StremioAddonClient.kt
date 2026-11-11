@@ -203,6 +203,11 @@ object StremioAddonClient {
         return hint?.toBooleanStrictOrNull() == true
     }
 
+    fun configurationRequired(addon: StremioAddon): Boolean {
+        val hint = (addon.manifest.behaviorHints?.get("configurationRequired") as? JsonPrimitive)?.contentOrNull
+        return hint?.toBooleanStrictOrNull() == true
+    }
+
     fun configureUrl(addon: StremioAddon): String? {
         if (!isConfigurable(addon)) return null
         return runCatching {

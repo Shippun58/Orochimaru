@@ -12,7 +12,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import ani.sanin.databinding.FragmentExtensionsBinding
 import ani.sanin.util.Logger
-import ani.sanin.util.customAlertDialog
 import kotlinx.coroutines.launch
 
 class StremioAvailableFragment : Fragment(), SearchQueryHandler {
@@ -68,7 +67,7 @@ class StremioAvailableFragment : Fragment(), SearchQueryHandler {
 
     private fun submitFiltered() {
         if (_binding == null) return
-        val installedUrls = StremioAddonManager.installed()
+        val installedUrls = StremioAddonManager.allInstalled()
             .map { it.transportUrl.lowercase() }
             .toSet()
         adapter.submitList(
@@ -125,24 +124,7 @@ class StremioAvailableFragment : Fragment(), SearchQueryHandler {
     }
 
     private fun showDetails(card: RepoUi) {
-        requireContext().customAlertDialog().apply {
-            setTitle(card.name)
-            setMessage(
-                buildString {
-                    if (!card.description.isNullOrBlank()) append(card.description)
-                    append("\n\n")
-                    append(card.countText.orEmpty())
-                    if (card.contentTypes.isNotEmpty()) {
-                        append("\nResources: ${card.contentTypes.joinToString()}")
-                    }
-                    if (card.languages.isNotEmpty()) {
-                        append("\nTypes: ${card.languages.joinToString()}")
-                    }
-                }.trim()
-            )
-            setPosButton("OK")
-            show()
-        }
+        showAddonDetailsDialog(requireContext(), card, availableTab = true)
     }
 
     override fun updateContentBasedOnQuery(query: String?) {

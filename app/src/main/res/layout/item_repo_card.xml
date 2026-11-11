@@ -75,16 +75,38 @@
                 tools:text="12 plugins" />
 
             <ImageView
-                android:id="@+id/repoConfigButton"
+                android:id="@+id/repoInfoButton"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:layout_marginStart="6dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Configure add-on"
+                android:contentDescription="Add-on info"
                 android:focusable="true"
                 android:padding="6dp"
                 android:visibility="gone"
-                app:srcCompat="@drawable/ic_round_settings_24"
+                app:srcCompat="@drawable/ic_round_info_24"
+                app:tint="?attr/colorOnSurface" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/repoEnableToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:contentDescription="Enable or disable add-on"
+                android:focusable="true"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/repoDragHandle"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="2dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Reorder add-on"
+                android:focusable="true"
+                android:padding="6dp"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_round_drag_handle_24"
                 app:tint="?attr/colorOnSurface" />
         </LinearLayout>
 
@@ -114,21 +136,41 @@
 
     </LinearLayout>
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/repoBrowseButton"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:layout_marginStart="20dp"
         android:layout_marginEnd="20dp"
         android:layout_marginBottom="2dp"
-        android:background="@drawable/bg_repo_browse_button"
-        android:focusable="true"
-        android:fontFamily="@font/poppins_bold"
-        android:text="Browse"
-        android:textAllCaps="false"
-        android:textColor="?attr/colorOnSurface"
-        android:textSize="13sp"
-        app:cornerRadius="24dp" />
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/repoSettingsButton"
+            android:layout_width="48dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="Configure add-on"
+            android:focusable="true"
+            android:padding="12dp"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_round_settings_24"
+            app:tint="@android:color/black" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/repoBrowseButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/bg_repo_browse_button"
+            android:focusable="true"
+            android:fontFamily="@font/poppins_bold"
+            android:text="Browse"
+            android:textAllCaps="false"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="13sp"
+            app:cornerRadius="24dp" />
+
+    </LinearLayout>
 
 </FrameLayout>

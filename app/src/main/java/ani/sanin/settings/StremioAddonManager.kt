@@ -35,6 +35,8 @@ data class StremioAddon(
     val manifest: StremioAddonManifest,
     // null = not probed yet, true = only info/recommendation cards, false = playable streams
     val extrasOnly: Boolean? = null,
+    // true = turned off by the user; hidden from home, watch tab, server sheet, search, etc.
+    val disabled: Boolean = false,
 )
 
 @Serializable
@@ -61,13 +63,19 @@ object StremioAddonManager {
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val client get() = Injekt.get<NetworkHelper>().client
 
-    fun installed(): List<StremioAddon> =
+    private fun rawInstalled(): List<StremioAddon> =
         PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons).mapNotNull { encoded ->
             runCatching { json.decodeFromString<StremioAddon>(encoded) }.getOrNull()
         }
 
+    /** Every installed add-on, including disabled ones (settings UI + install checks). */
+    fun allInstalled(): List<StremioAddon> = rawInstalled()
+
+    /** Active add-ons only; disabled ones are hidden from the app everywhere. */
+    fun installed(): List<StremioAddon> = rawInstalled().filterNot { it.disabled }
+
     fun isInstalled(transportUrl: String): Boolean =
-        installed().any { it.transportUrl.equals(transportUrl, ignoreCase = true) }
+        allInstalled().any { it.transportUrl.equals(transportUrl, ignoreCase = true) }
 
     fun metadataSources(): List<StremioAddon> = installed().filter { addon ->
         addon.manifest.resources.mapNotNull { it.resourceName() }
@@ -88,7 +96,7 @@ object StremioAddonManager {
 
     fun install(addon: StremioAddon): Boolean {
         val current = PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons)
-        if (installed().any { it.transportUrl.equals(addon.transportUrl, ignoreCase = true) }) {
+        if (allInstalled().any { it.transportUrl.equals(addon.transportUrl, ignoreCase = true) }) {
             Logger.log("STREMIO: install skipped (already installed) url=${addon.transportUrl}")
             return false
         }
@@ -170,6 +178,34 @@ object StremioAddonManager {
 
     fun extrasSources(): List<StremioAddon> = installed().filter { it.extrasOnly == true }
 
+    fun setDisabled(transportUrl: String, disabled: Boolean) {
+        var changed = false
+        val updated = rawInstalled().map { addon ->
+            if (!addon.transportUrl.equals(transportUrl, ignoreCase = true) ||
+                addon.disabled == disabled
+            ) {
+                addon
+            } else {
+                changed = true
+                addon.copy(disabled = disabled)
+            }
+        }
+        if (changed) {
+            PrefManager.setVal(PrefName.StremioInstalledAddons, updated.map { json.encodeToString(it) })
+            Logger.log("STREMIO: set disabled=$disabled url=$transportUrl")
+        }
+    }
+
+    fun setOrder(orderedUrls: List<String>) {
+        val rank = HashMap<String, Int>()
+        orderedUrls.forEachIndexed { index, url -> rank[url.lowercase()] = index }
+        val sorted = rawInstalled().sortedWith(
+            compareBy { addon -> rank[addon.transportUrl.lowercase()] ?: Int.MAX_VALUE }
+        )
+        PrefManager.setVal(PrefName.StremioInstalledAddons, sorted.map { json.encodeToString(it) })
+        Logger.log("STREMIO: set order urls=${orderedUrls.size} installed=${sorted.size}")
+    }
+
     fun uninstall(transportUrl: String) {
         val current = PrefManager.getVal<List<String>>(PrefName.StremioInstalledAddons)
         val remaining = current.filterNot { encoded ->
@@ -221,7 +257,7 @@ object StremioAddonManager {
         distinct
     }
 
-    fun toRepoUi(addon: StremioAddon): RepoUi {
+    fun toRepoUi(addon: StremioAddon, installedTab: Boolean = false): RepoUi {
         val manifest = addon.manifest
         val resources = manifest.resources.mapNotNull { it.resourceName() }.distinct()
         val catalogCount = manifest.catalogs.size + manifest.addonCatalogs.size
@@ -235,7 +271,14 @@ object StremioAddonManager {
             countText = "${resources.size} resources · $catalogCount catalogs",
             scopeLabel = "types",
             description = manifest.description,
-            watermarkRes = R.drawable.ic_extension,
+            watermarkRes = R.drawable.ic_stremio_watermark,
+            watermarkLeft = true,
+            hideCount = true,
+            showInfoButton = true,
+            enabled = !addon.disabled,
+            toggleVisible = installedTab,
+            dragVisible = installedTab,
+            needsConfiguration = StremioAddonClient.configurationRequired(addon),
             configUrl = StremioAddonClient.configureUrl(addon),
         )
     }

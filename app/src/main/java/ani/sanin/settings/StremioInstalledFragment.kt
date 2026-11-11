@@ -8,7 +8,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.databinding.FragmentExtensionsBinding
 import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
@@ -24,7 +26,11 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
         onExitTop = { (activity as? ExtensionsActivity)?.focusPill() == true },
         actionLabel = "Uninstall",
         onConfigure = ::openConfiguration,
+        onToggle = ::toggleEnabled,
+        onReorder = ::moveAddon,
+        dragStarter = { vh -> touchHelper.startDrag(vh) },
     )
+    private lateinit var touchHelper: ItemTouchHelper
     private var addons: List<StremioAddon> = emptyList()
     private var query = ""
 
@@ -36,6 +42,21 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
         _binding = FragmentExtensionsBinding.inflate(inflater, container, false)
         binding.allExtensionsRecyclerView.adapter = adapter
         binding.allExtensionsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        touchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN,
+            0,
+        ) {
+            override fun isLongPressDragEnabled(): Boolean = false
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder,
+            ): Boolean = moveAddon(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+        })
+        touchHelper.attachToRecyclerView(binding.allExtensionsRecyclerView)
         return binding.root
     }
 
@@ -52,7 +73,7 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
 
     private fun submitFiltered() {
         if (_binding == null) return
-        adapter.submitList(addons.map { StremioAddonManager.toRepoUi(it) }.filter { it.matches(query) })
+        adapter.submitList(addons.map { StremioAddonManager.toRepoUi(it, installedTab = true) }.filter { it.matches(query) })
     }
 
     private fun confirmUninstall(card: RepoUi) {
@@ -88,25 +109,27 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
         }
     }
 
+    private fun toggleEnabled(card: RepoUi, enabled: Boolean) {
+        StremioAddonManager.setDisabled(card.url, !enabled)
+        Logger.log("STREMIO: '${card.name}' enabled=$enabled")
+        loadInstalled()
+    }
+
+    private fun moveAddon(from: Int, to: Int): Boolean {
+        val size = addons.size
+        if (from == to) return false
+        if (from !in 0 until size || to !in 0 until size) return false
+        val mutable = addons.toMutableList()
+        val moved = mutable.removeAt(from)
+        mutable.add(to, moved)
+        addons = mutable
+        StremioAddonManager.setOrder(mutable.map { it.transportUrl })
+        submitFiltered()
+        return true
+    }
+
     private fun showDetails(card: RepoUi) {
-        requireContext().customAlertDialog().apply {
-            setTitle(card.name)
-            setMessage(
-                buildString {
-                    if (!card.description.isNullOrBlank()) append(card.description)
-                    append("\n\n")
-                    append(card.countText.orEmpty())
-                    if (card.contentTypes.isNotEmpty()) {
-                        append("\nResources: ${card.contentTypes.joinToString()}")
-                    }
-                    if (card.languages.isNotEmpty()) {
-                        append("\nTypes: ${card.languages.joinToString()}")
-                    }
-                }.trim()
-            )
-            setPosButton("OK")
-            show()
-        }
+        showAddonDetailsDialog(requireContext(), card)
     }
 
     override fun updateContentBasedOnQuery(query: String?) {
