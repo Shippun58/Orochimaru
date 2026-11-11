@@ -75,6 +75,7 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         const val ARG_PLUGIN_SOURCE = "pluginSource"
         const val ARG_PLUGIN_URL = "pluginUrl"
         const val ARG_OPEN_TAB = "openTab"
+        const val ARG_IMDB_ID = "imdbId"
         private const val TAG_WATCH = "tmdbWatch"
 
         const val TAB_INFO = 0
@@ -88,6 +89,7 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
     private var mediaId: Int = -1
     private var pluginSourceId: String? = null
     private var pluginUrl: String? = null
+    private var imdbId: String? = null
     private val pluginMode get() = pluginUrl != null
     private var detail: TmdbDetail? = null
     private var selectedPill = TAB_INFO
@@ -111,10 +113,12 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         mediaId = id
         pluginSourceId = null
         pluginUrl = null
+        imdbId = null
         intent.putExtra(ARG_MEDIA_TYPE, type)
         intent.putExtra(ARG_MEDIA_ID, id)
         intent.removeExtra(ARG_PLUGIN_SOURCE)
         intent.removeExtra(ARG_PLUGIN_URL)
+        intent.removeExtra(ARG_IMDB_ID)
         recreate()
     }
 
@@ -130,7 +134,8 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
                     mediaType = mediaType,
                     mediaId = mediaId,
                     pluginSourceId = pluginSourceId,
-                    pluginUrl = pluginUrl
+                    pluginUrl = pluginUrl,
+                    imdbId = imdbId,
                 ), TAG_WATCH)
                 .commit()
         } else {
@@ -158,7 +163,9 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         mediaId = intent.getIntExtra(ARG_MEDIA_ID, -1)
         pluginSourceId = intent.getStringExtra(ARG_PLUGIN_SOURCE)
         pluginUrl = intent.getStringExtra(ARG_PLUGIN_URL)
-        Logger.log("TMDB_DETAILS: opened mediaType=$mediaType mediaId=$mediaId")
+        imdbId = intent.getStringExtra(ARG_IMDB_ID)?.takeIf { it.isNotBlank() }
+        if (imdbId != null && mediaId == -1) mediaId = ImdbMedia.syntheticMediaId(imdbId!!)
+        Logger.log("TMDB_DETAILS: opened mediaType=$mediaType mediaId=$mediaId imdb=$imdbId")
 
         shell.tmdbDetailBack.setOnClickListener { finish() }
         FocusEffectUtil.applyFocusListener(shell.tmdbDetailBack)
@@ -351,7 +358,11 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         lifecycleScope.launch {
             binding.mediaInfoProgressBar.visibility = View.VISIBLE
             binding.mediaInfoContainer.visibility = View.GONE
-            val d = withStremioFallback(Tmdb.detail(mediaType, mediaId)) ?: run {
+            val d = if (imdbId != null) {
+                ImdbMedia.loadDetail(mediaType, imdbId!!)
+            } else {
+                withStremioFallback(Tmdb.detail(mediaType, mediaId))
+            } ?: run {
                 binding.mediaInfoProgressBar.visibility = View.GONE
                 snackString("Could not load details"); return@launch
             }

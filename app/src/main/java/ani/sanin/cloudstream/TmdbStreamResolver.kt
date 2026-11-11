@@ -7,6 +7,9 @@ import ani.sanin.FileUrl
 import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.tmdb.TmdbDetail
 import ani.sanin.connections.tmdb.TmdbEpisode
+import ani.sanin.connections.tmdb.TmdbExternalIds
+import ani.sanin.connections.tmdb.TmdbGenre
+import ani.sanin.connections.tmdb.TmdbSeason
 import ani.sanin.media.Media
 import ani.sanin.media.Selected
 import ani.sanin.media.anime.Anime
@@ -21,6 +24,7 @@ import ani.sanin.parsers.DrmInfo
 import ani.sanin.parsers.VideoType
 import ani.sanin.settings.StremioAddon
 import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioMetaDetails
 import ani.sanin.settings.StremioStream
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
@@ -44,6 +48,90 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+
+object ImdbMedia {
+
+    /** Deterministic negative id so per-title prefs (tmdb_source_$mediaId) stay unique. */
+    fun syntheticMediaId(imdbId: String): Int =
+        -1 - (imdbId.lowercase().hashCode() and 0x7FFFFFFF)
+
+    private val metaCache = HashMap<String, StremioMetaDetails>()
+
+    private suspend fun loadMeta(mediaType: String, imdbId: String): StremioMetaDetails? {
+        for (addon in StremioAddonManager.metadataSources()) {
+            val meta = runCatching {
+                StremioAddonClient.loadMeta(addon, mediaType, -1, imdbId)
+            }.getOrNull()
+            if (meta != null) return meta
+        }
+        return StremioAddonClient.loadCinemetaMeta(mediaType, imdbId)
+    }
+
+    private fun cacheKey(mediaType: String, imdbId: String) = "$mediaType:$imdbId"
+
+    private suspend fun cachedMeta(mediaType: String, imdbId: String): StremioMetaDetails? {
+        val key = cacheKey(mediaType, imdbId)
+        val cached = synchronized(metaCache) { metaCache[key] }
+        if (cached != null) return cached
+        val meta = loadMeta(mediaType, imdbId) ?: return null
+        synchronized(metaCache) { metaCache[key] = meta }
+        return meta
+    }
+
+    /** Nuvio-style detail built from the addon/Cinemeta meta for titles absent from TMDB. */
+    suspend fun loadDetail(mediaType: String, imdbId: String): TmdbDetail? {
+        val meta = cachedMeta(mediaType, imdbId) ?: return null
+        val year = Regex("\\d{4}").find(meta.releaseInfo.orEmpty())?.value
+        val seasons = meta.videos.asSequence()
+            .mapNotNull { it.season ?: 1 }
+            .distinct()
+            .sorted()
+            .map { s ->
+                TmdbSeason(
+                    id = syntheticMediaId("$imdbId:s$s"),
+                    name = "Season $s",
+                    seasonNumber = s,
+                    episodeCount = meta.videos.count { (it.season ?: 1) == s },
+                )
+            }
+            .toList()
+        return TmdbDetail(
+            id = syntheticMediaId(imdbId),
+            title = if (mediaType == "movie") meta.name else null,
+            name = if (mediaType == "movie") null else meta.name,
+            overview = meta.description,
+            posterPath = meta.poster,
+            backdropPath = meta.background,
+            voteAverage = meta.imdbRating?.toDoubleOrNull() ?: 0.0,
+            releaseDate = if (mediaType == "movie") year?.let { "$it-01-01" } else null,
+            firstAirDate = if (mediaType == "movie") null else year?.let { "$it-01-01" },
+            numberOfSeasons = seasons.size,
+            genres = meta.genres.mapIndexed { i, g -> TmdbGenre(i + 1, g) },
+            externalIds = TmdbExternalIds(imdbId = meta.id.ifBlank { imdbId }),
+            seasons = seasons,
+        )
+    }
+
+    /** Episodes for one season from the cached Cinemeta meta (titles absent from TMDB). */
+    suspend fun episodesFor(mediaType: String, imdbId: String, season: Int): List<TmdbEpisode> {
+        if (mediaType != "tv") return emptyList()
+        val meta = cachedMeta(mediaType, imdbId) ?: return emptyList()
+        return meta.videos
+            .filter { (it.season ?: 1) == season && (it.episode ?: 0) > 0 }
+            .sortedBy { it.episode ?: 0 }
+            .map { v ->
+                TmdbEpisode(
+                    id = syntheticMediaId(v.id),
+                    name = v.title ?: "Episode ${v.episode}",
+                    overview = v.overview,
+                    episodeNumber = v.episode ?: 0,
+                    seasonNumber = season,
+                    stillPath = v.thumbnail,
+                    airDate = v.released?.take(10),
+                )
+            }
+    }
+}
 
 object TmdbStreamResolver {
 

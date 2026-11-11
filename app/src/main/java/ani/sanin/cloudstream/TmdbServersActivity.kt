@@ -22,6 +22,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import ani.sanin.settings.StremioAddon
+import ani.sanin.settings.StremioAddonClient
 import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
@@ -47,6 +48,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         const val ARG_EPISODE = "episode"
         const val ARG_PLUGIN_SOURCE = "pluginSource"
         const val ARG_PLUGIN_URL = "pluginUrl"
+        const val ARG_IMDB_ID = "imdbId"
     }
 
     private sealed class GroupState {
@@ -92,6 +94,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var epNumber: Int? = null
     private var pluginSourceId: String? = null
     private var pluginUrl: String? = null
+    private var imdbId: String? = null
     private val pluginEpisodes = mutableMapOf<Int, List<TmdbEpisode>>()
 
     private lateinit var serversBinding: ActivityTmdbServersBinding
@@ -117,6 +120,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val epArg = intent.getIntExtra(ARG_EPISODE, 0)
         pluginSourceId = intent.getStringExtra(ARG_PLUGIN_SOURCE)
         pluginUrl = intent.getStringExtra(ARG_PLUGIN_URL)
+        imdbId = intent.getStringExtra(ARG_IMDB_ID)?.takeIf { it.isNotBlank() }
         if (seasonArg > 0) season = seasonArg
         if (epArg > 0) epNumber = epArg
 
@@ -159,7 +163,10 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 return@launch
             }
             if (pluginUrl == null) {
-                val d = withContext(Dispatchers.IO) { Tmdb.detail(mediaType, mediaId) }
+                var d = withContext(Dispatchers.IO) { Tmdb.detail(mediaType, mediaId) }
+                if (d == null && imdbId != null) {
+                    d = ImdbMedia.loadDetail(mediaType, imdbId!!)
+                }
                 if (d == null) {
                     snackString("Could not load details")
                     finish()
@@ -1047,10 +1054,27 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             if (match != null) {
                 Logger.log("TMDB_SERVERS: resolved extras title '$title' to tmdb=${match.id} (${match.type})")
                 openMedia(match)
+                return@launch
+            }
+            val cinemeta = withContext(Dispatchers.IO) {
+                runCatching { StremioAddonClient.searchCinemetaId(type, title) }.getOrNull()
+            }
+            if (cinemeta != null) {
+                Logger.log("TMDB_SERVERS: resolved extras title '$title' to cinemeta ${cinemeta.first}/${cinemeta.second}")
+                openImdbDetails(cinemeta.first, cinemeta.second)
             } else {
                 snackString("No TMDB match for $title")
             }
         }
+    }
+
+    private fun openImdbDetails(type: String, imdb: String) {
+        Logger.log("TMDB_SERVERS: opening imdb details type=$type imdb=$imdb")
+        startActivity(
+            android.content.Intent(this, TmdbDetailsActivity::class.java)
+                .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
+                .putExtra(TmdbDetailsActivity.ARG_IMDB_ID, imdb)
+        )
     }
 
     private fun openExternal(link: TmdbStreamResolver.StreamResult.PlayableLink) {
@@ -1078,8 +1102,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             }
             if (isFinishing || isDestroyed) return@launch
             if (found == null) {
-                Logger.log("TMDB_SERVERS: stremio link unresolved id=$imdbId")
-                snackString("Could not resolve $imdbId on TMDB")
+                Logger.log("TMDB_SERVERS: stremio link unresolved on tmdb, opening cinemeta id=$imdbId")
+                openImdbDetails(typeHint, imdbId)
                 return@launch
             }
             startActivity(

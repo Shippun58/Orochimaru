@@ -533,8 +533,68 @@ object StremioAddonClient {
         return result.getOrNull()
     }
 
-    private fun parseMeta(obj: JsonObject): StremioMetaDetails? {
-        val id = obj.string("id") ?: return null
+    /** Direct Cinemeta meta lookup by imdb id: meta/{movie|series}/{tt-id}.json */
+    suspend fun loadCinemetaMeta(tmdbType: String, imdbId: String): StremioMetaDetails? =
+        withContext(Dispatchers.IO) {
+            val url = "https://v3-cinemeta.strem.io/meta/${stremioType(tmdbType)}/$imdbId.json"
+            val result = runCatching {
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Accept", "application/json")
+                    .build()
+                val body = client.newBuilder()
+                    .callTimeout(15, TimeUnit.SECONDS)
+                    .build()
+                    .newCall(request)
+                    .execute()
+                    .use { response ->
+                        if (!response.isSuccessful) throw IOException("Cinemeta returned HTTP ${response.code}")
+                        response.body?.string() ?: throw IOException("Cinemeta returned an empty response")
+                    }
+                json.parseToJsonElement(body).asObject()
+            }
+            val meta = result.getOrNull()?.get("meta") as? JsonObject
+            val parsed = meta?.let(::parseMeta)
+            Logger.log("STREMIO: cinemeta meta type=$tmdbType id=$imdbId ok=${parsed != null}")
+            parsed
+        }
+
+    /** Cinemeta catalog title search; returns (type, imdb id) of the first match or null. */
+    suspend fun searchCinemetaId(tmdbType: String, query: String): Pair<String, String>? =
+        withContext(Dispatchers.IO) {
+            val types = if (tmdbType == "tv") listOf("series", "movie") else listOf("movie", "series")
+            for (type in types) {
+                val url = "https://v3-cinemeta.strem.io/catalog/$type/top/search=${Uri.encode(query)}.json"
+                val result = runCatching {
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("Accept", "application/json")
+                        .build()
+                    val body = client.newBuilder()
+                        .callTimeout(15, TimeUnit.SECONDS)
+                        .build()
+                        .newCall(request)
+                        .execute()
+                        .use { response ->
+                            if (!response.isSuccessful) throw IOException("Cinemeta returned HTTP ${response.code}")
+                            response.body?.string() ?: throw IOException("Cinemeta returned an empty response")
+                        }
+                    json.parseToJsonElement(body).asObject()
+                }
+                val metas = (result.getOrNull()?.get("metas") as? JsonArray).orEmpty()
+                for (item in metas) {
+                    val obj = item.asObject() ?: continue
+                    val id = obj.string("id") ?: continue
+                    if (!id.startsWith("tt")) continue
+                    Logger.log("STREMIO: cinemeta search '$query' -> $type/$id")
+                    return@withContext (if (type == "series") "tv" else "movie") to id
+                }
+            }
+            Logger.log("STREMIO: cinemeta search '$query' -> no match")
+            null
+        }
+
+    private fun parseMeta(obj: JsonObject): StremioMetaDetails? {        val id = obj.string("id") ?: return null
         val type = obj.string("type") ?: return null
         val name = obj.string("name") ?: return null
         return StremioMetaDetails(

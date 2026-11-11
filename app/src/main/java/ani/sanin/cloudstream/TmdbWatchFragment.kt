@@ -83,6 +83,7 @@ class TmdbWatchFragment : Fragment() {
     companion object {
         const val ARG_MEDIA_TYPE = "mediaType"
         const val ARG_MEDIA_ID = "mediaId"
+        const val ARG_IMDB_ID = "imdbId"
         const val ARG_PLUGIN_SOURCE = "pluginSource"
         const val ARG_PLUGIN_URL = "pluginUrl"
         private const val EPISODE_CAP = 24
@@ -93,13 +94,15 @@ class TmdbWatchFragment : Fragment() {
             mediaType: String,
             mediaId: Int,
             pluginSourceId: String?,
-            pluginUrl: String?
+            pluginUrl: String?,
+            imdbId: String? = null,
         ): TmdbWatchFragment = TmdbWatchFragment().apply {
             arguments = Bundle().apply {
                 putString(ARG_MEDIA_TYPE, mediaType)
                 putInt(ARG_MEDIA_ID, mediaId)
                 pluginSourceId?.let { putString(ARG_PLUGIN_SOURCE, it) }
                 pluginUrl?.let { putString(ARG_PLUGIN_URL, it) }
+                imdbId?.let { putString(ARG_IMDB_ID, it) }
             }
         }
     }
@@ -126,6 +129,7 @@ class TmdbWatchFragment : Fragment() {
     private var mediaId: Int = -1
     private var pluginSourceId: String? = null
     private var pluginUrl: String? = null
+    private var imdbId: String? = null
     private var pluginLoad: LoadResponse? = null
     private val pluginEpisodes = mutableMapOf<Int, List<TmdbEpisode>>()
     private var detail: TmdbDetail? = null
@@ -178,6 +182,7 @@ class TmdbWatchFragment : Fragment() {
         mediaId = arguments?.getInt(ARG_MEDIA_ID, -1) ?: -1
         pluginSourceId = arguments?.getString(ARG_PLUGIN_SOURCE)
         pluginUrl = arguments?.getString(ARG_PLUGIN_URL)
+        imdbId = arguments?.getString(ARG_IMDB_ID)?.takeIf { it.isNotBlank() }
 
         if (pluginUrl != null) mediaId = pluginUrl.hashCode()
         episodeStyle = (PrefManager.getNullableCustomVal("tmdb_style", 2, Int::class.java)
@@ -304,7 +309,11 @@ class TmdbWatchFragment : Fragment() {
                 loadPlugin()
                 return@launch
             }
-            val d = Tmdb.detail(mediaType, mediaId) ?: run {
+            val d = if (imdbId != null) {
+                ImdbMedia.loadDetail(mediaType, imdbId!!)
+            } else {
+                Tmdb.detail(mediaType, mediaId)
+            } ?: run {
                 snackString("Could not load details")
                 goBack()
                 return@launch
@@ -330,12 +339,18 @@ class TmdbWatchFragment : Fragment() {
             headerBinding = ItemTmdbWatchHeaderBinding.inflate(LayoutInflater.from(requireContext()))
 
             if (mediaType == "tv") {
-                if (stremioExtrasOnly) {
-                    episodes = emptyList()
-                } else {
-                    seasons = Tmdb.seasons(mediaType, mediaId)
-                    selectedSeason = restoreSeason()
-                    episodes = Tmdb.episodes(mediaType, mediaId, selectedSeason)
+                when {
+                    stremioExtrasOnly -> episodes = emptyList()
+                    imdbId != null -> {
+                        seasons = ImdbMedia.loadDetail(mediaType, imdbId!!)?.seasons.orEmpty()
+                        selectedSeason = restoreSeason()
+                        episodes = ImdbMedia.episodesFor(mediaType, imdbId!!, selectedSeason)
+                    }
+                    else -> {
+                        seasons = Tmdb.seasons(mediaType, mediaId)
+                        selectedSeason = restoreSeason()
+                        episodes = Tmdb.episodes(mediaType, mediaId, selectedSeason)
+                    }
                 }
             } else {
                 if (stremioExtrasOnly) {
