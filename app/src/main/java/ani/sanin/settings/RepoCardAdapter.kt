@@ -304,8 +304,8 @@ class RepoCardAdapter(
                     reorderAnchor = currentPos
                     reorderMessage?.visibility = View.VISIBLE
                     onDragModeChanged?.invoke(true)
-                    v.imageTintList = android.content.res.ColorStateList.valueOf(primaryColor)
-                    v.post { v.requestFocus() }
+                    imageTintList = android.content.res.ColorStateList.valueOf(primaryColor)
+                    post { requestFocus() }
                 }
             }
             setOnTouchListener { _, event ->

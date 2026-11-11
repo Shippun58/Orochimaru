@@ -24,6 +24,7 @@ import ani.sanin.parsers.DrmInfo
 import ani.sanin.parsers.VideoType
 import ani.sanin.settings.StremioAddon
 import ani.sanin.settings.StremioAddonClient
+import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.StremioMetaDetails
 import ani.sanin.settings.StremioStream
 import ani.sanin.settings.saving.PrefManager
