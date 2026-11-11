@@ -19,6 +19,8 @@ import ani.sanin.databinding.ItemTmdbStreamsTextBinding
 import ani.sanin.databinding.ItemTmdbServerRowBinding
 import ani.sanin.limitedAsyncMap
 import ani.sanin.loadImage
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import ani.sanin.settings.StremioAddon
 import ani.sanin.settings.StremioAddonManager
@@ -67,6 +69,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val pluginLoad: LoadResponse? = null,
     ) {
         var state: GroupState = GroupState.Loading
+        var rank: Int = 2
+        var arrivalSeq: Int = Int.MAX_VALUE
     }
 
     private sealed class Row {
@@ -102,7 +106,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private val rowsAdapter = RowsAdapter()
     private var headerCollapseMax = 0
     private var pluginLoad: LoadResponse? = null
-    private val groupJobs = mutableMapOf<Int, kotlinx.coroutines.Job>()
+    private val groupJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
+    private var arrivalCounter = 0
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,6 +128,12 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
         serversBinding = ActivityTmdbServersBinding.inflate(layoutInflater)
         setContentView(serversBinding.root)
+        val topBarBasePadding = (6 * resources.displayMetrics.density).toInt()
+        ViewCompat.setOnApplyWindowInsetsListener(serversBinding.tmdbServersTopBar) { v, insets ->
+            val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            v.setPadding(v.paddingLeft, topBarBasePadding + top, v.paddingRight, v.paddingBottom)
+            insets
+        }
         serversBinding.tmdbStreamsRows.layoutManager =
             androidx.recyclerview.widget.LinearLayoutManager(this)
         serversBinding.tmdbStreamsRows.isNestedScrollingEnabled = false
@@ -358,6 +369,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private fun buildGroups() {
         groups.clear()
         chipByIndex.clear()
+        arrivalCounter = 0
         pluginSourceId?.let { pluginSourceId ->
             val source = CsRepos.installed(this).firstOrNull { it.id == pluginSourceId }
             if (source != null) {
@@ -495,10 +507,14 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         if (mode == 1) {
             groups.forEachIndexed { i, g ->
                 if (i != selectedIndex) {
-                    groupJobs.remove(i)?.cancel()
+                    groupJobs.remove(g.key)?.cancel()
                     g.state = GroupState.Loading
+                    g.rank = 2
+                    g.arrivalSeq = Int.MAX_VALUE
                 }
             }
+            renderChipStates()
+            refreshRows()
         }
         Logger.log("TMDB_SERVERS: resolveAll mode=$mode targets=$targets")
         targets.forEach { launchGroupResolution(it) }
@@ -508,19 +524,28 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private fun showLoadModeMenu(anchor: android.view.View) {
         val menu = android.widget.PopupMenu(this, anchor, android.view.Gravity.END)
         menu.menuInflater.inflate(R.menu.menu_tmdb_servers_load, menu.menu)
-        val current = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-        menu.menu.findItem(R.id.tmdbServersLoadModeParallel).isChecked = current == 0
-        menu.menu.findItem(R.id.tmdbServersLoadModeOnSelect).isChecked = current == 1
+        val parallelItem = menu.menu.findItem(R.id.tmdbServersLoadModeParallel)
+        val onSelectItem = menu.menu.findItem(R.id.tmdbServersLoadModeOnSelect)
+        parallelItem.isCheckable = true
+        onSelectItem.isCheckable = true
+        fun syncChecks() {
+            val current = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+            Logger.log("TMDB_SERVERS: load mode current=$current")
+            parallelItem.isChecked = current == 0
+            onSelectItem.isChecked = current == 1
+        }
+        syncChecks()
         menu.setOnMenuItemClickListener { item ->
             val mode = when (item.itemId) {
                 R.id.tmdbServersLoadModeParallel -> 0
                 R.id.tmdbServersLoadModeOnSelect -> 1
                 else -> return@setOnMenuItemClickListener true
             }
-            if (mode != current) {
-                PrefManager.setVal(PrefName.TmdbServersLoadMode, mode)
-                lifecycleScope.launch { resolveAll() }
-            }
+            PrefManager.setVal(PrefName.TmdbServersLoadMode, mode)
+            val stored = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+            Logger.log("TMDB_SERVERS: load mode set $mode stored=$stored")
+            syncChecks()
+            lifecycleScope.launch { resolveAll() }
             true
         }
         menu.show()
@@ -529,8 +554,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private fun launchGroupResolution(index: Int) {
         val group = groups.getOrNull(index) ?: return
         val d = detail ?: return
-        groupJobs.remove(index)?.cancel()
-        groupJobs[index] = lifecycleScope.launch(Dispatchers.IO) {
+        groupJobs.remove(group.key)?.cancel()
+        groupJobs[group.key] = lifecycleScope.launch(Dispatchers.IO) {
             when {
                 group.pluginLoad != null -> resolvePluginGroup(group)
                 group.addon != null -> resolveStremioGroup(group, d)
@@ -567,7 +592,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 && changed) {
             groups.forEachIndexed { i, g ->
                 if (i != index) {
-                    groupJobs.remove(i)?.cancel()
+                    groupJobs.remove(g.key)?.cancel()
                     g.state = GroupState.Loading
                 }
             }
@@ -585,6 +610,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         groups.forEach { it.state = GroupState.Loading }
         renderChipStates()
         refreshRows()
+        snackString(R.string.tmdb_servers_refreshed_all)
         lifecycleScope.launch { resolveAll() }
     }
 
@@ -690,12 +716,24 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     }
 
     private fun onResolved(group: Group) {
+        val playable = when (val s = group.state) {
+            is GroupState.Ready ->
+                s.links.count { it.url.isNotBlank() } + s.recommendations.size + s.infos.size
+            else -> 0
+        }
+        group.rank = when {
+            playable > 0 -> 0
+            group.state is GroupState.Failed -> 1
+            else -> 2
+        }
+        if (group.rank == 0) group.arrivalSeq = arrivalCounter++
         runOnUiThread {
             if (isFinishing || isDestroyed) return@runOnUiThread
-            renderChipStates()
-            if (groups.getOrNull(selectedIndex) === group) {
-                refreshRows()
-            }
+            val selectedKey = groups.getOrNull(selectedIndex)?.key
+            groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
+            selectedIndex = groups.indexOfFirst { it.key == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
+            buildChips()
+            refreshRows()
         }
     }
 

@@ -211,6 +211,7 @@
     <string name="chap">Chapter</string>
     <string name="wrong"><u>Wrong Title?</u></string>
     <string name="anime_watch_refreshed">Refreshed successfully</string>
+    <string name="tmdb_servers_refreshed_all">Refreshed all successfully</string>
     <string name="anime_watch_no_webpage">No webpage for this source</string>
     <string name="anime_watch_style_bars">Episode layout: Bars</string>
     <string name="anime_watch_style_compact">Episode layout: Compact</string>
