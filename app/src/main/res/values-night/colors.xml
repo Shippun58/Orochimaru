@@ -24,4 +24,5 @@
     <color name="franchise_list_stroke">#99EEEEEE</color>
     <color name="franchise_list_text">#FFEEEEEE</color>
     <color name="servers_row_background">#1C1D21</color>
+    <color name="tmdb_neutral_text">#FFFFFFFF</color>
 </resources>

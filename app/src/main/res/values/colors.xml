@@ -582,4 +582,5 @@
     <color name="franchise_list_stroke">#9915171A</color>
     <color name="franchise_list_text">#FF15171A</color>
     <color name="servers_row_background">#FFFFFF</color>
+    <color name="tmdb_neutral_text">#FF101010</color>
 </resources>

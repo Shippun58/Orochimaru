@@ -189,17 +189,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val pinned = (scrollY - headerCollapseMax).coerceAtLeast(0)
         sticky.translationY = -pinned.toFloat()
         backdrop.translationY = scrollY * 0.35f
-        serversBinding.tmdbServersCompactLogo.alpha = progress
         topBar.background?.alpha = (progress * 255).toInt().coerceIn(0, 255)
-        val fadingViews = listOf(
-            serversBinding.tmdbStreamsLogo,
-            serversBinding.tmdbStreamsTitle,
-            serversBinding.tmdbStreamsEpisode,
-            serversBinding.tmdbStreamsRating,
-            serversBinding.tmdbStreamsMeta,
-            serversBinding.tmdbStreamsOverview,
-        )
-        fadingViews.forEach { it.alpha = 1f - progress }
     }
 
     private fun bindHeader(d: TmdbDetail) {
@@ -207,17 +197,14 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             Tmdb.logoUrl(d)
         } else null
         if (logo != null) {
-            serversBinding.tmdbStreamsLogo.isVisible = true
-            serversBinding.tmdbStreamsTitle.isVisible = false
-            serversBinding.tmdbStreamsLogo.loadImage(logo)
+            serversBinding.tmdbServersCompactLogo.isVisible = true
+            serversBinding.tmdbServersCompactTitle.isVisible = false
             serversBinding.tmdbServersCompactLogo.loadImage(logo)
         } else {
-            serversBinding.tmdbStreamsLogo.isVisible = false
-            serversBinding.tmdbStreamsTitle.isVisible = true
-            serversBinding.tmdbStreamsTitle.text = d.displayTitle
+            serversBinding.tmdbServersCompactLogo.isVisible = false
+            serversBinding.tmdbServersCompactTitle.isVisible = true
+            serversBinding.tmdbServersCompactTitle.text = d.displayTitle
         }
-        Tmdb.logoUrl(d)?.takeIf { logo != null }?.let { serversBinding.tmdbServersCompactLogo.loadImage(it) }
-            ?: Tmdb.imageUrl(d.posterPath, 342)?.let { serversBinding.tmdbServersCompactLogo.loadImage(it) }
         applyThemeGradient()
 
         if (mediaType == "tv") {
@@ -337,8 +324,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     }
 
     private fun applyThemeGradient() {
-        val surface = getThemeColor(com.google.android.material.R.attr.colorSurface)
-        val onSurface = getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+        val surface = getThemeColor(android.R.attr.colorBackground)
+        val divider = getThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant)
         val gradient = android.graphics.drawable.GradientDrawable(
             android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(
@@ -351,8 +338,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             ),
         )
         serversBinding.tmdbStreamsScrim.background = gradient
-        serversBinding.tmdbServersDivider.background = android.graphics.drawable.ColorDrawable(onSurface)
-        serversBinding.tmdbServersCompactLogo.also { it.alpha = 0f }
+        serversBinding.tmdbServersDivider.background = android.graphics.drawable.ColorDrawable(divider)
         val topBarBg = android.graphics.drawable.GradientDrawable().apply {
             setColor(
                 android.graphics.Color.argb(
