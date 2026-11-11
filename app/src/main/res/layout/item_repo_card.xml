@@ -74,6 +74,16 @@
                 android:textSize="11sp"
                 tools:text="12 plugins" />
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/repoEnableToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:scaleX="0.75"
+                android:scaleY="0.75"
+                android:contentDescription="Enable or disable add-on"
+                android:focusable="true"
+                android:visibility="gone" />
+
             <ImageView
                 android:id="@+id/repoInfoButton"
                 android:layout_width="36dp"
@@ -86,15 +96,6 @@
                 android:visibility="gone"
                 app:srcCompat="@drawable/ic_round_info_24"
                 app:tint="?attr/colorOnSurface" />
-
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/repoEnableToggle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:contentDescription="Enable or disable add-on"
-                android:focusable="true"
-                android:visibility="gone" />
 
             <ImageView
                 android:id="@+id/repoDragHandle"

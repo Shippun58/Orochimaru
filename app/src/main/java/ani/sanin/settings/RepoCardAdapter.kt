@@ -6,8 +6,10 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.palette.graphics.Palette
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
@@ -71,10 +73,21 @@ class RepoCardAdapter(
     private val onConfigure: ((RepoUi) -> Unit)? = null,
     private val onToggle: ((RepoUi, Boolean) -> Unit)? = null,
     private val onReorder: ((Int, Int) -> Unit)? = null,
-    private val dragStarter: ((RecyclerView.ViewHolder) -> Unit)? = null,
 ) : ListAdapter<RepoUi, RepoCardAdapter.VH>(DIFF) {
 
     private var reorderAnchor = RecyclerView.NO_POSITION
+    var reorderMessage: TextView? = null
+    var itemTouchHelper: ItemTouchHelper? = null
+    var onDragModeChanged: ((Boolean) -> Unit)? = null
+
+    fun disarmDrag(persist: Boolean) {
+        if (reorderAnchor == RecyclerView.NO_POSITION) return
+        val anchor = reorderAnchor
+        reorderAnchor = RecyclerView.NO_POSITION
+        reorderMessage?.visibility = View.GONE
+        onDragModeChanged?.invoke(false)
+        if (anchor != RecyclerView.NO_POSITION) notifyItemChanged(anchor)
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemRepoCardBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -104,7 +117,10 @@ class RepoCardAdapter(
                 lp.bottomMargin = 0
             } else {
                 lp.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+                val d = ctx.resources.displayMetrics.density
                 lp.marginStart = 0
+                lp.marginEnd = (12 * d).toInt()
+                lp.bottomMargin = (12 * d).toInt()
             }
             holder.binding.repoWatermark.layoutParams = lp
         }
@@ -279,52 +295,68 @@ class RepoCardAdapter(
             imageTintList = android.content.res.ColorStateList.valueOf(
                 if (holder.absoluteAdapterPosition == reorderAnchor) primaryColor else chipTextColor
             )
-            setOnTouchListener { v, event ->
-                if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
-                    reorderAnchor = RecyclerView.NO_POSITION
-                    dragStarter?.invoke(holder)
+            setOnClickListener { v ->
+                val currentPos = holder.absoluteAdapterPosition
+                if (currentPos == RecyclerView.NO_POSITION) return@setOnClickListener
+                if (reorderAnchor == currentPos) {
+                    disarmDrag(persist = true)
+                } else {
+                    reorderAnchor = currentPos
+                    reorderMessage?.visibility = View.VISIBLE
+                    onDragModeChanged?.invoke(true)
+                    v.imageTintList = android.content.res.ColorStateList.valueOf(primaryColor)
+                    v.post { v.requestFocus() }
                 }
-                v.performClick()
+            }
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN &&
+                    reorderAnchor == holder.absoluteAdapterPosition
+                ) {
+                    itemTouchHelper?.startDrag(holder)
+                }
                 false
+            }
+            setOnLongClickListener {
+                val currentPos = holder.absoluteAdapterPosition
+                if (currentPos == RecyclerView.NO_POSITION) return@setOnLongClickListener false
+                itemTouchHelper?.startDrag(holder)
+                true
             }
             setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) {
                     false
                 } else {
+                    val currentPos = holder.absoluteAdapterPosition
+                    if (currentPos == RecyclerView.NO_POSITION) return@setOnKeyListener false
+                    val armed = reorderAnchor == currentPos
                     when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                            if (reorderAnchor == RecyclerView.NO_POSITION) {
-                                reorderAnchor = holder.absoluteAdapterPosition
-                                imageTintList = android.content.res.ColorStateList.valueOf(primaryColor)
-                            } else {
-                                reorderAnchor = RecyclerView.NO_POSITION
-                                imageTintList = android.content.res.ColorStateList.valueOf(chipTextColor)
-                            }
-                            true
-                        }
                         KeyEvent.KEYCODE_DPAD_UP -> {
-                            val from = reorderAnchor
-                            if (from != RecyclerView.NO_POSITION) {
-                                if (from > 0) {
-                                    onReorder?.invoke(from, from - 1)
-                                    reorderAnchor = from - 1
+                            if (armed) {
+                                if (currentPos > 0) {
+                                    onReorder?.invoke(currentPos, currentPos - 1)
+                                    reorderAnchor = currentPos - 1
                                 }
+                                true
                             } else {
                                 moveBrowseFocus(holder, -1) { it.binding.repoDragHandle }
                             }
-                            true
                         }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            val from = reorderAnchor
-                            if (from != RecyclerView.NO_POSITION) {
-                                if (from < itemCount - 1) {
-                                    onReorder?.invoke(from, from + 1)
-                                    reorderAnchor = from + 1
+                            if (armed) {
+                                if (currentPos < itemCount - 1) {
+                                    onReorder?.invoke(currentPos, currentPos + 1)
+                                    reorderAnchor = currentPos + 1
                                 }
+                                true
                             } else {
                                 moveBrowseFocus(holder, 1) { it.binding.repoDragHandle }
                             }
-                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (armed) {
+                                disarmDrag(persist = true)
+                            }
+                            false
                         }
                         else -> false
                     }

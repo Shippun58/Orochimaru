@@ -28,7 +28,6 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
         onConfigure = ::openConfiguration,
         onToggle = ::toggleEnabled,
         onReorder = ::moveAddon,
-        dragStarter = { vh -> touchHelper.startDrag(vh) },
     )
     private lateinit var touchHelper: ItemTouchHelper
     private var addons: List<StremioAddon> = emptyList()
@@ -57,6 +56,15 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
         })
         touchHelper.attachToRecyclerView(binding.allExtensionsRecyclerView)
+        adapter.reorderMessage = binding.reorderMessage
+        adapter.itemTouchHelper = touchHelper
+        val backDisarm = object : androidx.activity.OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                adapter.disarmDrag(persist = true)
+            }
+        }
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backDisarm)
+        adapter.onDragModeChanged = { armed -> backDisarm.isEnabled = armed }
         return binding.root
     }
 
@@ -66,7 +74,7 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
     }
 
     private fun loadInstalled() {
-        addons = StremioAddonManager.installed()
+        addons = StremioAddonManager.allInstalled()
         Logger.log("STREMIO: installed list count=${addons.size}")
         submitFiltered()
     }

@@ -272,7 +272,7 @@ object StremioAddonManager {
             scopeLabel = "types",
             description = manifest.description,
             watermarkRes = R.drawable.ic_stremio_watermark,
-            watermarkLeft = true,
+            watermarkLeft = false,
             hideCount = true,
             showInfoButton = true,
             enabled = !addon.disabled,
