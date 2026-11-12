@@ -65,7 +65,14 @@ class AnimeServersActivity : AppCompatActivity() {
     private sealed class Row {
         data class Head(val group: Group) : Row()
         data class Server(val group: Group, val server: VideoServer) : Row()
-        data class Video(val group: Group, val extractor: VideoExtractor, val videoIdx: Int) : Row()
+        data class Video(
+            val group: Group,
+            val extractor: VideoExtractor,
+            val videoIdx: Int,
+            val isFirst: Boolean,
+            val isLast: Boolean,
+            val server: VideoServer? = null,
+        ) : Row()
         data class Text(val text: String) : Row()
     }
 
@@ -79,6 +86,7 @@ class AnimeServersActivity : AppCompatActivity() {
         val index: Int,
         val name: String,
         val logoUrl: String?,
+        val icon: android.graphics.drawable.Drawable?,
         val parser: AnimeParser,
     ) {
         var state: GroupState = GroupState.Loading
@@ -188,7 +196,12 @@ class AnimeServersActivity : AppCompatActivity() {
         applyThemeGradient()
 
         val ep = m.anime?.episodes?.getEpisode(epKey)
-        serversBinding.tmdbStreamsBackdrop.loadImage(m.banner ?: m.cover)
+        val epThumb = ep?.thumb
+        when {
+            epThumb != null -> serversBinding.tmdbStreamsBackdrop.loadImage(epThumb)
+            m.banner?.isNotBlank() == true -> serversBinding.tmdbStreamsBackdrop.loadImage(m.banner)
+            else -> serversBinding.tmdbStreamsBackdrop.loadImage(m.cover)
+        }
         serversBinding.tmdbStreamsEpisode.isVisible = ep != null
         serversBinding.tmdbStreamsEpisode.text = ep?.let {
             "Ep ${it.number}" + (it.title?.takeIf { t -> t.isNotBlank() }
@@ -268,7 +281,7 @@ class AnimeServersActivity : AppCompatActivity() {
             val listName = lazier.name
             if (listName.equals("Local", ignoreCase = true)) return@forEachIndexed
             val parser = runCatching { lazier.get.value as? AnimeParser }.getOrNull() ?: return@forEachIndexed
-            groups.add(Group(index, listName.ifBlank { parser.name }, parser.iconUrl, parser))
+            groups.add(Group(index, listName.ifBlank { parser.name }, parser.iconUrl, parser.icon, parser))
         }
         Logger.log(
             "ANIME_SERVERS: groups=${groups.map { it.name }} " +
@@ -326,7 +339,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 is GroupState.Ready -> {
                     if (state.servers.isEmpty()) {
                         rows.add(Row.Text("Nothing found in ${group.name}"))
-                    } else {
+                    } else if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
                         state.servers.forEach { server ->
                             val ex = group.extractors.firstOrNull { it.server.name == server.name }
                             val hasVideos = ex?.videos?.isNotEmpty() == true
@@ -336,8 +349,32 @@ class AnimeServersActivity : AppCompatActivity() {
                             rows.add(Row.Server(group, server))
                             if (hasVideos) {
                                 ex.videos.forEachIndexed { idx, _ ->
-                                    rows.add(Row.Video(group, ex, idx))
+                                    rows.add(
+                                        Row.Video(
+                                            group, ex, idx,
+                                            isFirst = idx == 0,
+                                            isLast = idx == ex.videos.lastIndex,
+                                        )
+                                    )
                                 }
+                            }
+                        }
+                    } else {
+                        state.servers.forEach { server ->
+                            val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                                ?: return@forEach
+                            if (group.extractionDone && ex.videos.isEmpty()) {
+                                return@forEach
+                            }
+                            ex.videos.forEachIndexed { idx, _ ->
+                                rows.add(
+                                    Row.Video(
+                                        group, ex, idx,
+                                        isFirst = idx == 0,
+                                        isLast = idx == ex.videos.lastIndex,
+                                        server = server,
+                                    )
+                                )
                             }
                         }
                     }
@@ -692,7 +729,10 @@ class AnimeServersActivity : AppCompatActivity() {
                         ?.servers?.indexOfFirst { it.name == row.server.name } ?: -1
                     (holder as ItemVH).bindServer(row.group, row.server, sIdx <= 0)
                 }
-                is Row.Video -> (holder as ItemVH).bindVideo(row.group, row.extractor, row.videoIdx)
+                is Row.Video -> (holder as ItemVH).bindVideo(
+                    row.group, row.extractor, row.videoIdx,
+                    row.isFirst, row.isLast, row.server,
+                )
                 is Row.Text -> (holder as TextVH).bind(row.text)
             }
         }
@@ -705,7 +745,18 @@ class AnimeServersActivity : AppCompatActivity() {
             }
 
             fun bind(group: Group) {
-                binding.tmdbStreamsGroupLogo.loadImage(group.logoUrl)
+                val logo = group.logoUrl?.takeIf { it.isNotBlank() }
+                when {
+                    logo != null -> {
+                        binding.tmdbStreamsGroupLogo.isVisible = true
+                        binding.tmdbStreamsGroupLogo.loadImage(logo)
+                    }
+                    group.icon != null -> {
+                        binding.tmdbStreamsGroupLogo.isVisible = true
+                        binding.tmdbStreamsGroupLogo.setImageDrawable(group.icon)
+                    }
+                    else -> binding.tmdbStreamsGroupLogo.isVisible = false
+                }
                 binding.tmdbStreamsGroupName.text = group.name
                 binding.tmdbStreamsGroupState.text = when (val st = group.state) {
                     is GroupState.Loading -> "Loading…"
@@ -744,11 +795,13 @@ class AnimeServersActivity : AppCompatActivity() {
                 itemView.layoutParams = lp
             }
 
-            /** Plain text line above the merged card: clean host left, tag grey right. */
+            /** SubHead-style line above the merged card (TMDB spec). */
             fun bindServer(group: Group, server: VideoServer, isFirstServer: Boolean) {
                 binding.root.background = null
                 val (cleanName, _, parsedAudio) = splitServerTitle(server.name)
                 binding.urlQuality.text = cleanName.ifBlank { server.name }
+                binding.urlQuality.textSize = 14f
+                binding.urlQuality.alpha = 0.6f
                 binding.urlQuality.setTextColor(
                     binding.root.context.getThemeColor(
                         com.google.android.material.R.attr.colorOnSurface
@@ -766,22 +819,30 @@ class AnimeServersActivity : AppCompatActivity() {
                 binding.root.setOnClickListener(null)
                 itemView.isClickable = false
                 itemView.isFocusable = false
-                setRowMargins(if (isFirstServer) 4 else 16, 4)
+                setRowMargins(if (isFirstServer) 12 else 12, 4)
             }
 
             /** Segment of the merged grey card; first row carries the top rim. */
-            fun bindVideo(group: Group, extractor: VideoExtractor, videoIdx: Int) {
+            fun bindVideo(
+                group: Group,
+                extractor: VideoExtractor,
+                videoIdx: Int,
+                isFirst: Boolean,
+                isLast: Boolean,
+                server: VideoServer?,
+            ) {
                 val video = extractor.videos.getOrNull(videoIdx)
-                val isFirst = videoIdx == 0
-                val isLast = videoIdx == extractor.videos.lastIndex
                 GlassPill.applyServerRowCard(
                     binding.root,
+                    cornerRadiusDp = 14f,
                     topRounded = isFirst,
                     bottomRounded = isLast,
                     showTopRim = isFirst,
                 )
                 binding.urlQuality.text =
                     video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
+                binding.urlQuality.textSize = 15f
+                binding.urlQuality.alpha = 1f
                 binding.urlQuality.setTextColor(
                     binding.root.context.getThemeColor(
                         com.google.android.material.R.attr.colorSecondary
@@ -801,13 +862,21 @@ class AnimeServersActivity : AppCompatActivity() {
                     binding.urlNote.text = note
                     binding.urlNote.isVisible = true
                 }
-                binding.urlTag.isVisible = false
+                val audio = if (server != null) {
+                    (splitServerTitle(server.name).third?.uppercase())
+                        ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
+                } else null
+                binding.urlTag.text = audio
+                binding.urlTag.isVisible = !audio.isNullOrBlank()
                 binding.urlSize.isVisible = false
                 binding.urlSub.isVisible = true
                 binding.urlDownload.isVisible = false
                 binding.root.setOnClickListener { playVideo(extractor, videoIdx, group) }
                 itemView.isFocusable = true
-                setRowMargins(if (isFirst) 0 else 1, if (isLast) 12 else 0)
+                setRowMargins(
+                    if (isFirst) (if (server != null) 6 else 0) else 1,
+                    0,
+                )
             }
         }
 
