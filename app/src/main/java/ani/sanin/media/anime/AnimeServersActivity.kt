@@ -754,7 +754,6 @@ class AnimeServersActivity : AppCompatActivity() {
                         com.google.android.material.R.attr.colorOnSurface
                     )
                 )
-                val parsedAudio = splitServerTitle(server.name).third
                 val audio = parsedAudio?.uppercase()
                     ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
                 binding.urlNote.isVisible = false
