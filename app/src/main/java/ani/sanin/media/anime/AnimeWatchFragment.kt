@@ -733,7 +733,12 @@ class AnimeWatchFragment : Fragment() {
             return
         }
         Logger.log("Watch: episode clicked '$i' source='$sourceName' (idx ${media.selected!!.sourceIndex})")
-        model.onEpisodeClick(media, i, requireActivity().supportFragmentManager)
+        model.onEpisodeClick(
+            media,
+            i,
+            requireActivity().supportFragmentManager,
+            isDownload = downloadMode
+        )
     }
 
     var downloadMode = false

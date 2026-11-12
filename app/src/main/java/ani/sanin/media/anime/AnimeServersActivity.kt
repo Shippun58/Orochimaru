@@ -13,6 +13,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.download.DownloadManager
+import ani.sanin.download.enqueue
 import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.themes.ThemeManager
@@ -50,9 +52,11 @@ class AnimeServersActivity : AppCompatActivity() {
         const val ARG_PREV = "prevEp"
         const val ARG_LAUNCH = "launch"
         const val ARG_SERVER = "savedServer"
+        const val ARG_IS_DOWNLOAD = "isDownload"
     }
 
     private lateinit var serversBinding: ActivityTmdbServersBinding
+    private var downloadMode = false
     private val model: MediaDetailsViewModel by viewModels()
 
     private var epKey: String = ""
@@ -114,9 +118,10 @@ class AnimeServersActivity : AppCompatActivity() {
         prevEp = intent.getStringExtra(ARG_PREV)
         savedServerArg = intent.getStringExtra(ARG_SERVER)
         sources = if (media?.isAdult == true) HAnimeSources else AnimeSources
+        downloadMode = intent.getBooleanExtra(ARG_IS_DOWNLOAD, false)
 
         Logger.log(
-            "ANIME_SERVERS: open episode='$epKey' launch=$launchFlag " +
+            "ANIME_SERVERS: open episode='$epKey' launch=$launchFlag download=$downloadMode " +
                 "sourceIdx=${media?.selected?.sourceIndex} title='${media?.name}'"
         )
 
@@ -160,7 +165,11 @@ class AnimeServersActivity : AppCompatActivity() {
             .takeIf { it >= 0 } ?: 0
         buildChips()
         refreshRows()
-        pendingAutoPlay = launchFlag && savedServerArg != null
+        pendingAutoPlay = !downloadMode && launchFlag && savedServerArg != null
+        if (downloadMode) {
+            serversBinding.tmdbServersMakeDefault.isVisible = false
+            serversBinding.tmdbServersDownloadMode.isVisible = true
+        }
         lifecycleScope.launch { resolveAll() }
     }
 
@@ -868,10 +877,25 @@ class AnimeServersActivity : AppCompatActivity() {
                 } else null
                 binding.urlTag.text = audio
                 binding.urlTag.isVisible = !audio.isNullOrBlank()
-                binding.urlSize.isVisible = false
                 binding.urlSub.isVisible = true
-                binding.urlDownload.isVisible = false
-                binding.root.setOnClickListener { playVideo(extractor, videoIdx, group) }
+                if (downloadMode) {
+                    val size = video?.size
+                    if (size != null && size > 0) {
+                        binding.urlSize.text = sizeLabel(size)
+                        binding.urlSize.isVisible = true
+                    } else {
+                        binding.urlSize.isVisible = false
+                    }
+                    binding.urlDownload.isVisible = true
+                    binding.urlDownload.setOnClickListener(null)
+                    binding.root.setOnClickListener {
+                        enqueueDownload(group, extractor, video)
+                    }
+                } else {
+                    binding.urlSize.isVisible = false
+                    binding.urlDownload.isVisible = false
+                    binding.root.setOnClickListener { playVideo(extractor, videoIdx, group) }
+                }
                 itemView.isFocusable = true
                 setRowMargins(
                     if (isFirst) (if (server != null) 6 else 0) else 1,
@@ -896,4 +920,27 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private fun stateSummary(state: GroupState.Ready): String =
         if (state.servers.isEmpty()) "Empty" else "${state.servers.size} servers"
+
+    private fun sizeLabel(sizeMb: Double): String =
+        if (sizeMb >= 1024) {
+            String.format(java.util.Locale.US, "%.2f GB", sizeMb / 1024.0)
+        } else {
+            String.format(java.util.Locale.US, "%.2f MB", sizeMb)
+        }
+
+    private fun enqueueDownload(group: Group, extractor: VideoExtractor, video: Video?) {
+        val v = video ?: return
+        val m = media ?: return
+        val ep = m.anime?.episodes?.getEpisode(epKey) ?: group.episode ?: return
+        val queued = DownloadManager.enqueue(m, ep, extractor, v, group.name)
+        if (queued != null) {
+            snackString(getString(R.string.downloading))
+        } else {
+            snackString(getString(R.string.download_not_found))
+        }
+        Logger.log(
+            "ANIME_SERVERS: download '${m.name}' ep=${ep.number} via ${group.name}/" +
+                "${extractor.server.name} q=${v.quality} queued=${queued != null}"
+        )
+    }
 }

@@ -233,6 +233,18 @@
                         android:layout_height="1dp"
                         android:layout_weight="1" />
 
+                    <TextView
+                        android:id="@+id/tmdbServersDownloadMode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="12dp"
+                        android:fontFamily="@font/poppins_bold"
+                        android:text="@string/download_mode"
+                        android:textSize="12sp"
+                        android:textColor="?attr/colorPrimary"
+                        android:visibility="gone"
+                        tools:visibility="visible" />
+
                     <CheckBox
                         android:id="@+id/tmdbServersMakeDefault"
                         android:layout_width="wrap_content"

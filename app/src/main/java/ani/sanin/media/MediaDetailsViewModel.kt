@@ -1054,7 +1054,7 @@ class MediaDetailsViewModel : ViewModel() {
 
                 val savedServer = media.selected!!.server
                 if (launch) media.selected!!.server = null
-                if (!isDownload && episodes.size == 1 &&
+                if (episodes.size == 1 &&
                     TmdbStreamResolver.sessionFor(media.id) == null &&
                     media.format != "LOCAL" && media.format != "LOCAL_NOVEL"
                 ) {
@@ -1067,6 +1067,7 @@ class MediaDetailsViewModel : ViewModel() {
                             .putExtra(AnimeServersActivity.ARG_PREV, prevEp)
                             .putExtra(AnimeServersActivity.ARG_LAUNCH, launch)
                             .putExtra(AnimeServersActivity.ARG_SERVER, media.selected!!.server)
+                            .putExtra(AnimeServersActivity.ARG_IS_DOWNLOAD, isDownload)
                     )
                     return@post
                 }
