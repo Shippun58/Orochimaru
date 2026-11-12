@@ -240,6 +240,11 @@
             android:theme="@style/Theme.Sanin.NeverCutout"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity android:name=".media.CharacterDetailsActivity" />
+        <activity
+            android:name=".media.anime.AnimeServersActivity"
+            android:label="Servers"
+            android:configChanges="orientation|screenSize|layoutDirection"
+            android:parentActivityName=".media.MediaDetailsActivity" />
         <activity android:name=".home.NoInternet" />
         <activity android:name=".others.CrashActivity"
             android:excludeFromRecents="true"

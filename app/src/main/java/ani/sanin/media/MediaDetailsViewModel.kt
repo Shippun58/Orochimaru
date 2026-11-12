@@ -16,6 +16,7 @@ import ani.sanin.connections.mal.MAL
 import ani.sanin.currContext
 import ani.sanin.media.anime.Episode
 import ani.sanin.media.anime.SelectorDialogFragment
+import ani.sanin.cloudstream.TmdbStreamResolver
 import ani.sanin.others.AniSkip
 import ani.sanin.others.Anify
 import ani.sanin.others.IntroDB
@@ -1050,7 +1051,24 @@ class MediaDetailsViewModel : ViewModel() {
                 Logger.log("Watch: opening selector for episode(s) ${episodes.joinToString(",")} source='${watchSources?.get(media.selected?.sourceIndex ?: 0)?.name}' (idx ${media.selected?.sourceIndex})")
                 media.selected = this.loadSelected(media)
 
+                val savedServer = media.selected!!.server
                 if (launch) media.selected!!.server = null
+                if (!isDownload && episodes.size == 1 &&
+                    TmdbStreamResolver.sessionFor(media.id) == null &&
+                    media.format != "LOCAL" && media.format != "LOCAL_NOVEL"
+                ) {
+                    AnimeServersActivity.media = media
+                    AnimeServersActivity.initialized = true
+                    val ctx = currContext() ?: return@post
+                    ctx.startActivity(
+                        android.content.Intent(ctx, AnimeServersActivity::class.java)
+                            .putExtra(AnimeServersActivity.ARG_EPISODE, i)
+                            .putExtra(AnimeServersActivity.ARG_PREV, prevEp)
+                            .putExtra(AnimeServersActivity.ARG_LAUNCH, launch)
+                            .putExtra(AnimeServersActivity.ARG_SERVER, media.selected!!.server)
+                    )
+                    return@post
+                }
                 val selector =
                     SelectorDialogFragment.newInstance(
                         media.selected!!.server,
