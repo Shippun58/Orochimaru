@@ -116,6 +116,57 @@ object GlassPill {
         view.clipToOutline = true
     }
 
+    /** Flat grey used by sheet rows (inner quality rows) */
+    fun serverRowGrey(context: Context): Int {
+        val themed = themedContext(context)
+        val tv = android.util.TypedValue()
+        if (themed.theme.resolveAttribute(
+                com.google.android.material.R.attr.colorSurfaceContainerHighest, tv, true
+            )
+        ) {
+            return tv.data
+        }
+        return if (isNight(context)) {
+            ColorUtils.blendARGB(Color.BLACK, Color.WHITE, 0.165f)
+        } else {
+            ColorUtils.blendARGB(Color.WHITE, Color.BLACK, 0.05f)
+        }
+    }
+
+    /**
+     * One segment of a merged server card: flat grey fill with selective corners and an
+     * optional primary rim along the top edge (sheet look, per-row).
+     */
+    fun applyServerRowCard(
+        view: View,
+        cornerRadiusDp: Float = 16f,
+        topRounded: Boolean = true,
+        bottomRounded: Boolean = true,
+        showTopRim: Boolean = false,
+    ) {
+        val context = view.context
+        val accent = themedContext(context)
+            .getThemeColor(com.google.android.material.R.attr.colorPrimary)
+        val radius = cornerRadiusDp * context.resources.displayMetrics.density
+        val t = if (topRounded) radius else 0f
+        val b = if (bottomRounded) radius else 0f
+        val fillLayer = GradientDrawable().apply {
+            setColor(serverRowGrey(context))
+            setCornerRadii(floatArrayOf(t, t, t, t, b, b, b, b))
+        }
+        view.background = if (showTopRim) {
+            val rim = TopEdgeRimDrawable(
+                ColorUtils.setAlphaComponent(accent, 0xCC),
+                dp(context, 1f).toFloat(),
+                radius,
+            )
+            LayerDrawable(arrayOf<Drawable>(fillLayer, rim))
+        } else {
+            fillLayer
+        }
+        view.clipToOutline = true
+    }
+
     fun applyCell(view: View, selected: Boolean, focused: Boolean) {
         val context = view.context
         val dark = isNight(context)
@@ -247,6 +298,65 @@ private class TopLitRimDrawable(
             Shader.TileMode.CLAMP,
         )
         canvas.drawRoundRect(rect, radius, radius, paint)
+    }
+
+    override fun setAlpha(alpha: Int) {
+        paint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        paint.colorFilter = colorFilter
+    }
+
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
+    override fun getOutline(outline: Outline) {
+        if (bounds.isEmpty) {
+            outline.setEmpty()
+        } else {
+            outline.setRoundRect(bounds, radius)
+        }
+    }
+}
+
+/** Stroke of only the top edge (with upper corner arcs) — the "small primary rim". */
+private class TopEdgeRimDrawable(
+    private val peak: Int,
+    private val thicknessPx: Float,
+    private val radius: Float,
+    rimFloor: Float = 0.5f,
+) : Drawable() {
+    private val floor = ColorUtils.setAlphaComponent(
+        peak, (Color.alpha(peak) * rimFloor).toInt().coerceIn(0, 255)
+    )
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = thicknessPx
+    }
+    private val path = android.graphics.Path()
+
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        val inset = thicknessPx / 2f
+        if (b.width() <= 0f || b.height() <= 0f) return
+        val r = radius.coerceAtMost(minOf(b.width(), b.height()) / 2f - inset)
+        path.reset()
+        path.moveTo(b.left + inset, b.bottom - inset)
+        path.lineTo(b.left + inset, b.top + inset + r)
+        path.quadTo(b.left + inset, b.top + inset, b.left + inset + r, b.top + inset)
+        path.lineTo(b.right - inset - r, b.top + inset)
+        path.quadTo(b.right - inset, b.top + inset, b.right - inset, b.top + inset + r)
+        path.lineTo(b.right - inset, b.bottom - inset)
+        paint.shader = LinearGradient(
+            0f,
+            b.top.toFloat(),
+            0f,
+            b.bottom.toFloat(),
+            peak,
+            floor,
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawPath(path, paint)
     }
 
     override fun setAlpha(alpha: Int) {

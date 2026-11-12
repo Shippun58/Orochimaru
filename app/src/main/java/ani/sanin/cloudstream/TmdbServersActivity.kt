@@ -28,6 +28,7 @@ import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.snackString
 import ani.sanin.themes.ThemeManager
+import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
 import androidx.lifecycle.lifecycleScope
@@ -326,21 +327,6 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             serversBinding.tmdbStreamsMeta.isVisible = true
             serversBinding.tmdbStreamsMeta.text = parts.joinToString("  ·  ")
         }
-    }
-
-    private fun tintedRowColor(): Int {
-        val dark = (resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val base = if (dark) 0xFF1C1D21.toInt() else 0xFFFFFFFF.toInt()
-        val primary = getThemeColor(com.google.android.material.R.attr.colorPrimary)
-        val mix = if (dark) 0.15f else 0.09f
-        fun blend(shift: Int): Int {
-            val b = (base shr shift) and 0xFF
-            val p = (primary shr shift) and 0xFF
-            return ((b * (1f - mix)) + (p * mix)).toInt().coerceIn(0, 255)
-        }
-        return android.graphics.Color.rgb(blend(16), blend(8), blend(0))
     }
 
     private fun applyThemeGradient() {
@@ -1212,8 +1198,11 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
             init {
-                (binding.root as androidx.cardview.widget.CardView)
-                    .setCardBackgroundColor(tintedRowColor())
+                (binding.root as androidx.cardview.widget.CardView).apply {
+                    setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    cardElevation = 0f
+                }
+                GlassPill.applyServerCard(binding.root)
                 itemView.isFocusable = true
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(
@@ -1267,8 +1256,11 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
             init {
-                (binding.root as androidx.cardview.widget.CardView)
-                    .setCardBackgroundColor(tintedRowColor())
+                (binding.root as androidx.cardview.widget.CardView).apply {
+                    setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    cardElevation = 0f
+                }
+                GlassPill.applyServerCard(binding.root)
                 itemView.isFocusable = true
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(

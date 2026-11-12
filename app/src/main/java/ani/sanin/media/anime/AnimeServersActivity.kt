@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.themes.ThemeManager
 import ani.sanin.databinding.ActivityTmdbServersBinding
@@ -38,10 +39,7 @@ import ani.sanin.util.Logger
 import com.google.android.material.chip.Chip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 class AnimeServersActivity : AppCompatActivity() {
 
@@ -66,7 +64,8 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private sealed class Row {
         data class Head(val group: Group) : Row()
-        data class Stream(val server: VideoServer, val group: Group) : Row()
+        data class Server(val group: Group, val server: VideoServer) : Row()
+        data class Video(val group: Group, val extractor: VideoExtractor, val videoIdx: Int) : Row()
         data class Text(val text: String) : Row()
     }
 
@@ -86,6 +85,7 @@ class AnimeServersActivity : AppCompatActivity() {
         var rank = 2
         var arrivalSeq = Int.MAX_VALUE
         var episode: Episode? = null
+        val extractors = mutableListOf<VideoExtractor>()
     }
 
     private val groups = mutableListOf<Group>()
@@ -311,7 +311,7 @@ class AnimeServersActivity : AppCompatActivity() {
         }
     }
 
-    private fun refreshRows() {
+    private fun refreshRows(scrollToTop: Boolean = true) {
         rows.clear()
         val group = groups.getOrNull(selectedIndex)
         if (group == null) {
@@ -326,15 +326,43 @@ class AnimeServersActivity : AppCompatActivity() {
                 if (state.servers.isEmpty()) {
                     rows.add(Row.Text("Nothing found in ${group.name}"))
                 } else {
-                    state.servers.forEach { rows.add(Row.Stream(it, group)) }
+                    state.servers.forEach { server ->
+                        rows.add(Row.Server(group, server))
+                        val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                        if (ex != null) {
+                            ex.videos.forEachIndexed { idx, _ ->
+                                rows.add(Row.Video(group, ex, idx))
+                            }
+                        }
+                    }
                 }
             }
         }
         rowsAdapter.notifyDataSetChanged()
-        serversBinding.tmdbStreamsRows.scrollToPosition(0)
+        if (scrollToTop) serversBinding.tmdbStreamsRows.scrollToPosition(0)
         Logger.log(
             "ANIME_SERVERS: rows for '${group.name}' count=${rows.size} state=${stateLabel(group.state)}"
         )
+    }
+
+    private val serverAudioRx = Regex("\\b(sub|dub|softsub|hardsub)\\b", RegexOption.IGNORE_CASE)
+    private val serverQualityRx = Regex("\\b(\\d{3,4}\\s*p|auto|unknown)\\b", RegexOption.IGNORE_CASE)
+
+    /** "Vidstream - Vidstream 720p (dub)" -> ("Vidstream", "720p", "dub") */
+    private fun splitServerTitle(name: String): Triple<String, String?, String?> {
+        var cleaned = name
+        val audio = serverAudioRx.find(cleaned)?.groupValues?.getOrNull(1)?.lowercase()
+        val quality = serverQualityRx.find(cleaned)?.groupValues?.getOrNull(1)
+            ?.replace(" ", "")?.lowercase()
+        audio?.let { cleaned = cleaned.replace(serverAudioRx, " ") }
+        quality?.let { cleaned = cleaned.replace(serverQualityRx, " ") }
+        cleaned = cleaned
+            .replace(Regex("[()\\[\\]]"), " ")
+            .replace(Regex("\\s*[-–·|]\\s*"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .trim('-', '·', '|', ' ')
+        return Triple(cleaned, quality, audio)
     }
 
     private fun stateLabel(state: GroupState): String = when (state) {
@@ -400,6 +428,7 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private suspend fun resolveGroup(group: Group) {
         val m = media ?: return
+        group.extractors.clear()
         val ep = m.anime?.episodes?.getEpisode(epKey)
         try {
             val target: Episode = if (
@@ -434,6 +463,36 @@ class AnimeServersActivity : AppCompatActivity() {
             }.orEmpty()
             group.state = GroupState.Ready(servers)
             Logger.log("ANIME_SERVERS: '${group.name}' ok ${servers.size} servers")
+            if (servers.isNotEmpty()) {
+                val link = target.link
+                val sEp = target.sEpisode
+                if (link != null && sEp != null) {
+                    runCatching {
+                        group.parser.loadByVideoServers(link, target.extra, sEp, { extractor ->
+                            group.extractors.add(extractor)
+                            Logger.log(
+                                "ANIME_SERVERS: '${group.name}' extractor '${extractor.server.name}' " +
+                                    "${extractor.videos.size} videos"
+                            )
+                            runOnUiThread {
+                                if (isFinishing || isDestroyed) return@runOnUiThread
+                                maybeAutoPlay(group, extractor)
+                                if (groups.getOrNull(selectedIndex) === group) refreshRows(scrollToTop = false)
+                            }
+                        }, servers)
+                    }.onFailure {
+                        Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' extractor load failed: ${it.message}")
+                    }
+                }
+            }
+            runOnUiThread {
+                if (pendingAutoPlay && group.index == (m.selected?.sourceIndex ?: -1)) {
+                    pendingAutoPlay = false
+                    m.selected?.server = null
+                    model.saveSelected(m.id, m.selected!!)
+                    snackString("Saved server unavailable, pick another")
+                }
+            }
         } catch (e: Exception) {
             Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' failed: ${e.message}")
             group.state = GroupState.Failed(e.message ?: "Failed")
@@ -456,40 +515,19 @@ class AnimeServersActivity : AppCompatActivity() {
             selectedIndex = groups.indexOfFirst { it.index == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
             buildChips()
             refreshRows()
-            attemptAutoPlay(group)
         }
     }
 
-    private fun attemptAutoPlay(group: Group) {
+    private fun maybeAutoPlay(group: Group, extractor: VideoExtractor) {
         if (!pendingAutoPlay) return
         val m = media ?: return
         val savedServer = savedServerArg ?: run { pendingAutoPlay = false; return }
         if (group.index != (m.selected?.sourceIndex ?: -1)) return
-        val state = group.state as? GroupState.Ready ?: return
-        val server = state.servers.firstOrNull { it.name == savedServer } ?: run {
-            Logger.log("ANIME_SERVERS: saved server '$savedServer' not found in ${group.name}")
-            pendingAutoPlay = false
-            m.selected?.server = null
-            model.saveSelected(m.id, m.selected!!)
-            snackString("Saved server '$savedServer' unavailable, pick another")
-            return
-        }
+        if (extractor.server.name != savedServer) return
+        if (extractor.videos.isEmpty()) return
         pendingAutoPlay = false
         Logger.log("ANIME_SERVERS: auto-play saved server '$savedServer'")
-        lifecycleScope.launch {
-            val extractor = withContext(Dispatchers.IO) {
-                runCatching { loadSingleExtractor(group, server) }.getOrNull()
-            }
-            if (isFinishing || isDestroyed) return@launch
-            if (extractor == null || extractor.videos.isEmpty()) {
-                Logger.log("ANIME_SERVERS: saved server '$savedServer' failed, falling back to list")
-                m.selected?.server = null
-                model.saveSelected(m.id, m.selected!!)
-                snackString("Could not load $savedServer, pick another server")
-                return@launch
-            }
-            launchPlayback(group, extractor, autoVideo = true)
-        }
+        launchPlayback(group, extractor, autoVideo = true)
     }
 
     private fun selectGroup(index: Int) {
@@ -539,29 +577,21 @@ class AnimeServersActivity : AppCompatActivity() {
 
     // --- playback ---
 
-    private fun play(server: VideoServer, group: Group) {
+    private fun playVideo(extractor: VideoExtractor, videoIdx: Int, group: Group) {
         val m = media ?: return
         if (PrefManager.getVal<Boolean>(PrefName.MakeDefault)) {
             m.selected?.sourceIndex = group.index
             model.saveSelected(m.id, m.selected!!)
         }
         lifecycleScope.launch {
-            val extractor = withContext(Dispatchers.IO) {
-                runCatching { loadSingleExtractor(group, server) }.getOrNull()
-            }
             if (isFinishing || isDestroyed) return@launch
-            if (extractor == null || extractor.videos.isEmpty()) {
+            if (extractor.videos.isEmpty()) {
                 Logger.log(
                     android.util.Log.ERROR,
-                    "ANIME_SERVERS: no video from '${server.name}' in ${group.name}"
+                    "ANIME_SERVERS: no video from '${extractor.server.name}' in ${group.name}"
                 )
-                snackString("No video found in ${server.name}")
+                snackString("No video found in ${extractor.server.name}")
                 return@launch
-            }
-            var videoIdx = extractor.videos.indexOfFirst { it.preferred }
-            if (videoIdx < 0) videoIdx = 0
-            if (extractor.videos.size > 1) {
-                videoIdx = pickVideo(extractor, videoIdx) ?: return@launch
             }
             launchPlayback(group, extractor, autoVideo = false, forcedVideo = videoIdx)
         }
@@ -609,36 +639,6 @@ class AnimeServersActivity : AppCompatActivity() {
         startExoplayer()
     }
 
-    private suspend fun loadSingleExtractor(group: Group, server: VideoServer): VideoExtractor? {
-        val ep = group.episode ?: return null
-        val link = ep.link ?: return null
-        val sEp = ep.sEpisode ?: return null
-        return group.parser.loadSingleVideoServer(server.name, link, ep.extra, sEp, true)
-    }
-
-    private suspend fun pickVideo(extractor: VideoExtractor, defaultIdx: Int): Int? =
-        suspendCoroutine { cont ->
-            val videos = extractor.videos
-            val options = videos.mapIndexed { i, v ->
-                val base = videoLabel(v)
-                if (i == defaultIdx) "$base (preferred)" else base
-            }
-            android.app.AlertDialog.Builder(this)
-                .setTitle(extractor.server.name)
-                .setItems(options.toTypedArray()) { _, which -> cont.resume(which) }
-                .setNegativeButton(android.R.string.cancel) { _, _ -> cont.resume(null) }
-                .show()
-        }
-
-    private fun videoLabel(v: Video): String {
-        val q = v.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
-        return when (v.format) {
-            VideoType.M3U8 -> "$q · m3u8"
-            VideoType.DASH -> "$q · dash"
-            else -> q
-        }
-    }
-
     private fun startExoplayer() {
         val m = media ?: return
         ExoplayerView.media = m
@@ -653,7 +653,8 @@ class AnimeServersActivity : AppCompatActivity() {
 
         override fun getItemViewType(position: Int): Int = when (rows[position]) {
             is Row.Head -> 0
-            is Row.Stream -> 1
+            is Row.Server -> 1
+            is Row.Video -> 1
             is Row.Text -> 2
         }
 
@@ -677,7 +678,12 @@ class AnimeServersActivity : AppCompatActivity() {
         ) {
             when (val row = rows[position]) {
                 is Row.Head -> (holder as HeadVH).bind(row.group)
-                is Row.Stream -> (holder as ItemVH).bind(row.server, row.group)
+                is Row.Server -> {
+                    val sIdx = (row.group.state as? GroupState.Ready)
+                        ?.servers?.indexOfFirst { it.name == row.server.name } ?: -1
+                    (holder as ItemVH).bindServer(row.group, row.server, sIdx <= 0)
+                }
+                is Row.Video -> (holder as ItemVH).bindVideo(row.group, row.extractor, row.videoIdx)
                 is Row.Text -> (holder as TextVH).bind(row.text)
             }
         }
@@ -709,8 +715,10 @@ class AnimeServersActivity : AppCompatActivity() {
             RecyclerView.ViewHolder(binding.root) {
 
             init {
-                (binding.root as androidx.cardview.widget.CardView)
-                    .setCardBackgroundColor(tintedRowColor())
+                (binding.root as androidx.cardview.widget.CardView).apply {
+                    setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    cardElevation = 0f
+                }
                 itemView.isFocusable = true
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(
@@ -719,21 +727,78 @@ class AnimeServersActivity : AppCompatActivity() {
                 )
             }
 
-            fun bind(server: VideoServer, group: Group) {
+            private fun setRowMargins(topDp: Int, bottomDp: Int) {
+                val lp = itemView.layoutParams as? RecyclerView.LayoutParams ?: return
+                val d = resources.displayMetrics.density
+                lp.topMargin = (topDp * d).toInt()
+                lp.bottomMargin = (bottomDp * d).toInt()
+                itemView.layoutParams = lp
+            }
+
+            /** Plain text line above the merged card: "HD SUB" left, tag grey right. */
+            fun bindServer(group: Group, server: VideoServer, isFirstServer: Boolean) {
+                binding.root.background = null
                 binding.urlQuality.text = server.name
-                val quality = server.extraData?.get("quality")?.takeIf { it.isNotBlank() }
-                val audio = server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
-                val note = listOfNotNull(quality, audio).joinToString(" · ")
+                binding.urlQuality.setTextColor(
+                    binding.root.context.getThemeColor(
+                        com.google.android.material.R.attr.colorOnSurface
+                    )
+                )
+                val parsedAudio = splitServerTitle(server.name).third
+                val audio = parsedAudio?.uppercase()
+                    ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
+                binding.urlNote.isVisible = false
+                binding.urlAudio.isVisible = false
+                binding.urlTag.text = audio
+                binding.urlTag.isVisible = !audio.isNullOrBlank()
+                binding.urlSize.isVisible = false
+                binding.urlSub.isVisible = false
+                binding.urlDownload.isVisible = false
+                binding.root.setOnClickListener(null)
+                itemView.isClickable = false
+                itemView.isFocusable = false
+                setRowMargins(if (isFirstServer) 4 else 20, 8)
+            }
+
+            /** Segment of the merged grey card; first row carries the top rim. */
+            fun bindVideo(group: Group, extractor: VideoExtractor, videoIdx: Int) {
+                val video = extractor.videos.getOrNull(videoIdx)
+                val isFirst = videoIdx == 0
+                val isLast = videoIdx == extractor.videos.lastIndex
+                GlassPill.applyServerRowCard(
+                    binding.root,
+                    topRounded = isFirst,
+                    bottomRounded = isLast,
+                    showTopRim = isFirst,
+                )
+                binding.urlQuality.text =
+                    video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
+                binding.urlQuality.setTextColor(
+                    binding.root.context.getThemeColor(
+                        com.google.android.material.R.attr.colorSecondary
+                    )
+                )
+                val note = listOfNotNull(
+                    when (video?.format) {
+                        VideoType.M3U8 -> "M3U8"
+                        VideoType.DASH -> "DASH"
+                        else -> null
+                    },
+                    video?.extraNote?.takeIf { it.isNotBlank() },
+                ).joinToString(" · ")
                 if (note.isBlank()) {
                     binding.urlNote.isVisible = false
                 } else {
                     binding.urlNote.text = note
                     binding.urlNote.isVisible = true
                 }
+                binding.urlTag.isVisible = false
                 binding.urlSize.isVisible = false
-                binding.urlSub.isVisible = false
+                binding.urlSub.isVisible = true
                 binding.urlDownload.isVisible = false
-                binding.root.setOnClickListener { play(server, group) }
+                binding.root.setOnClickListener { playVideo(extractor, videoIdx, group) }
+                itemView.isFocusable = true
+                setRowMargins(if (isFirst) 0 else 1, if (isLast) 16 else 0)
             }
         }
 
@@ -753,19 +818,4 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private fun stateSummary(state: GroupState.Ready): String =
         if (state.servers.isEmpty()) "Empty" else "${state.servers.size} servers"
-
-    private fun tintedRowColor(): Int {
-        val dark = (resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val base = if (dark) 0xFF1C1D21.toInt() else 0xFFFFFFFF.toInt()
-        val primary = getThemeColor(com.google.android.material.R.attr.colorPrimary)
-        val mix = if (dark) 0.15f else 0.09f
-        fun blend(shift: Int): Int {
-            val b = (base shr shift) and 0xFF
-            val p = (primary shr shift) and 0xFF
-            return ((b * (1f - mix)) + (p * mix)).toInt().coerceIn(0, 255)
-        }
-        return android.graphics.Color.rgb(blend(16), blend(8), blend(0))
-    }
 }
