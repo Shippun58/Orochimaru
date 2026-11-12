@@ -1277,7 +1277,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 )
             }
 
-            fun bind(m: TmdbMedia) {
+            fun bind(m: TmdbMedia, addon: StremioAddon? = null) {
                 binding.tmdbExtraPoster.loadImage(
                     Rpdb.posterUrl(m.type, m.id) ?: (
                         Tmdb.imageUrl(m.posterPath ?: m.backdropPath, 300)
