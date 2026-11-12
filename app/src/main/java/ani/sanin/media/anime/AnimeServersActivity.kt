@@ -4,11 +4,11 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsetsCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
-import androidx.fragment.app.activityViewModels
+import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -55,7 +55,7 @@ class AnimeServersActivity : AppCompatActivity() {
     }
 
     private lateinit var serversBinding: ActivityTmdbServersBinding
-    private val model: MediaDetailsViewModel by activityViewModels()
+    private val model: MediaDetailsViewModel by viewModels()
 
     private var epKey: String = ""
     private var actualEpKey: String? = null
@@ -152,7 +152,7 @@ class AnimeServersActivity : AppCompatActivity() {
         buildChips()
         refreshRows()
         pendingAutoPlay = launchFlag && savedServerArg != null
-        resolveAll()
+        lifecycleScope.launch { resolveAll() }
     }
 
     private fun setupCollapse() {
