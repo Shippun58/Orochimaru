@@ -86,6 +86,7 @@ class AnimeServersActivity : AppCompatActivity() {
         var arrivalSeq = Int.MAX_VALUE
         var episode: Episode? = null
         val extractors = mutableListOf<VideoExtractor>()
+        var extractionDone = false
     }
 
     private val groups = mutableListOf<Group>()
@@ -322,21 +323,25 @@ class AnimeServersActivity : AppCompatActivity() {
         when (val state = group.state) {
             is GroupState.Loading -> rows.add(Row.Text("Loading ${group.name}…"))
             is GroupState.Failed -> rows.add(Row.Text(state.reason))
-            is GroupState.Ready -> {
-                if (state.servers.isEmpty()) {
-                    rows.add(Row.Text("Nothing found in ${group.name}"))
-                } else {
-                    state.servers.forEach { server ->
-                        rows.add(Row.Server(group, server))
-                        val ex = group.extractors.firstOrNull { it.server.name == server.name }
-                        if (ex != null) {
-                            ex.videos.forEachIndexed { idx, _ ->
-                                rows.add(Row.Video(group, ex, idx))
+                is GroupState.Ready -> {
+                    if (state.servers.isEmpty()) {
+                        rows.add(Row.Text("Nothing found in ${group.name}"))
+                    } else {
+                        state.servers.forEach { server ->
+                            val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                            val hasVideos = ex?.videos?.isNotEmpty() == true
+                            if (group.extractionDone && !hasVideos) {
+                                return@forEach
+                            }
+                            rows.add(Row.Server(group, server))
+                            if (hasVideos) {
+                                ex.videos.forEachIndexed { idx, _ ->
+                                    rows.add(Row.Video(group, ex, idx))
+                                }
                             }
                         }
                     }
                 }
-            }
         }
         rowsAdapter.notifyDataSetChanged()
         if (scrollToTop) serversBinding.tmdbStreamsRows.scrollToPosition(0)
@@ -462,6 +467,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 }
             }.orEmpty()
             group.state = GroupState.Ready(servers)
+            group.extractionDone = false
             Logger.log("ANIME_SERVERS: '${group.name}' ok ${servers.size} servers")
             if (servers.isNotEmpty()) {
                 val link = target.link
@@ -485,7 +491,10 @@ class AnimeServersActivity : AppCompatActivity() {
                     }
                 }
             }
+            group.extractionDone = true
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (groups.getOrNull(selectedIndex) === group) refreshRows(scrollToTop = false)
                 if (pendingAutoPlay && group.index == (m.selected?.sourceIndex ?: -1)) {
                     pendingAutoPlay = false
                     m.selected?.server = null
@@ -735,10 +744,11 @@ class AnimeServersActivity : AppCompatActivity() {
                 itemView.layoutParams = lp
             }
 
-            /** Plain text line above the merged card: "HD SUB" left, tag grey right. */
+            /** Plain text line above the merged card: clean host left, tag grey right. */
             fun bindServer(group: Group, server: VideoServer, isFirstServer: Boolean) {
                 binding.root.background = null
-                binding.urlQuality.text = server.name
+                val (cleanName, _, parsedAudio) = splitServerTitle(server.name)
+                binding.urlQuality.text = cleanName.ifBlank { server.name }
                 binding.urlQuality.setTextColor(
                     binding.root.context.getThemeColor(
                         com.google.android.material.R.attr.colorOnSurface
@@ -757,7 +767,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 binding.root.setOnClickListener(null)
                 itemView.isClickable = false
                 itemView.isFocusable = false
-                setRowMargins(if (isFirstServer) 4 else 20, 8)
+                setRowMargins(if (isFirstServer) 4 else 16, 4)
             }
 
             /** Segment of the merged grey card; first row carries the top rim. */
@@ -798,7 +808,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 binding.urlDownload.isVisible = false
                 binding.root.setOnClickListener { playVideo(extractor, videoIdx, group) }
                 itemView.isFocusable = true
-                setRowMargins(if (isFirst) 0 else 1, if (isLast) 16 else 0)
+                setRowMargins(if (isFirst) 0 else 1, if (isLast) 12 else 0)
             }
         }
 

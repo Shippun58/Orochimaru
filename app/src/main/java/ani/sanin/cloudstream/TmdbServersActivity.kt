@@ -1202,7 +1202,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                     setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
                     cardElevation = 0f
                 }
-                GlassPill.applyServerCard(binding.root)
+                GlassPill.applyServerRowCard(binding.root, showTopRim = true)
                 itemView.isFocusable = true
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(
@@ -1260,7 +1260,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                     setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
                     cardElevation = 0f
                 }
-                GlassPill.applyServerCard(binding.root)
+                GlassPill.applyServerRowCard(binding.root, showTopRim = true)
                 itemView.isFocusable = true
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(

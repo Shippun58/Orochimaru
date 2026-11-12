@@ -159,6 +159,7 @@ object GlassPill {
                 ColorUtils.setAlphaComponent(accent, 0xCC),
                 dp(context, 1f).toFloat(),
                 radius,
+                rimFloor = 0f,
             )
             LayerDrawable(arrayOf<Drawable>(fillLayer, rim))
         } else {
