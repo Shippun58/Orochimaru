@@ -48,6 +48,7 @@ import android.view.animation.AnimationUtils
 import android.widget.AdapterView
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.HorizontalScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import com.google.android.material.chip.Chip
@@ -270,6 +271,12 @@ class ExoplayerView :
     private lateinit var subtitleLangButton: ImageButton
     private lateinit var subtitleDrawerList: RecyclerView
     private var subtitleRailController: SubtitleRailController? = null
+    private var serverRailController: ServerRailController? = null
+    private lateinit var serverDrawerContent: View
+    private lateinit var serverDrawerClose: ImageButton
+    private lateinit var serverRailChipsScroll: HorizontalScrollView
+    private lateinit var serverRailChips: ChipGroup
+    private lateinit var serverRailList: RecyclerView
     private var embeddedSubTracks: List<Tracks.Group> = emptyList()
     private var playerTracksBtn: ImageButton? = null
     private lateinit var tracksDrawerContent: View
@@ -764,6 +771,38 @@ class ExoplayerView :
             subtitleDrawerClose,
             subtitleDrawerList,
         )
+
+        serverDrawerContent = findViewById(R.id.serverDrawer)
+        serverDrawerClose = findViewById(R.id.serverDrawerClose)
+        serverRailChipsScroll = findViewById(R.id.serverRailChipsScroll)
+        serverRailChips = findViewById(R.id.serverRailChips)
+        serverRailList = findViewById(R.id.serverRailList)
+        serverRailController = ServerRailController(
+            this,
+            model,
+            binding.root,
+            serverDrawerContent,
+            serverDrawerClose,
+            serverRailChipsScroll,
+            serverRailChips,
+            serverRailList,
+        )
+        binding.root.addDrawerListener(object : DrawerLayout.DrawerListener {
+            override fun onDrawerSlide(drawerView: View, slideOffset: Float) {}
+            override fun onDrawerOpened(drawerView: View) {
+                if (drawerView !== serverDrawerContent) return
+                playerView.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                playerView.isFocusable = false
+                serverRailController?.focusFirst()
+            }
+            override fun onDrawerClosed(drawerView: View) {
+                if (drawerView !== serverDrawerContent) return
+                playerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+                playerView.isFocusable = true
+                exoSource.requestFocus()
+            }
+            override fun onDrawerStateChanged(newState: Int) {}
+        })
 
         binding.root.addDrawerListener(object : DrawerLayout.DrawerListener {
             override fun onDrawerSlide(drawerView: View, slideOffset: Float) {}
@@ -2890,21 +2929,39 @@ class ExoplayerView :
     }
 
     private fun sourceClick() {
-        Logger.log("Player: sourceClick — opening source selector (server=${media.selected?.server ?: "none"}, ep=${episode.number})")
-        changingServer = true
+        Logger.log("Player: sourceClick — opening server rail (server=${media.selected?.server ?: "none"}, ep=${episode.number})")
+        val controller = serverRailController
+        if (controller == null) {
+            changingServer = true
+            media.selected!!.server = null
+            PrefManager.setCustomVal(
+                "${media.id}_${media.anime!!.selectedEpisode}",
+                exoPlayer.currentPosition,
+            )
+            model.saveSelected(media.id, media.selected!!)
+            model.onEpisodeClick(
+                media,
+                episode.number,
+                this.supportFragmentManager,
+                launch = false,
+            )
+        } else {
+            PrefManager.setCustomVal(
+                "${media.id}_${media.anime!!.selectedEpisode}",
+                exoPlayer.currentPosition,
+            )
+            controller.open()
+        }
+    }
 
-        media.selected!!.server = null
+    fun restartWithServer() {
         PrefManager.setCustomVal(
             "${media.id}_${media.anime!!.selectedEpisode}",
             exoPlayer.currentPosition,
         )
-        model.saveSelected(media.id, media.selected!!)
-        model.onEpisodeClick(
-            media,
-            episode.number,
-            this.supportFragmentManager,
-            launch = false,
-        )
+        startActivity(Intent(this, ExoplayerView::class.java))
+        finish()
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
     private fun silentLiveReconnect() {
