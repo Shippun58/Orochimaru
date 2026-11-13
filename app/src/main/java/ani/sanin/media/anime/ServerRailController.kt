@@ -640,9 +640,15 @@ class ServerRailController(
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RailViewHolder {
             val inf = LayoutInflater.from(parent.context)
             return when (viewType) {
-                0 -> RailViewHolder(RailViewHolderType.TEXT, textB = ItemTmdbStreamsTextBinding.inflate(inf, parent, false))
-                2 -> RailViewHolder(RailViewHolderType.EXTRA, extraB = ItemTmdbStreamsExtraBinding.inflate(inf, parent, false))
-                else -> RailViewHolder(RailViewHolderType.ROW, rowB = ItemTmdbServerRowBinding.inflate(inf, parent, false))
+                0 -> ItemTmdbStreamsTextBinding.inflate(inf, parent, false).let {
+                    RailViewHolder(RailViewHolderType.TEXT, it.root, textB = it)
+                }
+                2 -> ItemTmdbStreamsExtraBinding.inflate(inf, parent, false).let {
+                    RailViewHolder(RailViewHolderType.EXTRA, it.root, extraB = it)
+                }
+                else -> ItemTmdbServerRowBinding.inflate(inf, parent, false).let {
+                    RailViewHolder(RailViewHolderType.ROW, it.root, rowB = it)
+                }
             }
         }
 
@@ -663,13 +669,11 @@ class ServerRailController(
 
     private inner class RailViewHolder(
         val type: RailViewHolderType,
+        root: View,
         private val textB: ItemTmdbStreamsTextBinding? = null,
         private val rowB: ItemTmdbServerRowBinding? = null,
         private val extraB: ItemTmdbStreamsExtraBinding? = null,
-    ) : RecyclerView.ViewHolder(
-        textB?.root ?: rowB?.root ?: extraB?.root ?: View(itemViewContext())
-    ) {
-        private fun itemViewContext(): android.content.Context = activity
+    ) : RecyclerView.ViewHolder(root) {
 
         init {
             rowB?.let {
