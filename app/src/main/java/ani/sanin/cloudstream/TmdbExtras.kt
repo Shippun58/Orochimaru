@@ -1,6 +1,7 @@
 package ani.sanin.cloudstream
 
 import ani.sanin.connections.tmdb.Tmdb
+import ani.sanin.connections.tmdb.TmdbMedia
 
 /** TMDB extras parsing/resolution shared by TmdbServersActivity and the player server rail. */
 object TmdbExtras {
