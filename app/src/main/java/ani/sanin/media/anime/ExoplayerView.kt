@@ -780,29 +780,21 @@ class ExoplayerView :
         serverRailController = ServerRailController(
             this,
             model,
-            binding.root,
             serverDrawerContent,
             serverDrawerClose,
             serverRailChipsScroll,
             serverRailChips,
             serverRailList,
-        )
-        binding.root.addDrawerListener(object : DrawerLayout.DrawerListener {
-            override fun onDrawerSlide(drawerView: View, slideOffset: Float) {}
-            override fun onDrawerOpened(drawerView: View) {
-                if (drawerView !== serverDrawerContent) return
+            onOpened = {
                 playerView.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 playerView.isFocusable = false
-                serverRailController?.focusFirst()
-            }
-            override fun onDrawerClosed(drawerView: View) {
-                if (drawerView !== serverDrawerContent) return
+            },
+            onClosed = {
                 playerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
                 playerView.isFocusable = true
                 exoSource.requestFocus()
-            }
-            override fun onDrawerStateChanged(newState: Int) {}
-        })
+            },
+        )
 
         binding.root.addDrawerListener(object : DrawerLayout.DrawerListener {
             override fun onDrawerSlide(drawerView: View, slideOffset: Float) {}
@@ -5698,6 +5690,12 @@ class ExoplayerView :
             backPressTime = now
             return true
         }
+        if (serverRailController?.isOpen() == true) {
+            Logger.log("Player handleBackPress: closing server rail")
+            serverRailController?.close()
+            backPressTime = now
+            return true
+        }
         if (pauseOverlay.visibility == View.VISIBLE) {
             pauseOverlay.visibility = View.GONE
             if (!playerView.isControllerFullyVisible) playerView.showController()
@@ -5962,6 +5960,23 @@ class ExoplayerView :
             }
         }
 
+        if (serverRailController?.isOpen() == true) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        serverRailController?.close()
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        serverRailController?.close()
+                    }
+                    return true
+                }
+            }
+        }
+
         if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT &&
             (episodeDrawer.isDrawerOpen(episodeDrawerContent) ||
                 episodeCommentPanel.visibility == View.VISIBLE)
@@ -5984,12 +5999,13 @@ class ExoplayerView :
         if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT &&
             (episodeDrawer.isDrawerOpen(episodeDrawerContent) ||
                 binding.root.isDrawerOpen(subtitleDrawerContent) ||
+                serverRailController?.isOpen() == true ||
                 trackRailController?.isOpen() == true)
         ) {
 
             val focused = currentFocus
             val next = focused?.focusSearch(View.FOCUS_RIGHT)
-            if (next == null || !isDescendantOf(next, episodeDrawerContent) && !isDescendantOf(next, subtitleDrawerContent) && !isDescendantOf(next, tracksDrawerContent)) {
+            if (next == null || !isDescendantOf(next, episodeDrawerContent) && !isDescendantOf(next, subtitleDrawerContent) && !isDescendantOf(next, serverDrawerContent) && !isDescendantOf(next, tracksDrawerContent)) {
                 return true
             }
         }
@@ -6004,6 +6020,9 @@ class ExoplayerView :
                         return true
                     } else if (episodeCommentPanel.visibility == View.VISIBLE) {
                         closeEpisodeCommentPanel(returnToRail = true)
+                        return true
+                    } else if (serverRailController?.isOpen() == true) {
+                        serverRailController?.close()
                         return true
                     } else if (trackRailController?.isOpen() == true) {
                         closeTracksRail()
@@ -6022,13 +6041,15 @@ class ExoplayerView :
                 val subOpen = binding.root.isDrawerOpen(subtitleDrawerContent)
                 val tracksOpen = trackRailController?.isOpen() == true
                 val commentOpen = episodeCommentPanel.visibility == View.VISIBLE
-                if (epOpen || subOpen || tracksOpen || commentOpen) {
+                val serverOpen = serverRailController?.isOpen() == true
+                if (epOpen || subOpen || tracksOpen || commentOpen || serverOpen) {
                     val focused = currentFocus
                     if (focused != null) {
                         val insideRail = isDescendantOf(focused, episodeDrawerContent) ||
                             isDescendantOf(focused, subtitleDrawerContent) ||
                             isDescendantOf(focused, tracksDrawerContent) ||
-                            isDescendantOf(focused, episodeCommentPanel)
+                            isDescendantOf(focused, episodeCommentPanel) ||
+                            isDescendantOf(focused, serverDrawerContent)
                         if (!insideRail) {
 
                             Logger.log("Player rail focus escaped on ${if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) "UP" else "DOWN"}, refocusing")
@@ -6041,6 +6062,7 @@ class ExoplayerView :
                                 }
                                 commentOpen -> episodeCommentList.findViewHolderForAdapterPosition(0)?.itemView ?: episodeCommentClose
                                 tracksOpen -> tracksDrawerList.findViewHolderForAdapterPosition(0)?.itemView ?: tracksDrawerClose
+                                serverOpen -> serverRailList.findViewHolderForAdapterPosition(0)?.itemView ?: serverDrawerClose
                                 else -> null
                             }
                             target?.post { target.requestFocus() }
@@ -6053,6 +6075,7 @@ class ExoplayerView :
                                 epOpen && isDescendantOf(focused, episodeDrawerContent) -> episodeDrawerList
                                 commentOpen && isDescendantOf(focused, episodeCommentPanel) -> episodeCommentList
                                 tracksOpen && isDescendantOf(focused, tracksDrawerContent) -> tracksDrawerList
+                                serverOpen && isDescendantOf(focused, serverDrawerContent) -> serverRailList
                                 else -> null
                             }
                             if (rv != null) {

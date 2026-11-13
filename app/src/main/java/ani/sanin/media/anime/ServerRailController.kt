@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.HorizontalScrollView
 import androidx.core.view.isVisible
-import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -47,12 +46,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 class ServerRailController(
     private val activity: ExoplayerView,
     private val model: MediaDetailsViewModel,
-    private val drawer: DrawerLayout,
     private val content: View,
     private val closeButton: ImageButton,
     private val chipsScroll: HorizontalScrollView,
     private val chipsGroup: ChipGroup,
     private val recycler: RecyclerView,
+    private val onOpened: () -> Unit,
+    private val onClosed: () -> Unit,
 ) {
 
     private val media: Media get() = ExoplayerView.media
@@ -116,16 +116,31 @@ class ServerRailController(
 
     fun open() {
         if (rows.isEmpty()) rebuild()
-        if (drawer.isDrawerOpen(content)) {
+        if (isOpen()) {
             focusFirst()
-        } else {
-            drawer.openDrawer(content)
+            return
+        }
+        onOpened()
+        content.visibility = View.VISIBLE
+        content.post {
+            content.translationX = -content.width.toFloat()
+            content.animate().translationX(0f).setDuration(220)
+                .withEndAction { focusFirst() }
+                .start()
         }
     }
 
     fun close() {
-        drawer.closeDrawer(content)
+        if (!isOpen()) return
+        content.animate().translationX(-content.width.toFloat()).setDuration(180)
+            .withEndAction {
+                content.visibility = View.GONE
+                onClosed()
+            }
+            .start()
     }
+
+    fun isOpen(): Boolean = content.visibility == View.VISIBLE
 
     fun focusFirst() {
         val focusable = rows.indexOfFirst { it is Row.Video || it is Row.TmdbStream || it is Row.Extra }
