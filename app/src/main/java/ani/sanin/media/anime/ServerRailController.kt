@@ -80,7 +80,7 @@ private sealed class TmdbGroupState {
     ) : TmdbGroupState()
 }
 
-private class AnimeEntry(
+internal class AnimeEntry(
     val servers: List<VideoServer>,
     val extractors: List<VideoExtractor>,
     val failedReason: String?,
@@ -97,13 +97,14 @@ private class TmdbEntry(val state: TmdbGroupState, val done: Boolean)
 // never re-resolves a source that already succeeded.
 // ---------------------------------------------------------------------
 
-private object RailRepo {
+internal object RailRepo {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
 
     private val animeCache = HashMap<String, AnimeEntry>()
     private val animeWaiters = HashMap<String, MutableList<(AnimeEntry) -> Unit>>()
     private val animeJobs = HashMap<String, Job>()
+    private val animeJobTokens = HashMap<String, Any>()
 
     private val tmdbCache = HashMap<String, TmdbEntry>()
     private val tmdbWaiters = HashMap<String, MutableList<(TmdbEntry) -> Unit>>()
@@ -134,6 +135,7 @@ private object RailRepo {
             animeCache.keys.removeAll { it.startsWith(prefix) }
             animeJobs.keys.filter { it.startsWith(prefix) }.forEach {
                 animeJobs.remove(it)?.cancel()
+                animeJobTokens.remove(it)
                 animeWaiters.remove(it)
             }
         }
@@ -150,7 +152,43 @@ private object RailRepo {
         }
     }
 
-    fun getAnime(key: String): AnimeEntry? = synchronized(lock) { animeCache[key] }
+    fun watchAnime(key: String, onUpdate: (AnimeEntry) -> Unit): AnimeEntry? {
+        synchronized(lock) {
+            val cached = animeCache[key] ?: return null
+            if (!cached.extractionDone) {
+                animeWaiters.getOrPut(key) { mutableListOf() }.add(onUpdate)
+            }
+            return cached
+        }
+    }
+
+    fun seedAnime(key: String, entry: AnimeEntry) {
+        if (entry.failedReason != null) return
+        var waiters: List<(AnimeEntry) -> Unit> = emptyList()
+        synchronized(lock) {
+            animeJobTokens.remove(key)
+            animeJobs.remove(key)?.cancel()
+            animeCache[key] = entry
+            waiters = if (entry.extractionDone) {
+                animeWaiters.remove(key) ?: emptyList()
+            } else {
+                animeWaiters[key]?.toList() ?: emptyList()
+            }
+        }
+        waiters.forEach { it(entry) }
+    }
+
+    fun failAnime(key: String, reason: String) {
+        var waiters: List<(AnimeEntry) -> Unit> = emptyList()
+        synchronized(lock) {
+            animeCache.remove(key)
+            animeJobTokens.remove(key)
+            animeJobs.remove(key)?.cancel()
+            waiters = animeWaiters.remove(key) ?: emptyList()
+        }
+        val entry = AnimeEntry(emptyList(), emptyList(), reason, true, null)
+        waiters.forEach { it(entry) }
+    }
 
     fun startAnime(
         key: String,
@@ -169,11 +207,15 @@ private object RailRepo {
             }
             animeWaiters.getOrPut(key) { mutableListOf() }.add(onUpdate)
             if (animeJobs.containsKey(key)) return
+            val token = Any()
+            animeJobTokens[key] = token
             animeJobs[key] = scope.launch {
                 val entry = resolveAnime(
                     key, media, epKey, sourceIndex, currentSourceIndex, parser, sources,
                 )
                 synchronized(lock) {
+                    if (animeJobTokens[key] !== token) return@synchronized
+                    animeJobTokens.remove(key)
                     animeJobs.remove(key)
                     if (entry.failedReason == null) animeCache[key] = entry
                     val waiters = animeWaiters.remove(key) ?: emptyList()
@@ -786,7 +828,12 @@ class ServerRailController(
             .takeIf { it >= 0 } ?: 0
         groups.forEachIndexed { i, group ->
             val key = RailRepo.animeKey(m.id, epKey, group.index)
-            val cached = RailRepo.getAnime(key)
+            val cached = RailRepo.watchAnime(key) { entry ->
+                activity.runOnUiThread {
+                    if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                    onAnimeUpdate(group, entry)
+                }
+            }
             if (cached != null) {
                 hydrateGroup(group, cached)
             } else if (mode == 0 || i == selectedIndex) {
@@ -1259,6 +1306,7 @@ class ServerRailController(
                 m.anime?.episodes?.set(key, mapped)
             }
         }
+        m.selected?.sourceIndex = group.index
         m.selected?.server = extractor.server.name
         m.selected?.video = videoIdx
         model.saveSelected(m.id, m.selected!!)

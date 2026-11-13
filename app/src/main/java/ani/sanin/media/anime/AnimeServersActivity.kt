@@ -98,6 +98,7 @@ class AnimeServersActivity : AppCompatActivity() {
         var arrivalSeq = Int.MAX_VALUE
         var episode: Episode? = null
         val extractors = mutableListOf<VideoExtractor>()
+        val extractorLock = Any()
         var extractionDone = false
     }
 
@@ -485,7 +486,7 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private suspend fun resolveGroup(group: Group) {
         val m = media ?: return
-        group.extractors.clear()
+        synchronized(group.extractorLock) { group.extractors.clear() }
         val ep = m.anime?.episodes?.getEpisode(epKey)
         try {
             val target: Episode = if (
@@ -521,17 +522,19 @@ class AnimeServersActivity : AppCompatActivity() {
             group.state = GroupState.Ready(servers)
             group.extractionDone = false
             Logger.log("ANIME_SERVERS: '${group.name}' ok ${servers.size} servers")
+            seedRailCache(group, done = false)
             if (servers.isNotEmpty()) {
                 val link = target.link
                 val sEp = target.sEpisode
                 if (link != null && sEp != null) {
                     runCatching {
                         group.parser.loadByVideoServers(link, target.extra, sEp, { extractor ->
-                            group.extractors.add(extractor)
+                            synchronized(group.extractorLock) { group.extractors.add(extractor) }
                             Logger.log(
                                 "ANIME_SERVERS: '${group.name}' extractor '${extractor.server.name}' " +
                                     "${extractor.videos.size} videos"
                             )
+                            seedRailCache(group, done = false)
                             runOnUiThread {
                                 if (isFinishing || isDestroyed) return@runOnUiThread
                                 maybeAutoPlay(group, extractor)
@@ -544,6 +547,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 }
             }
             group.extractionDone = true
+            seedRailCache(group, done = true)
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (groups.getOrNull(selectedIndex) === group) refreshRows(scrollToTop = false)
@@ -555,10 +559,35 @@ class AnimeServersActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) {
+                seedRailCache(group, done = true)
+                throw e
+            }
             Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' failed: ${e.message}")
             group.state = GroupState.Failed(e.message ?: "Failed")
+            m.anime?.selectedEpisode?.let { key ->
+                RailRepo.failAnime(RailRepo.animeKey(m.id, key, group.index), e.message ?: "Failed")
+            }
         }
         onResolved(group)
+    }
+
+    private fun seedRailCache(group: Group, done: Boolean) {
+        val m = media ?: return
+        val ready = group.state as? GroupState.Ready ?: return
+        if (ready.servers.isEmpty()) return
+        val epKey = m.anime?.selectedEpisode ?: return
+        val extractors = synchronized(group.extractorLock) { group.extractors.toList() }
+        RailRepo.seedAnime(
+            RailRepo.animeKey(m.id, epKey, group.index),
+            AnimeEntry(
+                servers = ready.servers,
+                extractors = extractors,
+                failedReason = null,
+                extractionDone = done,
+                episode = group.episode,
+            ),
+        )
     }
 
     private fun onResolved(group: Group) {
@@ -640,10 +669,8 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private fun playVideo(extractor: VideoExtractor, videoIdx: Int, group: Group) {
         val m = media ?: return
-        if (PrefManager.getVal<Boolean>(PrefName.MakeDefault)) {
-            m.selected?.sourceIndex = group.index
-            model.saveSelected(m.id, m.selected!!)
-        }
+        m.selected?.sourceIndex = group.index
+        model.saveSelected(m.id, m.selected!!)
         lifecycleScope.launch {
             if (isFinishing || isDestroyed) return@launch
             if (extractor.videos.isEmpty()) {
@@ -693,6 +720,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 m.anime?.episodes?.set(key, mapped)
             }
         }
+        m.selected?.sourceIndex = group.index
         m.selected?.server = extractor.server.name
         m.selected?.video = videoIdx
         model.saveSelected(m.id, m.selected!!)
