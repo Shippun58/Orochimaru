@@ -511,7 +511,6 @@
                             android:nextFocusDown="@id/exo_play"
                             android:backgroundTint="#00FFFFFF"
                             android:src="@drawable/ic_tracks_24"
-                            app:tint="@color/bg_white"
                             tools:ignore="ContentDescription" />
                     </LinearLayout>
                     </LinearLayout>
