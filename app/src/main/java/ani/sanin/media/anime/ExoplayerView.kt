@@ -601,6 +601,16 @@ class ExoplayerView :
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        if (!initialized) {
+            android.widget.Toast.makeText(
+                this,
+                R.string.playback_session_expired,
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            startMainActivity(this)
+            return
+        }
+
         ThemeManager(this).applyTheme()
         OledBackgroundManager.remove(this)
         binding = ActivityExoplayerBinding.inflate(layoutInflater)
@@ -2938,8 +2948,7 @@ class ExoplayerView :
             "${media.id}_${media.anime!!.selectedEpisode}",
             exoPlayer.currentPosition,
         )
-        startActivity(Intent(this, ExoplayerView::class.java))
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        recreate()
     }
 
     private fun silentLiveReconnect() {
@@ -5508,8 +5517,7 @@ class ExoplayerView :
     @SuppressLint("UnsafeIntentLaunch")
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        finishAndRemoveTask()
-        startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        recreate()
     }
 
     override fun onDestroy() {
