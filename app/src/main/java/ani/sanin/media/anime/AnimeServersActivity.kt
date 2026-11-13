@@ -812,7 +812,7 @@ class AnimeServersActivity : AppCompatActivity() {
             ep.extractorsSource = group.index
             ep.allStreams = false
         }
-        ep.extractors = (ep.extractors ?: mutableListOf()).also { list ->
+        ep.extractors = (ep.extractors?.filterNotNull() ?: mutableListOf()).toMutableList().also { list ->
             if (list.none { it.server.name == extractor.server.name }) list.add(extractor)
         }
         ep.selectedExtractor = extractor.server.name

@@ -1,5 +1,6 @@
 package ani.sanin.media.anime
 
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -499,6 +500,8 @@ class ServerRailController(
     private var selectedIndex = 0
     private var tmdbSelectedIndex = 0
     private var currentTab: Tab = Tab.SOURCES
+    private var keepTabFocus = false
+    private var targetEpisodeKey: String? = null
     private val adapter = RailAdapter()
     private var arrivalCounter = 0
     private val sources: WatchSources =
@@ -511,20 +514,55 @@ class ServerRailController(
         recycler.layoutManager = LinearLayoutManager(activity)
         recycler.adapter = adapter
         closeButton.nextFocusDownId = R.id.railTabs
-        recycler.nextFocusUpId = R.id.serverDrawerClose
+        recycler.nextFocusUpId = R.id.railTabs
         FocusEffectUtil.applyFocusListener(closeButton)
         closeButton.setOnClickListener { close() }
         FocusEffectUtil.applyFocusListener(refreshAllView)
         refreshAllView.setOnClickListener { refreshAll() }
+        refreshAllView.nextFocusUpId = tabs.id
+        refreshAllView.nextFocusDownId = R.id.serverRailList
+        refreshAllView.nextFocusLeftId = refreshAllView.id
+        refreshAllView.nextFocusRightId = makeDefaultCheck.id
+        FocusEffectUtil.applyFocusListener(makeDefaultCheck)
+        makeDefaultCheck.nextFocusUpId = tabs.id
+        makeDefaultCheck.nextFocusDownId = R.id.serverRailList
+        makeDefaultCheck.nextFocusLeftId = refreshAllView.id
+        makeDefaultCheck.nextFocusRightId = makeDefaultCheck.id
         makeDefaultCheck.isChecked = PrefManager.getVal<Boolean>(PrefName.MakeDefault)
         makeDefaultCheck.setOnCheckedChangeListener { _, checked ->
             PrefManager.setVal(PrefName.MakeDefault, checked)
+        }
+        tabs.isFocusable = true
+        tabs.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        tabs.nextFocusUpId = closeButton.id
+        tabs.nextFocusLeftId = tabs.id
+        tabs.nextFocusRightId = tabs.id
+        FocusEffectUtil.applyFocusListener(tabs)
+        tabs.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    moveTab(-1)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    moveTab(1)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (currentTab == Tab.TRACKS) {
+                        focusFirst()
+                        true
+                    } else false
+                }
+                else -> false
+            }
         }
         tabs.addTab(tabs.newTab().setText(R.string.sources))
         tabs.addTab(tabs.newTab().setText(R.string.tracks))
         tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
-                switchTab(if (tab.position == 1) Tab.TRACKS else Tab.SOURCES)
+                switchTab(if (tab.position == 1) Tab.TRACKS else Tab.SOURCES, focusList = !keepTabFocus)
             }
 
             override fun onTabUnselected(tab: TabLayout.Tab) {}
@@ -561,23 +599,35 @@ class ServerRailController(
         }
     }
 
-    private fun switchTab(tab: Tab) {
+    private fun switchTab(tab: Tab, focusList: Boolean = true) {
         if (currentTab == tab) return
         currentTab = tab
         applyTabVisibility()
         if (tab == Tab.TRACKS) rebuildTracks() else rebuild()
-        focusFirst()
+        if (focusList) focusFirst()
+    }
+
+    private fun moveTab(delta: Int) {
+        val index = if (currentTab == Tab.SOURCES) 0 else 1
+        val next = (index + delta).coerceIn(0, 1)
+        if (next == index) return
+        keepTabFocus = true
+        tabs.getTabAt(next)?.select()
+        keepTabFocus = false
     }
 
     private fun applyTabVisibility() {
         val sources = currentTab == Tab.SOURCES
         strip.isVisible = sources
         chipsScroll.isVisible = sources
+        tabs.nextFocusDownId = if (sources) refreshAllView.id else recycler.id
     }
 
     /** Rebuilds the list for the Tracks tab: bold white Video header, then video tracks,
      *  then Audio header + audio tracks — replacing the old tracks dialog sheet. */
     private fun rebuildTracks() {
+        val focusPosition = focusedAdapterPosition()
+        val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
         rows.clear()
         val tracks = activity.playerCurrentTracks()
         val videos = trackEntries(tracks, C.TRACK_TYPE_VIDEO)
@@ -593,6 +643,7 @@ class ServerRailController(
         }
         if (rows.isEmpty()) rows.add(Row.TrackHeader("No selectable tracks"))
         adapter.notifyDataSetChanged()
+        restoreRowFocus(focusPosition, focusKey)
     }
 
     /** Called from onTracksChanged so an open Tracks tab always reflects current tracks. */
@@ -711,6 +762,12 @@ class ServerRailController(
     }
 
     fun open() {
+        targetEpisodeKey = null
+        show(Tab.SOURCES)
+    }
+
+    fun openForEpisode(epKey: String) {
+        targetEpisodeKey = epKey
         show(Tab.SOURCES)
     }
 
@@ -719,6 +776,7 @@ class ServerRailController(
         content.animate().translationX(-content.width.toFloat()).setDuration(180)
             .withEndAction {
                 content.visibility = View.GONE
+                targetEpisodeKey = null
                 onClosed()
             }
             .start()
@@ -727,10 +785,7 @@ class ServerRailController(
     fun isOpen(): Boolean = content.visibility == View.VISIBLE
 
     fun focusFirst() {
-        val focusable = rows.indexOfFirst {
-            it is Row.Video || it is Row.Stream || it is Row.Info ||
-                it is Row.Extra || it is Row.Track
-        }
+        val focusable = rows.indexOfFirst { isFocusableRow(it) }
         if (focusable >= 0) {
             recycler.post {
                 recycler.scrollToPosition(focusable)
@@ -745,15 +800,18 @@ class ServerRailController(
         }
     }
 
+    private fun activeEpisodeKey(): String? =
+        targetEpisodeKey ?: media.anime?.selectedEpisode
+
     private fun currentEpisode(): Episode? {
         val m = media
-        val key = m.anime?.selectedEpisode ?: return null
+        val key = activeEpisodeKey() ?: return null
         return m.anime?.episodes?.getEpisode(key)
     }
 
     private fun refreshAll() {
         val m = media
-        val epKey = m.anime?.selectedEpisode
+        val epKey = activeEpisodeKey()
         rows.clear()
         arrivalCounter = 0
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
@@ -801,8 +859,10 @@ class ServerRailController(
     }
 
     private fun rebuild() {
+        val focusPosition = focusedAdapterPosition()
+        val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
         val m = media
-        val epKey = m.anime?.selectedEpisode
+        val epKey = activeEpisodeKey()
         val ep = currentEpisode()
         val season = ep?.extra?.get("season")?.toIntOrNull()
         val epNum = ep?.extra?.get("episode")?.toIntOrNull()
@@ -815,6 +875,7 @@ class ServerRailController(
             buildAnimeGroups()
         }
         adapter.notifyDataSetChanged()
+        restoreRowFocus(focusPosition, focusKey)
     }
 
     // --- Anime mode ---
@@ -823,7 +884,7 @@ class ServerRailController(
         groups.clear()
         chipByIndex.clear()
         val m = media
-        val epKey = m.anime?.selectedEpisode
+        val epKey = activeEpisodeKey()
         val currentSourceIndex = m.selected?.sourceIndex ?: -1
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
         sources.list.forEachIndexed { index, lazier ->
@@ -911,10 +972,11 @@ class ServerRailController(
                 buildChips()
             }
             val group = groups[index]
-            val key = RailRepo.animeKey(m.id, m.anime?.selectedEpisode, group.index)
+            val epKey = activeEpisodeKey()
+            val key = RailRepo.animeKey(m.id, epKey, group.index)
             if (group.state is AnimeGroupState.Loading) {
                 RailRepo.startAnime(
-                    key, m, m.anime?.selectedEpisode, group.index,
+                    key, m, epKey, group.index,
                     m.selected?.sourceIndex ?: -1, group.parser, sources,
                 ) { entry ->
                     activity.runOnUiThread {
@@ -1186,15 +1248,17 @@ class ServerRailController(
     // --- chips ---
 
     private fun buildChips() {
+        val focusedIndex = chipByIndex.indexOfFirst { it.hasFocus() }
         chipsGroup.removeAllViews()
         chipByIndex.clear()
-        chipsScroll.isVisible = true
+        chipsScroll.isVisible = currentTab == Tab.SOURCES
         val inflater = LayoutInflater.from(activity)
         val listCount = if (tmdbSession != null) tmdbGroups.size else groups.size
         for (index in 0 until listCount) {
             val chip = inflater.inflate(
                 R.layout.item_tmdb_chip, chipsGroup, false,
             ) as Chip
+            chip.id = View.generateViewId()
             chip.isCheckable = true
             chip.isClickable = true
             chip.isFocusable = true
@@ -1206,6 +1270,39 @@ class ServerRailController(
             FocusEffectUtil.applyFocusListener(chip)
             chipsGroup.addView(chip)
             chipByIndex.add(chip)
+        }
+        chipByIndex.forEachIndexed { index, chip ->
+            chip.nextFocusUpId = refreshAllView.id
+            chip.nextFocusDownId = R.id.serverRailList
+            chip.nextFocusLeftId = if (index == 0) chip.id else chipByIndex[index - 1].id
+            chip.nextFocusRightId =
+                if (index == chipByIndex.lastIndex) chip.id else chipByIndex[index + 1].id
+            chip.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when {
+                    keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        focusFirst()
+                        true
+                    }
+                    keyCode == KeyEvent.KEYCODE_DPAD_LEFT && index == 0 -> true
+                    keyCode == KeyEvent.KEYCODE_DPAD_RIGHT &&
+                        index == chipByIndex.lastIndex -> true
+                    else -> false
+                }
+            }
+        }
+        val selected = if (tmdbSession != null) tmdbSelectedIndex else selectedIndex
+        val selectedChipId = chipByIndex.getOrNull(selected)?.id ?: R.id.serverRailList
+        refreshAllView.nextFocusDownId = selectedChipId
+        makeDefaultCheck.nextFocusDownId = selectedChipId
+        if (focusedIndex >= 0) {
+            val target = chipByIndex.getOrNull(focusedIndex)
+            if (target != null && !target.requestFocus()) {
+                chipsGroup.post {
+                    val current = activity.currentFocus
+                    if (current == null || current === target) target.requestFocus()
+                }
+            }
         }
         renderChipStates()
     }
@@ -1237,6 +1334,9 @@ class ServerRailController(
     // --- row refresh ---
 
     private fun refreshRows() {
+        if (currentTab != Tab.SOURCES) return
+        val focusPosition = focusedAdapterPosition()
+        val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
         rows.clear()
         if (tmdbSession != null) {
             refreshTmdbRows()
@@ -1244,6 +1344,7 @@ class ServerRailController(
             refreshAnimeRows()
         }
         adapter.notifyDataSetChanged()
+        restoreRowFocus(focusPosition, focusKey)
     }
 
     // --- text helpers (parity with the servers screen) ---
@@ -1291,7 +1392,8 @@ class ServerRailController(
     private fun switchServer(group: Group, extractor: VideoExtractor, videoIdx: Int) {
         if (launching) return
         val m = media
-        val epKey = m.anime?.selectedEpisode ?: return
+        val pickingNextEpisode = targetEpisodeKey != null
+        val epKey = activeEpisodeKey() ?: return
         val ep = m.anime?.episodes?.getEpisode(epKey) ?: group.episode ?: return
         launching = true
         if (ep.extractorsSource != group.index) {
@@ -1299,7 +1401,7 @@ class ServerRailController(
             ep.extractorsSource = group.index
             ep.allStreams = false
         }
-        ep.extractors = (ep.extractors ?: mutableListOf()).also { list ->
+        ep.extractors = (ep.extractors?.filterNotNull() ?: mutableListOf()).toMutableList().also { list ->
             if (list.none { it.server.name == extractor.server.name }) list.add(extractor)
         }
         ep.selectedExtractor = extractor.server.name
@@ -1323,7 +1425,12 @@ class ServerRailController(
             "SERVER_RAIL: switch '${m.name}' ep=${ep.number} via ${group.name}/" +
                 "${extractor.server.name} video=$videoIdx"
         )
-        activity.restartWithServer()
+        if (pickingNextEpisode) {
+            targetEpisodeKey = null
+            activity.restartWithServer(savePosition = false)
+        } else {
+            activity.restartWithServer()
+        }
     }
 
     private fun playTmdbStream(link: TmdbStreamResolver.StreamResult.PlayableLink, group: TmdbGroup) {
@@ -1402,6 +1509,54 @@ class ServerRailController(
                 )
             }
             activity.finish()
+        }
+    }
+
+    // --- focus helpers ---
+
+    private fun focusedAdapterPosition(): Int {
+        val focused = recycler.findFocus() ?: return RecyclerView.NO_POSITION
+        var view: View? = focused
+        while (view != null && view.parent !== recycler) view = view.parent as? View
+        return view?.let { recycler.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION
+    }
+
+    private fun rowKey(row: Row): String = when (row) {
+        is Row.Header -> "header|${row.name}"
+        is Row.TrackHeader -> "trackheader|${row.name}"
+        is Row.Track -> "track|${row.entry.type}|${row.entry.index}|${row.entry.label}"
+        is Row.Video -> "video|${row.group.name}|${row.extractor.server.name}|${row.idx}"
+        is Row.Stream -> "stream|${row.group.key}|${row.link.label}|${row.link.url}"
+        is Row.Info -> "info|${row.link.label}|${row.link.url}"
+        is Row.Extra -> "extra|${row.item.id}"
+    }
+
+    private fun isFocusableRow(row: Row): Boolean = when (row) {
+        is Row.Video, is Row.Stream, is Row.Extra, is Row.Track -> true
+        is Row.Info -> row.link.externalUrl != null
+        else -> false
+    }
+
+    private fun restoreRowFocus(position: Int, key: String?) {
+        if (position == RecyclerView.NO_POSITION) return
+        recycler.post {
+            if (rows.isEmpty()) return@post
+            if (activity.currentFocus != null) return@post
+            val match = key?.let { k -> rows.indexOfFirst { rowKey(it) == k } } ?: -1
+            var target = if (match >= 0) match else position.coerceIn(0, rows.lastIndex)
+            if (!isFocusableRow(rows[target])) {
+                target = (target until rows.size).firstOrNull { isFocusableRow(rows[it]) }
+                    ?: (target - 1 downTo 0).firstOrNull { isFocusableRow(rows[it]) }
+                    ?: return@post
+            }
+            val holder = recycler.findViewHolderForAdapterPosition(target)
+            if (holder != null) {
+                if (holder.itemView.isFocusable) holder.itemView.requestFocus()
+            } else {
+                recycler.post {
+                    recycler.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                }
+            }
         }
     }
 

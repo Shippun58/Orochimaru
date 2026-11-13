@@ -981,7 +981,7 @@ class MediaDetailsViewModel : ViewModel() {
             ep.extractorsSource = null
             ep.allStreams = false
         }
-        if (ep.extractors?.find { it.server.name == server || it.isPreferred } == null) {
+        if (ep.extractors?.filterNotNull()?.find { it.server.name == server || it.isPreferred } == null) {
             Logger.log("Watch: loading single video server '$server' for episode '${ep.number}' source idx=${selected.sourceIndex}")
             if(ep.extractors == null){
                 ep.extractors = mutableListOf(watchSources?.get(selected.sourceIndex)?.let {

@@ -79,6 +79,12 @@ class SubtitleRailController(
         recycler.adapter = adapter
         languageButton.nextFocusDownId = R.id.subtitleDrawerList
         closeButton.nextFocusDownId = R.id.subtitleDrawerList
+        languageButton.nextFocusUpId = languageButton.id
+        languageButton.nextFocusLeftId = languageButton.id
+        languageButton.nextFocusRightId = closeButton.id
+        closeButton.nextFocusUpId = closeButton.id
+        closeButton.nextFocusLeftId = languageButton.id
+        closeButton.nextFocusRightId = closeButton.id
         recycler.nextFocusUpId = R.id.subtitleDrawerClose
         FocusEffectUtil.applyFocusListener(languageButton)
         FocusEffectUtil.applyFocusListener(closeButton)
@@ -155,6 +161,9 @@ class SubtitleRailController(
             crossServerEpisodeId = episodeId
             crossServerExpanded = false
         }
+
+        val focusPosition = focusedAdapterPosition()
+        val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
 
         rows.clear()
 
@@ -330,10 +339,44 @@ class SubtitleRailController(
         )
 
         adapter.notifyDataSetChanged()
+        restoreFocus(focusPosition, focusKey)
         } catch (e: Exception) {
             Logger.log("SubtitleRail rebuild failed: ${e.message}")
 
             e.printStackTrace()
+        }
+    }
+
+    private fun focusedAdapterPosition(): Int {
+        val focused = recycler.findFocus() ?: return RecyclerView.NO_POSITION
+        var view: View? = focused
+        while (view != null && view.parent !== recycler) view = view.parent as? View
+        return view?.let { recycler.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION
+    }
+
+    private fun rowKey(item: RailItem): String =
+        "${item.isHeader}|${item.isToggle}|${item.label}|${item.badge}|${item.selectedKey}"
+
+    private fun restoreFocus(position: Int, key: String?) {
+        if (position == RecyclerView.NO_POSITION) return
+        recycler.post {
+            if (rows.isEmpty()) return@post
+            if (activity.currentFocus != null) return@post
+            val match = key?.let { k -> rows.indexOfFirst { rowKey(it) == k } } ?: -1
+            var target = if (match >= 0) match else position.coerceIn(0, rows.lastIndex)
+            if (rows[target].onClick == null) {
+                target = (target until rows.size).firstOrNull { rows[it].onClick != null }
+                    ?: (target - 1 downTo 0).firstOrNull { rows[it].onClick != null }
+                    ?: return@post
+            }
+            val holder = recycler.findViewHolderForAdapterPosition(target)
+            if (holder != null) {
+                holder.itemView.requestFocus()
+            } else {
+                recycler.post {
+                    recycler.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                }
+            }
         }
     }
 
