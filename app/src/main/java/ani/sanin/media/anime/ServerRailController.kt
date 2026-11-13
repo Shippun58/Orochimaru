@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
 import ani.sanin.cloudstream.TmdbDetailsActivity
-import ani.sanin.cloudstream.TmdbMedia
+import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.cloudstream.TmdbExtras
 import ani.sanin.cloudstream.TmdbStreamResolver
 import ani.sanin.databinding.ItemServerRailRowBinding
