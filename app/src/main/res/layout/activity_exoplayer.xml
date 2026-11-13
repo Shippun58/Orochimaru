@@ -22,9 +22,7 @@
 
         <include layout="@layout/panel_episode_comments" />
 
-        <include layout="@layout/drawer_tracks_rail" />
-
-        <include layout="@layout/drawer_server_rail" />
+        <include layout="@layout/drawer_sources_tracks_rail" />
 
     </FrameLayout>
 

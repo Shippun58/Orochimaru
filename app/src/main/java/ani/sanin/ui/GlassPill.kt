@@ -143,6 +143,7 @@ object GlassPill {
         topRounded: Boolean = true,
         bottomRounded: Boolean = true,
         showTopRim: Boolean = false,
+        selected: Boolean = false,
     ) {
         val context = view.context
         val accent = themedContext(context)
@@ -154,16 +155,24 @@ object GlassPill {
             setColor(serverRowGrey(context))
             setCornerRadii(floatArrayOf(t, t, t, t, b, b, b, b))
         }
-        view.background = if (showTopRim) {
-            val rim = TopEdgeRimDrawable(
+        val rimLayer = if (showTopRim) {
+            TopEdgeRimDrawable(
                 ColorUtils.setAlphaComponent(accent, 0xCC),
                 dp(context, 1f).toFloat(),
                 radius,
                 rimFloor = 0f,
             )
-            LayerDrawable(arrayOf<Drawable>(fillLayer, rim))
-        } else {
-            fillLayer
+        } else null
+        val barLayer = if (selected) {
+            ServerSelectedBarDrawable(
+                accent,
+                dp(context, 4f).toFloat(),
+                dp(context, 10f).toFloat(),
+                dp(context, 14f).toFloat(),
+            )
+        } else null
+        view.background = listOfNotNull(fillLayer, rimLayer, barLayer).let { layers ->
+            if (layers.size == 1) layers[0] else LayerDrawable(layers.toTypedArray())
         }
         view.clipToOutline = true
     }
@@ -320,9 +329,40 @@ private class TopLitRimDrawable(
     }
 }
 
+/** Rounded vertical accent bar at the start edge — "currently playing" selection marker. */
+private class ServerSelectedBarDrawable(
+    private val color: Int,
+    private val barWidthPx: Float,
+    private val insetPx: Float,
+    private val verticalInsetPx: Float,
+) : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        setColor(color)
+    }
+    private val rect = RectF()
+
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        val top = b.top + verticalInsetPx
+        val bottom = b.bottom - verticalInsetPx
+        if (bottom - top <= 0f || barWidthPx <= 0f) return
+        rect.set(b.left + insetPx, top, b.left + insetPx + barWidthPx, bottom)
+        canvas.drawRoundRect(rect, barWidthPx / 2f, barWidthPx / 2f, paint)
+    }
+
+    override fun setAlpha(alpha: Int) {
+        paint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        paint.colorFilter = colorFilter
+    }
+
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
 /** Stroke of only the top edge (with upper corner arcs) — the "small primary rim". */
-private class TopEdgeRimDrawable(
-    private val peak: Int,
+private class TopEdgeRimDrawable(    private val peak: Int,
     private val thicknessPx: Float,
     private val radius: Float,
     rimFloor: Float = 0.5f,

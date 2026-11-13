@@ -274,15 +274,13 @@ class ExoplayerView :
     private var serverRailController: ServerRailController? = null
     private lateinit var serverDrawerContent: View
     private lateinit var serverDrawerClose: ImageButton
+    private lateinit var serverRailRefreshAll: View
+    private lateinit var serverRailMakeDefault: android.widget.CheckBox
     private lateinit var serverRailChipsScroll: HorizontalScrollView
     private lateinit var serverRailChips: ChipGroup
     private lateinit var serverRailList: RecyclerView
     private var embeddedSubTracks: List<Tracks.Group> = emptyList()
     private var playerTracksBtn: ImageButton? = null
-    private lateinit var tracksDrawerContent: View
-    private lateinit var tracksDrawerClose: ImageButton
-    private lateinit var tracksDrawerList: RecyclerView
-    private var trackRailController: TrackRailController? = null
     private var tracksHidden = true
     private lateinit var exoAudioTrack: ImageButton
     private lateinit var exoSpeed: ImageButton
@@ -774,6 +772,8 @@ class ExoplayerView :
 
         serverDrawerContent = findViewById(R.id.serverDrawer)
         serverDrawerClose = findViewById(R.id.serverDrawerClose)
+        serverRailRefreshAll = findViewById(R.id.serverRailRefreshAll)
+        serverRailMakeDefault = findViewById(R.id.serverRailMakeDefault)
         serverRailChipsScroll = findViewById(R.id.serverRailChipsScroll)
         serverRailChips = findViewById(R.id.serverRailChips)
         serverRailList = findViewById(R.id.serverRailList)
@@ -782,6 +782,10 @@ class ExoplayerView :
             model,
             serverDrawerContent,
             serverDrawerClose,
+            findViewById(R.id.railTabs),
+            findViewById(R.id.serverRailStrip),
+            serverRailRefreshAll,
+            serverRailMakeDefault,
             serverRailChipsScroll,
             serverRailChips,
             serverRailList,
@@ -813,27 +817,11 @@ class ExoplayerView :
             override fun onDrawerStateChanged(newState: Int) {}
         })
 
-        tracksDrawerContent = findViewById(R.id.tracksDrawer)
-        tracksDrawerClose = findViewById(R.id.tracksDrawerClose)
-        tracksDrawerList = findViewById(R.id.tracksDrawerList)
-        trackRailController = TrackRailController(
-            this,
-            tracksDrawerContent,
-            tracksDrawerClose,
-            tracksDrawerList,
-        )
         playerTracksBtn = playerView.findViewById(R.id.exo_tracks)
 
-        trackRailController?.let { rail ->
-            playerTracksBtn?.setOnClickListener {
-                Logger.log("Player: TRACKS pressed")
-                rail.open()
-                playerView.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                playerView.isFocusable = false
-            }
-            tracksDrawerClose.setOnClickListener {
-                closeTracksRail()
-            }
+        playerTracksBtn?.setOnClickListener {
+            Logger.log("Player: TRACKS pressed — opening sources & tracks rail (tracks tab)")
+            serverRailController?.openTracksTab()
         }
 
         playerView.controllerShowTimeoutMs = PrefManager.getVal<Int>(PrefName.AutoHideTimeout) * 1000
@@ -4791,17 +4779,6 @@ class ExoplayerView :
 
     fun playerCurrentTracks(): Tracks = if (isInitialized) exoPlayer.currentTracks else Tracks.EMPTY
 
-    fun closeTracksRail() {
-        playerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
-        playerView.isFocusable = true
-        trackRailController?.close()
-        if (!tracksHidden) {
-            if (playerTracksBtn?.requestFocus() != true) exoPlay.requestFocus()
-        } else {
-            exoPlay.requestFocus()
-        }
-    }
-
     fun subtitleRailHasExtSubtitles(): Boolean = hasExtSubtitles
 
     fun subtitleRailEmbeddedTracks(): List<Tracks.Group> = embeddedSubTracks
@@ -4937,7 +4914,7 @@ class ExoplayerView :
             emptyList()
         }
         updateTracksButton(tracks)
-        trackRailController?.rebuild()
+        serverRailController?.notifyTracksChanged()
         exoAudioTrack.isVisible = audioTracks.size > 1
         exoAudioTrack.setOnClickListener {
             Logger.log("Player: AUDIO TRACK pressed — ${audioTracks.size} tracks available")
@@ -5684,12 +5661,6 @@ class ExoplayerView :
             backPressTime = now
             return true
         }
-        if (this::tracksDrawerContent.isInitialized && trackRailController?.isOpen() == true) {
-            Logger.log("Player handleBackPress: closing tracks rail")
-            closeTracksRail()
-            backPressTime = now
-            return true
-        }
         if (serverRailController?.isOpen() == true) {
             Logger.log("Player handleBackPress: closing server rail")
             serverRailController?.close()
@@ -5924,25 +5895,6 @@ class ExoplayerView :
         if (event.action == KeyEvent.ACTION_DOWN) markInteracted()
         if (!isInitialized) return super.dispatchKeyEvent(event)
 
-        if (this::tracksDrawerContent.isInitialized &&
-            trackRailController?.isOpen() == true
-        ) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                        closeTracksRail()
-                    }
-                    return true
-                }
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        closeTracksRail()
-                    }
-                    return true
-                }
-            }
-        }
-
         if (this::subtitleDrawerContent.isInitialized && binding.root.isDrawerOpen(subtitleDrawerContent)) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -5999,13 +5951,12 @@ class ExoplayerView :
         if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT &&
             (episodeDrawer.isDrawerOpen(episodeDrawerContent) ||
                 binding.root.isDrawerOpen(subtitleDrawerContent) ||
-                serverRailController?.isOpen() == true ||
-                trackRailController?.isOpen() == true)
+                serverRailController?.isOpen() == true)
         ) {
 
             val focused = currentFocus
             val next = focused?.focusSearch(View.FOCUS_RIGHT)
-            if (next == null || !isDescendantOf(next, episodeDrawerContent) && !isDescendantOf(next, subtitleDrawerContent) && !isDescendantOf(next, serverDrawerContent) && !isDescendantOf(next, tracksDrawerContent)) {
+            if (next == null || !isDescendantOf(next, episodeDrawerContent) && !isDescendantOf(next, subtitleDrawerContent) && !isDescendantOf(next, serverDrawerContent)) {
                 return true
             }
         }
@@ -6024,9 +5975,6 @@ class ExoplayerView :
                     } else if (serverRailController?.isOpen() == true) {
                         serverRailController?.close()
                         return true
-                    } else if (trackRailController?.isOpen() == true) {
-                        closeTracksRail()
-                        return true
                     }
                 }
             }
@@ -6039,15 +5987,13 @@ class ExoplayerView :
 
                 val epOpen = episodeDrawer.isDrawerOpen(episodeDrawerContent)
                 val subOpen = binding.root.isDrawerOpen(subtitleDrawerContent)
-                val tracksOpen = trackRailController?.isOpen() == true
                 val commentOpen = episodeCommentPanel.visibility == View.VISIBLE
                 val serverOpen = serverRailController?.isOpen() == true
-                if (epOpen || subOpen || tracksOpen || commentOpen || serverOpen) {
+                if (epOpen || subOpen || commentOpen || serverOpen) {
                     val focused = currentFocus
                     if (focused != null) {
                         val insideRail = isDescendantOf(focused, episodeDrawerContent) ||
                             isDescendantOf(focused, subtitleDrawerContent) ||
-                            isDescendantOf(focused, tracksDrawerContent) ||
                             isDescendantOf(focused, episodeCommentPanel) ||
                             isDescendantOf(focused, serverDrawerContent)
                         if (!insideRail) {
@@ -6061,7 +6007,6 @@ class ExoplayerView :
                                     episodeDrawerList.findViewHolderForAdapterPosition(pos)?.itemView ?: episodeDrawerClose
                                 }
                                 commentOpen -> episodeCommentList.findViewHolderForAdapterPosition(0)?.itemView ?: episodeCommentClose
-                                tracksOpen -> tracksDrawerList.findViewHolderForAdapterPosition(0)?.itemView ?: tracksDrawerClose
                                 serverOpen -> serverRailList.findViewHolderForAdapterPosition(0)?.itemView ?: serverDrawerClose
                                 else -> null
                             }
@@ -6074,7 +6019,6 @@ class ExoplayerView :
                                 subOpen && isDescendantOf(focused, subtitleDrawerContent) -> subtitleDrawerList
                                 epOpen && isDescendantOf(focused, episodeDrawerContent) -> episodeDrawerList
                                 commentOpen && isDescendantOf(focused, episodeCommentPanel) -> episodeCommentList
-                                tracksOpen && isDescendantOf(focused, tracksDrawerContent) -> tracksDrawerList
                                 serverOpen && isDescendantOf(focused, serverDrawerContent) -> serverRailList
                                 else -> null
                             }
@@ -6115,7 +6059,6 @@ class ExoplayerView :
                                     ?: episodeDrawerClose.requestFocus()
                             }
                             commentOpen -> episodeCommentClose.requestFocus()
-                            tracksOpen -> tracksDrawerClose.requestFocus()
                         }
                         return true
                     }

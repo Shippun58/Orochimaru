@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/serverDrawer"
+    android:layout_width="340dp"
+    android:layout_height="match_parent"
+    android:layout_gravity="start"
+    android:background="#E6101010"
+    android:visibility="gone"
+    android:focusable="true"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp">
+
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/railTabs"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            app:tabBackground="@android:color/transparent"
+            app:tabGravity="fill"
+            app:tabIndicatorColor="?attr/colorPrimary"
+            app:tabMode="fixed"
+            app:tabPaddingEnd="12dp"
+            app:tabPaddingStart="12dp"
+            app:tabRippleColor="@android:color/transparent"
+            app:tabTextAppearance="@style/NavBarText"
+            app:tabTextColor="@color/tmdb_neutral_text" />
+
+        <ImageButton
+            android:id="@+id/serverDrawerClose"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@android:color/transparent"
+            android:focusable="true"
+            android:src="@drawable/ic_round_close_24"
+            app:tint="@android:color/white"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#30FFFFFF" />
+
+    <LinearLayout
+        android:id="@+id/serverRailStrip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:id="@+id/serverRailRefreshAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:focusable="true"
+            android:padding="8dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                app:srcCompat="@drawable/ic_round_refresh_24"
+                app:tint="?attr/colorPrimary"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFamily="@font/poppins"
+                android:textSize="13sp"
+                android:textColor="@color/tmdb_neutral_text"
+                android:text="@string/refresh" />
+        </LinearLayout>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <CheckBox
+            android:id="@+id/serverRailMakeDefault"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:buttonTint="?attr/colorPrimary"
+            android:fontFamily="@font/poppins"
+            android:text="@string/make_default"
+            android:textSize="12sp"
+            android:textColor="@color/tmdb_neutral_text" />
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/serverRailChipsScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="8dp"
+        android:clipToPadding="false">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/serverRailChips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:singleLine="true"
+            app:chipSpacingHorizontal="8dp" />
+    </HorizontalScrollView>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/serverRailList"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="16dp" />
+</LinearLayout>

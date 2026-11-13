@@ -3,23 +3,30 @@ package ani.sanin.media.anime
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.graphics.Color
 import android.widget.ImageButton
 import android.widget.HorizontalScrollView
+import androidx.annotation.OptIn
 import androidx.cardview.widget.CardView
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.C
+import androidx.media3.common.Format
+import androidx.media3.common.Tracks
+import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.cloudstream.CsInstalledSource
+import ani.sanin.cloudstream.CsRepos
 import ani.sanin.cloudstream.Rpdb
 import ani.sanin.cloudstream.TmdbDetailsActivity
-import ani.sanin.connections.tmdb.Tmdb
-import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.cloudstream.TmdbExtras
 import ani.sanin.cloudstream.TmdbStreamResolver
+import ani.sanin.connections.tmdb.Tmdb
+import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.databinding.ItemTmdbServerRowBinding
 import ani.sanin.databinding.ItemTmdbStreamsExtraBinding
-import ani.sanin.databinding.ItemTmdbStreamsTextBinding
 import ani.sanin.getThemeColor
 import ani.sanin.limitedAsyncMap
 import ani.sanin.loadImage
@@ -34,6 +41,8 @@ import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
 import ani.sanin.parsers.VideoType
 import ani.sanin.parsers.WatchSources
+import ani.sanin.settings.StremioAddon
+import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.ui.GlassPill
@@ -41,21 +50,324 @@ import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import com.google.android.material.tabs.TabLayout
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.Locale
+
+// ---------------------------------------------------------------------
+// Shared state models (process-lifetime, safe to hold in static caches)
+// ---------------------------------------------------------------------
+
+private sealed class AnimeGroupState {
+    object Loading : AnimeGroupState()
+    data class Failed(val reason: String) : AnimeGroupState()
+    data class Ready(val servers: List<VideoServer>) : AnimeGroupState()
+}
+
+private sealed class TmdbGroupState {
+    object Loading : TmdbGroupState()
+    data class Failed(val reason: String) : TmdbGroupState()
+    data class Ready(
+        val links: List<TmdbStreamResolver.StreamResult.PlayableLink>,
+        val recommendations: List<TmdbMedia> = emptyList(),
+        val infos: List<TmdbStreamResolver.StreamResult.PlayableLink> = emptyList(),
+    ) : TmdbGroupState()
+}
+
+private class AnimeEntry(
+    val servers: List<VideoServer>,
+    val extractors: List<VideoExtractor>,
+    val failedReason: String?,
+    val extractionDone: Boolean,
+    val episode: Episode?,
+)
+
+private class TmdbEntry(val state: TmdbGroupState, val done: Boolean)
+
+// ---------------------------------------------------------------------
+// RailRepo: process-level resolution + cache.
+// Jobs are NOT tied to any activity, so they survive player restarts
+// (restartWithServer) and results are cached so reopening the rail
+// never re-resolves a source that already succeeded.
+// ---------------------------------------------------------------------
+
+private object RailRepo {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val lock = Any()
+
+    private val animeCache = HashMap<String, AnimeEntry>()
+    private val animeWaiters = HashMap<String, MutableList<(AnimeEntry) -> Unit>>()
+    private val animeJobs = HashMap<String, Job>()
+
+    private val tmdbCache = HashMap<String, TmdbEntry>()
+    private val tmdbWaiters = HashMap<String, MutableList<(TmdbEntry) -> Unit>>()
+    private val tmdbJobs = HashMap<String, Job>()
+
+    fun animeKey(mediaId: Int, epKey: String?, sourceIndex: Int) =
+        "A:$mediaId|$epKey|$sourceIndex"
+
+    fun tmdbKey(mediaId: Int, season: Int?, ep: Int?, groupKey: String) =
+        "T:$mediaId|$season|$ep|$groupKey"
+
+    /** Drop cached entries belonging to a previous episode (episode change). */
+    fun prune(mediaId: Int, epKey: String?, season: Int?, ep: Int?) {
+        synchronized(lock) {
+            animeCache.keys.removeAll {
+                it.startsWith("A:$mediaId|") && !it.startsWith("A:$mediaId|$epKey|")
+            }
+            tmdbCache.keys.removeAll {
+                it.startsWith("T:$mediaId|") && !it.startsWith("T:$mediaId|$season|$ep|")
+            }
+        }
+    }
+
+    /** Refresh-all: drop cache + cancel running jobs for the current episode. */
+    fun refreshAnime(mediaId: Int, epKey: String?) {
+        synchronized(lock) {
+            val prefix = "A:$mediaId|$epKey|"
+            animeCache.keys.removeAll { it.startsWith(prefix) }
+            animeJobs.keys.filter { it.startsWith(prefix) }.forEach {
+                animeJobs.remove(it)?.cancel()
+                animeWaiters.remove(it)
+            }
+        }
+    }
+
+    fun refreshTmdb(mediaId: Int, season: Int?, ep: Int?) {
+        synchronized(lock) {
+            val prefix = "T:$mediaId|$season|$ep|"
+            tmdbCache.keys.removeAll { it.startsWith(prefix) }
+            tmdbJobs.keys.filter { it.startsWith(prefix) }.forEach {
+                tmdbJobs.remove(it)?.cancel()
+                tmdbWaiters.remove(it)
+            }
+        }
+    }
+
+    fun getAnime(key: String): AnimeEntry? = synchronized(lock) { animeCache[key] }
+
+    fun startAnime(
+        key: String,
+        media: Media,
+        epKey: String?,
+        sourceIndex: Int,
+        currentSourceIndex: Int,
+        parser: AnimeParser,
+        sources: WatchSources,
+        onUpdate: (AnimeEntry) -> Unit,
+    ) {
+        synchronized(lock) {
+            animeCache[key]?.takeIf { it.extractionDone }?.let {
+                onUpdate(it)
+                return
+            }
+            animeWaiters.getOrPut(key) { mutableListOf() }.add(onUpdate)
+            if (animeJobs.containsKey(key)) return
+            animeJobs[key] = scope.launch {
+                val entry = resolveAnime(
+                    key, media, epKey, sourceIndex, currentSourceIndex, parser, sources,
+                )
+                synchronized(lock) {
+                    animeJobs.remove(key)
+                    if (entry.failedReason == null) animeCache[key] = entry
+                    val waiters = animeWaiters.remove(key) ?: emptyList()
+                    waiters.forEach { it(entry) }
+                }
+            }
+        }
+    }
+
+    private suspend fun resolveAnime(
+        key: String,
+        media: Media,
+        epKey: String?,
+        sourceIndex: Int,
+        currentSourceIndex: Int,
+        parser: AnimeParser,
+        sources: WatchSources,
+    ): AnimeEntry {
+        fun notify(entry: AnimeEntry) {
+            val waiters = synchronized(lock) { animeWaiters[key]?.toList() ?: emptyList() }
+            waiters.forEach { it(entry) }
+        }
+        var target: Episode? = null
+        var servers: List<VideoServer> = emptyList()
+        val extractors = mutableListOf<VideoExtractor>()
+        var failed: String? = null
+        try {
+            val ep = media.anime?.episodes?.getEpisode(epKey)
+            val t: Episode = if (
+                sourceIndex == currentSourceIndex &&
+                ep?.link != null && ep.sEpisode != null
+            ) {
+                ep
+            } else {
+                val map = withTimeoutOrNull(45_000) {
+                    sources.loadEpisodesFromMedia(sourceIndex, media)
+                }.orEmpty()
+                val num = ep?.number?.toFloatOrNull()
+                map.entries.firstOrNull { it.key.toFloatOrNull() == num }?.value
+                    ?: map.entries.firstOrNull { it.key.equals(epKey, true) }?.value
+                    ?: throw Exception("Episode not found in ${parser.name}")
+            }
+            target = t
+            val preferDub = media.selected?.preferDub ?: PrefManager.getVal(PrefName.PreferDub)
+            if (sourceIndex != currentSourceIndex && parser.isDubAvailableSeparately()) {
+                parser.selectDub = preferDub
+            }
+            servers = withTimeoutOrNull(60_000) {
+                t.link?.let { link ->
+                    t.sEpisode?.let { sEp ->
+                        parser.loadVideoServers(link, t.extra, sEp)
+                    }
+                }
+            }.orEmpty()
+            notify(AnimeEntry(servers, emptyList(), null, false, t))
+            Logger.log("SERVER_RAIL: '${parser.name}' ok ${servers.size} servers")
+            if (servers.isNotEmpty()) {
+                val link = t.link
+                val sEp = t.sEpisode
+                if (link != null && sEp != null) {
+                    runCatching {
+                        parser.loadByVideoServers(link, t.extra, sEp, { extractor ->
+                            extractors.add(extractor)
+                            notify(AnimeEntry(servers, extractors.toList(), null, false, t))
+                        }, servers)
+                    }.onFailure {
+                        Logger.log(
+                            android.util.Log.ERROR,
+                            "SERVER_RAIL: '${parser.name}' extractor load failed: ${it.message}",
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Logger.log(android.util.Log.ERROR, "SERVER_RAIL: '${parser.name}' failed: ${e.message}")
+            failed = e.message ?: "Failed"
+        }
+        return AnimeEntry(servers, extractors.toList(), failed, true, target)
+    }
+
+    fun getTmdb(key: String): TmdbEntry? = synchronized(lock) { tmdbCache[key] }
+
+    fun startTmdb(
+        key: String,
+        context: android.content.Context,
+        session: TmdbStreamResolver.SyntheticSession,
+        season: Int?,
+        ep: Int?,
+        source: CsInstalledSource,
+        addon: StremioAddon?,
+        onUpdate: (TmdbEntry) -> Unit,
+    ) {
+        synchronized(lock) {
+            tmdbCache[key]?.let {
+                onUpdate(it)
+                return
+            }
+            tmdbWaiters.getOrPut(key) { mutableListOf() }.add(onUpdate)
+            if (tmdbJobs.containsKey(key)) return
+            tmdbJobs[key] = scope.launch {
+                val entry = resolveTmdb(context, session, season, ep, source, addon)
+                synchronized(lock) {
+                    tmdbJobs.remove(key)
+                    tmdbCache[key] = entry
+                    val waiters = tmdbWaiters.remove(key) ?: emptyList()
+                    waiters.forEach { it(entry) }
+                }
+            }
+        }
+    }
+
+    private suspend fun resolveTmdb(
+        context: android.content.Context,
+        session: TmdbStreamResolver.SyntheticSession,
+        season: Int?,
+        ep: Int?,
+        source: CsInstalledSource,
+        addon: StremioAddon?,
+    ): TmdbEntry {
+        val mediaType = session.mediaType
+        val mediaId = session.mediaId
+        return when {
+            addon != null -> {
+                val result = TmdbStreamResolver.resolveStremio(
+                    addon, mediaType, mediaId, session.detail, season, ep,
+                )
+                when (result) {
+                    is TmdbStreamResolver.StreamResult.Success -> {
+                        val external = result.links.filter { it.url.isBlank() }
+                        if (external.isEmpty()) {
+                            TmdbStreamResolver.cacheLinks(mediaId, source.name, season, ep, result)
+                            TmdbEntry(TmdbGroupState.Ready(result.links), true)
+                        } else {
+                            val canCard = { link: TmdbStreamResolver.StreamResult.PlayableLink ->
+                                TmdbExtras.parseStremioTarget(link.externalUrl) != null ||
+                                    TmdbExtras.parseExtraDescription(
+                                        link.rawDetails ?: link.details,
+                                    )?.isTemplateMatch == true
+                            }
+                            val infos = external.filter { !canCard(it) }
+                            val extras = external - infos.toSet()
+                            val recs = extras.limitedAsyncMap(4) { link ->
+                                runCatching { TmdbExtras.resolveExtraMedia(link, mediaType) }.getOrNull()
+                            }.filterNotNull()
+                                .filterNot { it.id == mediaId && it.type == mediaType }
+                                .distinctBy { "${it.type}:${it.id}" }
+                            TmdbStreamResolver.cacheLinks(mediaId, source.name, season, ep, result)
+                            TmdbEntry(TmdbGroupState.Ready(result.links, recs, infos), true)
+                        }
+                    }
+                    is TmdbStreamResolver.StreamResult.Error ->
+                        TmdbEntry(TmdbGroupState.Failed(result.message), true)
+                }
+            }
+            else -> {
+                val cached = TmdbStreamResolver.cachedLinks(mediaId, source.name, season, ep)
+                if (cached != null) {
+                    Logger.log("SERVER_RAIL: '${source.name}' cached ${cached.links.size} links")
+                    TmdbEntry(TmdbGroupState.Ready(cached.links), true)
+                } else {
+                    val result = TmdbStreamResolver.resolveStreams(context, source, session.detail, season, ep)
+                    when (result) {
+                        is TmdbStreamResolver.StreamResult.Success -> {
+                            TmdbStreamResolver.cacheLinks(mediaId, source.name, season, ep, result)
+                            TmdbEntry(TmdbGroupState.Ready(result.links), true)
+                        }
+                        is TmdbStreamResolver.StreamResult.Error ->
+                            TmdbEntry(TmdbGroupState.Failed(result.message), true)
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
- * In-player server rail: a mini version of the servers screen.
- * Anime mode: source chips + per-source servers (grey containers, top rim, grouped cards).
- * TMDB mode: server chips + quality rows + extras, mirroring the TMDB servers screen.
+ * In-player Sources & Tracks rail: a mini version of the servers screen.
+ * Sources tab — anime mode: source chips + per-source servers (grey containers, top rim,
+ * grouped cards); TMDB mode: source chips (CS3 + Stremio) + stream/info/extras cards,
+ * like the TMDB servers screen. Resolution runs process-wide (RailRepo) and is cached
+ * across player restarts.
+ * Tracks tab — replaces the old tracks dialog: bold white Video/Audio headers with the
+ * player's video and audio tracks underneath, same container + selected-indicator look.
  */
+@OptIn(UnstableApi::class)
 class ServerRailController(
     private val activity: ExoplayerView,
     private val model: MediaDetailsViewModel,
     private val content: View,
     private val closeButton: ImageButton,
+    private val tabs: TabLayout,
+    private val strip: View,
+    private val refreshAllView: View,
+    private val makeDefaultCheck: android.widget.CheckBox,
     private val chipsScroll: HorizontalScrollView,
     private val chipsGroup: ChipGroup,
     private val recycler: RecyclerView,
@@ -66,8 +378,9 @@ class ServerRailController(
     private val media: Media get() = ExoplayerView.media
 
     private sealed class Row {
-        data class Label(val text: String) : Row()
         data class Header(val name: String, val tag: String?) : Row()
+        data class TrackHeader(val name: String) : Row()
+        data class Track(val entry: TrackEntry, val active: Boolean) : Row()
         data class Video(
             val group: Group,
             val extractor: VideoExtractor,
@@ -77,14 +390,18 @@ class ServerRailController(
             val server: VideoServer?,
         ) : Row()
 
-        data class TmdbStream(val extractor: VideoExtractor, val idx: Int) : Row()
-        data class Extra(val item: TmdbMedia, val addon: ani.sanin.settings.StremioAddon?) : Row()
-    }
+        data class Stream(
+            val link: TmdbStreamResolver.StreamResult.PlayableLink,
+            val group: TmdbGroup,
+            val selected: Boolean,
+        ) : Row()
 
-    private sealed class GroupState {
-        object Loading : GroupState()
-        data class Failed(val reason: String) : GroupState()
-        data class Ready(val servers: List<VideoServer>) : GroupState()
+        data class Info(
+            val link: TmdbStreamResolver.StreamResult.PlayableLink,
+            val addon: StremioAddon?,
+        ) : Row()
+
+        data class Extra(val item: TmdbMedia, val addon: StremioAddon?) : Row()
     }
 
     private class Group(
@@ -92,7 +409,7 @@ class ServerRailController(
         val name: String,
         val parser: AnimeParser,
     ) {
-        var state: GroupState = GroupState.Loading
+        var state: AnimeGroupState = AnimeGroupState.Loading
         var rank = 2
         var arrivalSeq = Int.MAX_VALUE
         var episode: Episode? = null
@@ -100,12 +417,37 @@ class ServerRailController(
         var extractionDone = false
     }
 
+    private class TmdbGroup(
+        val key: String,
+        val name: String,
+        val iconUrl: String?,
+        val source: CsInstalledSource,
+        val addon: StremioAddon? = null,
+    ) {
+        var state: TmdbGroupState = TmdbGroupState.Loading
+        var rank = 2
+        var arrivalSeq = Int.MAX_VALUE
+    }
+
+    enum class Tab { SOURCES, TRACKS }
+
+    private class TrackEntry(
+        val group: Tracks.Group,
+        val index: Int,
+        val type: @C.TrackType Int,
+        val label: String,
+        val active: Boolean,
+        val height: Int = 0,
+    )
+
     private val rows = mutableListOf<Row>()
     private val groups = mutableListOf<Group>()
+    private val tmdbGroups = mutableListOf<TmdbGroup>()
     private val chipByIndex = mutableListOf<Chip>()
     private var selectedIndex = 0
+    private var tmdbSelectedIndex = 0
+    private var currentTab: Tab = Tab.SOURCES
     private val adapter = RailAdapter()
-    private val groupJobs = mutableMapOf<Int, Job>()
     private var arrivalCounter = 0
     private val sources: WatchSources =
         if (ExoplayerView.media.isAdult) HAnimeSources else AnimeSources
@@ -113,21 +455,46 @@ class ServerRailController(
         TmdbStreamResolver.sessionFor(media.id)
     }
 
-    private var tmdbExtractors: List<VideoExtractor> = emptyList()
-    private var tmdbSelectedExtractor = 0
-    private var tmdbExtrasResolved = false
-
     init {
         recycler.layoutManager = LinearLayoutManager(activity)
         recycler.adapter = adapter
-        closeButton.nextFocusDownId = R.id.serverRailList
+        closeButton.nextFocusDownId = R.id.railTabs
         recycler.nextFocusUpId = R.id.serverDrawerClose
         FocusEffectUtil.applyFocusListener(closeButton)
         closeButton.setOnClickListener { close() }
+        FocusEffectUtil.applyFocusListener(refreshAllView)
+        refreshAllView.setOnClickListener { refreshAll() }
+        makeDefaultCheck.isChecked = PrefManager.getVal<Boolean>(PrefName.MakeDefault)
+        makeDefaultCheck.setOnCheckedChangeListener { _, checked ->
+            PrefManager.setVal(PrefName.MakeDefault, checked)
+        }
+        tabs.addTab(tabs.newTab().setText(R.string.sources))
+        tabs.addTab(tabs.newTab().setText(R.string.tracks))
+        tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                switchTab(if (tab.position == 1) Tab.TRACKS else Tab.SOURCES)
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+
+            override fun onTabReselected(tab: TabLayout.Tab) {
+                if (isOpen()) focusFirst()
+            }
+        })
+        applyTabVisibility()
     }
 
-    fun open() {
-        if (rows.isEmpty()) rebuild()
+    fun openTracksTab() {
+        show(Tab.TRACKS)
+    }
+
+    private fun show(tab: Tab) {
+        if (currentTab != tab) {
+            currentTab = tab
+            tabs.getTabAt(if (tab == Tab.TRACKS) 1 else 0)?.select()
+            applyTabVisibility()
+        }
+        if (currentTab == Tab.TRACKS) rebuildTracks() else rebuild()
         if (isOpen()) {
             focusFirst()
             return
@@ -140,6 +507,159 @@ class ServerRailController(
                 .withEndAction { focusFirst() }
                 .start()
         }
+    }
+
+    private fun switchTab(tab: Tab) {
+        if (currentTab == tab) return
+        currentTab = tab
+        applyTabVisibility()
+        if (tab == Tab.TRACKS) rebuildTracks() else rebuild()
+        focusFirst()
+    }
+
+    private fun applyTabVisibility() {
+        val sources = currentTab == Tab.SOURCES
+        strip.isVisible = sources
+        chipsScroll.isVisible = sources
+    }
+
+    /** Rebuilds the list for the Tracks tab: bold white Video header, then video tracks,
+     *  then Audio header + audio tracks — replacing the old tracks dialog sheet. */
+    private fun rebuildTracks() {
+        rows.clear()
+        val tracks = activity.playerCurrentTracks()
+        val videos = trackEntries(tracks, C.TRACK_TYPE_VIDEO)
+            .sortedByDescending { it.height }
+        if (videos.isNotEmpty()) {
+            rows.add(Row.TrackHeader("Video"))
+            videos.forEach { rows.add(Row.Track(it, it.active)) }
+        }
+        val audios = trackEntries(tracks, C.TRACK_TYPE_AUDIO)
+        if (audios.isNotEmpty()) {
+            rows.add(Row.TrackHeader("Audio"))
+            audios.forEach { rows.add(Row.Track(it, it.active)) }
+        }
+        if (rows.isEmpty()) rows.add(Row.TrackHeader("No selectable tracks"))
+        adapter.notifyDataSetChanged()
+    }
+
+    /** Called from onTracksChanged so an open Tracks tab always reflects current tracks. */
+    fun notifyTracksChanged() {
+        if (isOpen() && currentTab == Tab.TRACKS) rebuildTracks()
+    }
+
+    private fun trackEntries(tracks: Tracks, type: @C.TrackType Int): List<TrackEntry> {
+        val result = mutableListOf<TrackEntry>()
+        tracks.groups.forEach { group ->
+            if (group.type != type) return@forEach
+            for (i in 0 until group.length) {
+                if (!group.isTrackSupported(i, true)) continue
+                val format = group.getTrackFormat(i)
+                when (type) {
+                    C.TRACK_TYPE_VIDEO -> {
+                        val height = format.height
+                        if (height == Format.NO_VALUE || height <= 0) continue
+                        val label = format.label?.takeIf { it.isNotBlank() }
+                            ?: "${format.width}x$height"
+                        result.add(
+                            TrackEntry(
+                                group = group,
+                                index = i,
+                                type = type,
+                                label = qualityLabel(height, label),
+                                active = group.isTrackSelected(i),
+                                height = height,
+                            )
+                        )
+                    }
+                    C.TRACK_TYPE_AUDIO -> {
+                        val language = languageLabel(format.language)
+                        val channels = when (format.channelCount) {
+                            Format.NO_VALUE, -1, 0 -> ""
+                            else -> "${format.channelCount}ch"
+                        }
+                        val label = listOfNotNull(language, channels.takeIf { it.isNotEmpty() })
+                            .joinToString(" • ")
+                            .ifBlank {
+                                format.label?.takeIf { it.isNotBlank() } ?: "Track ${i + 1}"
+                            }
+                        result.add(
+                            TrackEntry(
+                                group = group,
+                                index = i,
+                                type = type,
+                                label = label,
+                                active = group.isTrackSelected(i),
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    private fun qualityLabel(height: Int, fallback: String): String {
+        if (height in intArrayOf(2160, 1440, 1080, 720, 576, 480, 360)) {
+            return "${height}p"
+        }
+        return fallback
+    }
+
+    private fun languageLabel(lang: String?): String {
+        val code = lang ?: return ""
+        if (code.isBlank()) return ""
+        val lower = code.lowercase(Locale.ROOT)
+        val mapped = when (lower) {
+            "eng", "en", "en-us" -> "English"
+            "spa", "es", "es-es", "es-419" -> "Spanish"
+            "fra", "fr", "fr-fr" -> "French"
+            "deu", "de", "de-de" -> "German"
+            "ita", "it", "it-it" -> "Italian"
+            "por", "pt", "pt-br", "pt-pt" -> "Portuguese"
+            "rus", "ru", "ru-ru" -> "Russian"
+            "jpn", "ja", "ja-jp" -> "Japanese"
+            "zho", "chi", "zh", "zh-cn" -> "Chinese"
+            "ara", "ar" -> "Arabic"
+            "hin" -> "Hindi"
+            "kor", "ko" -> "Korean"
+            "pol", "pl" -> "Polish"
+            "tur", "tr" -> "Turkish"
+            "hun", "hu" -> "Hungarian"
+            "ron", "ro" -> "Romanian"
+            "ell", "el" -> "Greek"
+            "cze", "cs" -> "Czech"
+            "swe", "sv" -> "Swedish"
+            "dan", "da" -> "Danish"
+            "fin", "fi" -> "Finnish"
+            "nor", "no" -> "Norwegian"
+            "nld", "nl" -> "Dutch"
+            "tha", "th" -> "Thai"
+            "vie", "vi" -> "Vietnamese"
+            "ind", "id" -> "Indonesian"
+            "ukr", "uk" -> "Ukrainian"
+            "heb", "he" -> "Hebrew"
+            "bul", "bg" -> "Bulgarian"
+            "hrv", "hr" -> "Croatian"
+            "slk", "sk" -> "Slovak"
+            "slv", "sl" -> "Slovenian"
+            "mon", "mn" -> "Mongolian"
+            "srp", "sr" -> "Serbian"
+            "und" -> "Unknown"
+            else -> code
+        }
+        return if (mapped == code) {
+            runCatching { ani.sanin.others.LanguageMapper.getLanguageName(code) }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?: code
+        } else {
+            mapped
+        }
+    }
+
+    fun open() {
+        show(Tab.SOURCES)
     }
 
     fun close() {
@@ -156,7 +676,8 @@ class ServerRailController(
 
     fun focusFirst() {
         val focusable = rows.indexOfFirst {
-            it is Row.Video || it is Row.TmdbStream || it is Row.Extra
+            it is Row.Video || it is Row.Stream || it is Row.Info ||
+                it is Row.Extra || it is Row.Track
         }
         if (focusable >= 0) {
             recycler.post {
@@ -172,68 +693,76 @@ class ServerRailController(
         }
     }
 
-    private fun rebuild() {
-        rows.clear()
-        if (tmdbSession != null) {
-            buildTmdbRows()
-        } else {
-            buildAnimeGroups()
-        }
-        adapter.notifyDataSetChanged()
-    }
-
-    // --- TMDB mode ---
-
-    private fun buildTmdbRows() {
-        val ep = currentEpisode()
-        tmdbExtractors = ep?.extractors.orEmpty().filterNotNull()
-        tmdbSelectedExtractor = 0
-        buildChips()
-        refreshRows()
-        val session = tmdbSession ?: return
-        if (session.stremioAddon == null) return
-        activity.lifecycleScope.launch(Dispatchers.IO) {
-            val recs = resolveTmdbExtras(session)
-            activity.runOnUiThread {
-                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                tmdbExtrasResolved = true
-                tmdbExtras = recs
-                refreshRows()
-            }
-        }
-    }
-
-    private var tmdbExtras: List<TmdbMedia> = emptyList()
-
-    private suspend fun resolveTmdbExtras(
-        session: TmdbStreamResolver.SyntheticSession,
-    ): List<TmdbMedia> {
-        val addon = session.stremioAddon ?: return emptyList()
-        val ep = currentEpisode()
-        val season = ep?.extra?.get("season")?.toIntOrNull()
-        val epNum = ep?.extra?.get("episode")?.toIntOrNull()
-        val result = TmdbStreamResolver.cachedLinks(session.mediaId, session.source.name, season, epNum)
-            ?: ((TmdbStreamResolver.resolveStremio(
-                addon, session.mediaType, session.mediaId, session.detail, season, epNum,
-            ) as? TmdbStreamResolver.StreamResult.Success)
-                ?.also { TmdbStreamResolver.cacheLinks(session.mediaId, session.source.name, season, epNum, it) })
-            ?: return emptyList()
-        val canCard = { link: TmdbStreamResolver.StreamResult.PlayableLink ->
-            TmdbExtras.parseStremioTarget(link.externalUrl) != null ||
-                TmdbExtras.parseExtraDescription(link.rawDetails ?: link.details)?.isTemplateMatch == true
-        }
-        val extras = result.links.filter { it.url.isBlank() }.filter { canCard(it) }
-        return extras.limitedAsyncMap(4) { link ->
-            runCatching { TmdbExtras.resolveExtraMedia(link, session.mediaType) }.getOrNull()
-        }.filterNotNull()
-            .filterNot { it.id == session.mediaId && it.type == session.mediaType }
-            .distinctBy { "${it.type}:${it.id}" }
-    }
-
     private fun currentEpisode(): Episode? {
         val m = media
         val key = m.anime?.selectedEpisode ?: return null
         return m.anime?.episodes?.getEpisode(key)
+    }
+
+    private fun refreshAll() {
+        val m = media
+        val epKey = m.anime?.selectedEpisode
+        rows.clear()
+        arrivalCounter = 0
+        val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        if (tmdbSession != null) {
+            val (season, epNum) = tmdbSeasonEp()
+            TmdbStreamResolver.invalidateLinks(m.id)
+            RailRepo.refreshTmdb(m.id, season, epNum)
+            tmdbGroups.forEach { g ->
+                g.state = TmdbGroupState.Loading
+                g.rank = 2
+                g.arrivalSeq = Int.MAX_VALUE
+            }
+            buildChips()
+            refreshRows()
+            tmdbGroups.forEachIndexed { i, _ ->
+                if (mode == 0 || i == tmdbSelectedIndex) startTmdbGroup(i)
+            }
+        } else {
+            RailRepo.refreshAnime(m.id, epKey)
+            val currentSourceIndex = m.selected?.sourceIndex ?: -1
+            groups.forEach { g ->
+                g.state = AnimeGroupState.Loading
+                g.rank = 2
+                g.arrivalSeq = Int.MAX_VALUE
+                g.extractors.clear()
+                g.extractionDone = false
+                g.episode = null
+            }
+            buildChips()
+            refreshRows()
+            groups.forEachIndexed { i, g ->
+                if (mode == 0 || i == selectedIndex) {
+                    RailRepo.startAnime(
+                        RailRepo.animeKey(m.id, epKey, g.index),
+                        m, epKey, g.index, currentSourceIndex, g.parser, sources,
+                    ) { entry ->
+                        activity.runOnUiThread {
+                            if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                            onAnimeUpdate(g, entry)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun rebuild() {
+        val m = media
+        val epKey = m.anime?.selectedEpisode
+        val ep = currentEpisode()
+        val season = ep?.extra?.get("season")?.toIntOrNull()
+        val epNum = ep?.extra?.get("episode")?.toIntOrNull()
+        RailRepo.prune(m.id, epKey, season, epNum)
+        rows.clear()
+        arrivalCounter = 0
+        if (tmdbSession != null) {
+            buildTmdbGroups()
+        } else {
+            buildAnimeGroups()
+        }
+        adapter.notifyDataSetChanged()
     }
 
     // --- Anime mode ---
@@ -241,7 +770,10 @@ class ServerRailController(
     private fun buildAnimeGroups() {
         groups.clear()
         chipByIndex.clear()
-        arrivalCounter = 0
+        val m = media
+        val epKey = m.anime?.selectedEpisode
+        val currentSourceIndex = m.selected?.sourceIndex ?: -1
+        val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
         sources.list.forEachIndexed { index, lazier ->
             val listName = lazier.name
             if (listName.equals("Local", ignoreCase = true)) return@forEachIndexed
@@ -249,236 +781,101 @@ class ServerRailController(
                 ?: return@forEachIndexed
             groups.add(Group(index, listName.ifBlank { parser.name }, parser))
         }
-        selectedIndex = groups.indexOfFirst { it.index == (media.selected?.sourceIndex ?: -1) }
+        selectedIndex = groups.indexOfFirst { it.index == currentSourceIndex }
             .takeIf { it >= 0 } ?: 0
+        groups.forEachIndexed { i, group ->
+            val key = RailRepo.animeKey(m.id, epKey, group.index)
+            val cached = RailRepo.getAnime(key)
+            if (cached != null) {
+                hydrateGroup(group, cached)
+            } else if (mode == 0 || i == selectedIndex) {
+                RailRepo.startAnime(
+                    key, m, epKey, group.index, currentSourceIndex, group.parser, sources,
+                ) { entry ->
+                    activity.runOnUiThread {
+                        if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                        onAnimeUpdate(group, entry)
+                    }
+                }
+            } else {
+                group.state = AnimeGroupState.Loading
+            }
+        }
         buildChips()
         refreshRows()
-        lifecycleResolveAll()
     }
 
-    private fun lifecycleResolveAll() {
-        activity.lifecycleScope.launch {
-            val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-            val targets = if (mode == 1) listOf(selectedIndex) else groups.indices
-            if (mode == 1) {
-                groups.forEachIndexed { i, g ->
-                    if (i != selectedIndex) {
-                        groupJobs.remove(i)?.cancel()
-                        g.state = GroupState.Loading
-                        g.rank = 2
-                        g.arrivalSeq = Int.MAX_VALUE
-                    }
-                }
-                buildChips()
-                refreshRows()
-            }
-            Logger.log("SERVER_RAIL: resolveAll mode=$mode targets=$targets")
-            targets.forEach { launchGroupResolution(it) }
-        }
-    }
-
-    private fun launchGroupResolution(index: Int) {
-        val group = groups.getOrNull(index) ?: return
-        groupJobs.remove(index)?.cancel()
-        groupJobs[index] = activity.lifecycleScope.launch(Dispatchers.IO) {
-            resolveGroup(group)
-        }
-    }
-
-    private suspend fun resolveGroup(group: Group) {
-        val m = media
+    private fun hydrateGroup(group: Group, entry: AnimeEntry) {
+        group.episode = entry.episode
         group.extractors.clear()
-        val epKey = m.anime?.selectedEpisode ?: return
-        val ep = m.anime?.episodes?.getEpisode(epKey)
-        try {
-            val target: Episode = if (
-                group.index == (m.selected?.sourceIndex ?: -1) &&
-                ep?.link != null && ep.sEpisode != null
-            ) {
-                ep
-            } else {
-                val map = withTimeoutOrNull(45_000) {
-                    sources.loadEpisodesFromMedia(group.index, m)
-                }.orEmpty()
-                val num = ep?.number?.toFloatOrNull()
-                map.entries.firstOrNull { it.key.toFloatOrNull() == num }?.value
-                    ?: map.entries.firstOrNull { it.key.equals(epKey, true) }?.value
-                    ?: throw Exception("Episode not found in ${group.name}")
-            }
-            group.episode = target
-            val preferDub = m.selected?.preferDub ?: PrefManager.getVal(PrefName.PreferDub)
-            if (group.index != (m.selected?.sourceIndex ?: -1) &&
-                group.parser.isDubAvailableSeparately()
-            ) {
-                group.parser.selectDub = preferDub
-            }
-            val servers = withTimeoutOrNull(60_000) {
-                target.link?.let { link ->
-                    target.sEpisode?.let { sEp ->
-                        group.parser.loadVideoServers(link, target.extra, sEp)
-                    }
-                }
-            }.orEmpty()
-            group.state = GroupState.Ready(servers)
-            group.extractionDone = false
-            Logger.log("SERVER_RAIL: '${group.name}' ok ${servers.size} servers")
-            if (servers.isNotEmpty()) {
-                val link = target.link
-                val sEp = target.sEpisode
-                if (link != null && sEp != null) {
-                    runCatching {
-                        group.parser.loadByVideoServers(link, target.extra, sEp, { extractor ->
-                            group.extractors.add(extractor)
-                            activity.runOnUiThread {
-                                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                                renderChipStates()
-                                refreshRows()
-                            }
-                        }, servers)
-                    }.onFailure {
-                        Logger.log(
-                            android.util.Log.ERROR,
-                            "SERVER_RAIL: '${group.name}' extractor load failed: ${it.message}"
-                        )
-                    }
-                }
-            }
-            group.extractionDone = true
-            activity.runOnUiThread {
-                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                refreshRows()
-            }
-        } catch (e: Exception) {
-            Logger.log(android.util.Log.ERROR, "SERVER_RAIL: '${group.name}' failed: ${e.message}")
-            group.state = GroupState.Failed(e.message ?: "Failed")
+        group.extractors.addAll(entry.extractors)
+        group.extractionDone = entry.extractionDone
+        group.state = when {
+            entry.failedReason != null -> AnimeGroupState.Failed(entry.failedReason)
+            else -> AnimeGroupState.Ready(entry.servers)
         }
-        onResolved(group)
     }
 
-    private fun onResolved(group: Group) {
-        val ready = (group.state as? GroupState.Ready)?.servers?.isNotEmpty() == true
-        group.rank = when {
-            ready -> 0
-            group.state is GroupState.Failed -> 1
-            else -> 2
-        }
-        if (group.rank == 0) group.arrivalSeq = arrivalCounter++
-        activity.runOnUiThread {
-            if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+    private fun onAnimeUpdate(group: Group, entry: AnimeEntry) {
+        hydrateGroup(group, entry)
+        if (entry.extractionDone) {
+            val ready = entry.failedReason == null && entry.servers.isNotEmpty()
+            group.rank = when {
+                ready -> 0
+                entry.failedReason != null -> 1
+                else -> 2
+            }
+            if (group.rank == 0) group.arrivalSeq = arrivalCounter++
             val selectedKey = groups.getOrNull(selectedIndex)?.index
             groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
             selectedIndex = groups.indexOfFirst { it.index == selectedKey }
                 .takeIf { it >= 0 } ?: selectedIndex
             buildChips()
-            refreshRows()
+        } else {
+            renderChipStates()
         }
+        refreshRows()
     }
 
     private fun selectGroup(index: Int) {
         if (index !in groups.indices) return
         val changed = selectedIndex != index
         selectedIndex = index
+        val m = media
         if (PrefManager.getVal<Boolean>(PrefName.MakeDefault)) {
-            media.selected?.sourceIndex = groups[index].index
-            model.saveSelected(media.id, media.selected!!)
+            m.selected?.sourceIndex = groups[index].index
+            model.saveSelected(m.id, m.selected!!)
         }
         buildChips()
         refreshRows()
-        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 && changed) {
-            groups.forEachIndexed { i, g ->
-                if (i != index) {
-                    groupJobs.remove(i)?.cancel()
-                    g.state = GroupState.Loading
+        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
+            if (changed) {
+                groups.forEachIndexed { i, g -> if (i != index) g.state = AnimeGroupState.Loading }
+                buildChips()
+            }
+            val group = groups[index]
+            val key = RailRepo.animeKey(m.id, m.anime?.selectedEpisode, group.index)
+            if (group.state is AnimeGroupState.Loading) {
+                RailRepo.startAnime(
+                    key, m, m.anime?.selectedEpisode, group.index,
+                    m.selected?.sourceIndex ?: -1, group.parser, sources,
+                ) { entry ->
+                    activity.runOnUiThread {
+                        if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                        onAnimeUpdate(group, entry)
+                    }
                 }
             }
-            launchGroupResolution(index)
-        } else if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
-            if (groups[index].state is GroupState.Loading) launchGroupResolution(index)
         }
-    }
-
-    private fun buildChips() {
-        chipsGroup.removeAllViews()
-        chipByIndex.clear()
-        val inflater = LayoutInflater.from(activity)
-        if (tmdbSession != null) {
-            chipsScroll.isVisible = true
-            tmdbExtractors.forEachIndexed { index, extractor ->
-                val chip = inflater.inflate(
-                    R.layout.item_tmdb_chip, chipsGroup, false,
-                ) as Chip
-                chip.text = cleanServerName(extractor.server.name)
-                chip.isCheckable = true
-                chip.isClickable = true
-                chip.isFocusable = true
-                chip.setTextColor(activity.resources.getColorStateList(R.color.chip_text_color))
-                chip.isChecked = index == tmdbSelectedExtractor
-                chip.setOnClickListener { selectTmdbExtractor(index) }
-                FocusEffectUtil.applyFocusListener(chip)
-                chipsGroup.addView(chip)
-                chipByIndex.add(chip)
-            }
-        } else {
-            groups.forEachIndexed { index, group ->
-                val chip = inflater.inflate(
-                    R.layout.item_tmdb_chip, chipsGroup, false,
-                ) as Chip
-                chip.text = group.name
-                chip.isCheckable = true
-                chip.isClickable = true
-                chip.isFocusable = true
-                chip.setTextColor(activity.resources.getColorStateList(R.color.chip_text_color))
-                chip.isChecked = index == selectedIndex
-                chip.setOnClickListener { selectGroup(index) }
-                FocusEffectUtil.applyFocusListener(chip)
-                chipsGroup.addView(chip)
-                chipByIndex.add(chip)
-            }
-            renderChipStates()
-        }
-    }
-
-    private fun renderChipStates() {
-        chipByIndex.forEachIndexed { index, chip ->
-            val group = groups.getOrNull(index) ?: return@forEachIndexed
-            chip.text = when (group.state) {
-                is GroupState.Loading -> "${group.name} ·"
-                is GroupState.Failed -> "${group.name} (failed)"
-                is GroupState.Ready -> group.name
-            }
-        }
-    }
-
-    private fun selectTmdbExtractor(index: Int) {
-        if (index !in tmdbExtractors.indices) return
-        tmdbSelectedExtractor = index
-        buildChips()
-        refreshRows()
-    }
-
-    private fun refreshRows() {
-        rows.clear()
-        if (tmdbSession != null) {
-            refreshTmdbRows()
-        } else {
-            refreshAnimeRows()
-        }
-        adapter.notifyDataSetChanged()
     }
 
     private fun refreshAnimeRows() {
         val group = groups.getOrNull(selectedIndex)
-        if (group == null) {
-            adapter.notifyDataSetChanged()
-            return
-        }
+        if (group == null) return
         when (val state = group.state) {
-            is GroupState.Loading -> {}
-            is GroupState.Failed -> rows.add(Row.Label(state.reason))
-            is GroupState.Ready -> {
-                if (state.servers.isEmpty()) {
-                    rows.add(Row.Label("Nothing found in ${group.name}"))
-                } else if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
+            is AnimeGroupState.Ready -> {
+                if (state.servers.isEmpty()) return
+                if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
                     state.servers.forEach { server ->
                         val ex = group.extractors.firstOrNull { it.server.name == server.name }
                         val hasVideos = ex?.videos?.isNotEmpty() == true
@@ -486,8 +883,14 @@ class ServerRailController(
                             return@forEach
                         }
                         val (_, _, parsedAudio) = splitServerTitle(server.name)
-                        rows.add(Row.Header(cleanServerName(server.name), parsedAudio?.uppercase()
-                            ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()))
+                        rows.add(
+                            Row.Header(
+                                cleanServerName(server.name),
+                                parsedAudio?.uppercase()
+                                    ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }
+                                        ?.uppercase(),
+                            )
+                        )
                         if (hasVideos) {
                             ex.videos.forEachIndexed { idx, _ ->
                                 rows.add(
@@ -521,24 +924,272 @@ class ServerRailController(
                     }
                 }
             }
+            else -> {}
+        }
+    }
+
+    // --- TMDB mode ---
+
+    private fun tmdbSeasonEp(): Pair<Int?, Int?> {
+        val ep = currentEpisode()
+        val season = ep?.extra?.get("season")?.toIntOrNull()
+        val epNum = ep?.extra?.get("episode")?.toIntOrNull()
+        return season to epNum
+    }
+
+    private fun buildTmdbGroups() {
+        tmdbGroups.clear()
+        chipByIndex.clear()
+        val session = tmdbSession ?: return
+        CsRepos.installed(activity).forEach { source ->
+            tmdbGroups.add(TmdbGroup(source.id, source.name, source.iconUrl, source))
+        }
+        StremioAddonManager.installed().forEach { addon ->
+            val synthetic = CsInstalledSource(
+                id = StremioAddonManager.sourceId(addon),
+                name = addon.manifest.name,
+                version = 1,
+                type = "movie",
+                lang = "en",
+                url = addon.transportUrl,
+                repoUrl = "",
+                iconUrl = addon.manifest.logo,
+            )
+            tmdbGroups.add(
+                TmdbGroup(
+                    synthetic.id,
+                    synthetic.name,
+                    synthetic.iconUrl,
+                    synthetic,
+                    addon = addon,
+                )
+            )
+        }
+        val savedId = PrefManager.getNullableCustomVal(
+            "tmdb_source_${session.mediaId}", null, String::class.java,
+        )
+        tmdbSelectedIndex = tmdbGroups.indexOfFirst { it.source.id == session.source.id }
+            .takeIf { it >= 0 }
+            ?: tmdbGroups.indexOfFirst { it.key.equals(savedId ?: "", ignoreCase = true) }
+                .takeIf { it >= 0 }
+            ?: 0
+        val (season, epNum) = tmdbSeasonEp()
+        val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        tmdbGroups.forEachIndexed { i, group ->
+            val key = RailRepo.tmdbKey(session.mediaId, season, epNum, group.key)
+            val cached = RailRepo.getTmdb(key)
+            if (cached != null) {
+                group.state = cached.state
+            } else if (mode == 0 || i == tmdbSelectedIndex) {
+                startTmdbGroup(i)
+            } else {
+                group.state = TmdbGroupState.Loading
+            }
+        }
+        buildChips()
+        refreshRows()
+    }
+
+    private fun startTmdbGroup(index: Int) {
+        val session = tmdbSession ?: return
+        val group = tmdbGroups.getOrNull(index) ?: return
+        val (season, epNum) = tmdbSeasonEp()
+        val key = RailRepo.tmdbKey(session.mediaId, season, epNum, group.key)
+        RailRepo.startTmdb(key, activity, session, season, epNum, group.source, group.addon) { entry ->
+            activity.runOnUiThread {
+                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                onTmdbUpdate(group, entry)
+            }
+        }
+    }
+
+    private fun onTmdbUpdate(group: TmdbGroup, entry: TmdbEntry) {
+        group.state = entry.state
+        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 &&
+            tmdbGroups.getOrNull(tmdbSelectedIndex) !== group
+        ) {
+            return
+        }
+        if (entry.state is TmdbGroupState.Ready) {
+            group.rank = 0
+            group.arrivalSeq = arrivalCounter++
+        } else if (entry.state is TmdbGroupState.Failed) {
+            group.rank = 1
+        }
+        val selectedKey = tmdbGroups.getOrNull(tmdbSelectedIndex)?.key
+        tmdbGroups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
+        tmdbSelectedIndex = tmdbGroups.indexOfFirst { it.key == selectedKey }
+            .takeIf { it >= 0 } ?: tmdbSelectedIndex
+        buildChips()
+        refreshRows()
+    }
+
+    private fun selectTmdbGroup(index: Int) {
+        if (index !in tmdbGroups.indices) return
+        val changed = tmdbSelectedIndex != index
+        tmdbSelectedIndex = index
+        val session = tmdbSession
+        if (PrefManager.getVal<Boolean>(PrefName.MakeDefault) && session != null) {
+            PrefManager.setCustomVal("tmdb_source_${session.mediaId}", tmdbGroups[index].key)
+        }
+        buildChips()
+        refreshRows()
+        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
+            if (changed) {
+                tmdbGroups.forEachIndexed { i, g ->
+                    if (i != index) g.state = TmdbGroupState.Loading
+                }
+                buildChips()
+            }
+            if (tmdbGroups[index].state is TmdbGroupState.Loading) {
+                startTmdbGroup(index)
+            }
+        }
+    }
+
+    private fun refreshTmdbRows() {
+        val group = tmdbGroups.getOrNull(tmdbSelectedIndex) ?: return
+        when (val state = group.state) {
+            is TmdbGroupState.Ready -> {
+                val playable = state.links.filter { it.url.isNotBlank() }
+                state.recommendations.forEach { rows.add(Row.Extra(it, group.addon)) }
+                state.infos.forEach { rows.add(Row.Info(it, group.addon)) }
+                if (playable.isNotEmpty()) {
+                    val extractorNames = tmdbExtractorNames(state.links)
+                    val playingEp = currentEpisode()
+                    if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags) &&
+                        playable.size > 1
+                    ) {
+                        val byHost = LinkedHashMap<String, MutableList<TmdbStreamResolver.StreamResult.PlayableLink>>()
+                        playable.forEach { link ->
+                            byHost.getOrPut(link.host.ifBlank { link.label }) { mutableListOf() }.add(link)
+                        }
+                        if (byHost.size <= 1) {
+                            playable.forEach { link ->
+                                rows.add(Row.Stream(link, group, isTmdbRowSelected(playingEp, extractorNames[link])))
+                            }
+                        } else {
+                            byHost.forEach { (host, links) ->
+                                rows.add(Row.Header(host, null))
+                                links.forEach { link ->
+                                    rows.add(Row.Stream(link, group, isTmdbRowSelected(playingEp, extractorNames[link])))
+                                }
+                            }
+                        }
+                    } else {
+                        playable.forEach { link ->
+                            rows.add(Row.Stream(link, group, isTmdbRowSelected(playingEp, extractorNames[link])))
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    /** Mirror of TmdbStreamResolver.buildExtractors naming, to map links back to
+     *  (extractor name, video index) so the playing row can be highlighted. */
+    private fun tmdbExtractorNames(
+        links: List<TmdbStreamResolver.StreamResult.PlayableLink>,
+    ): Map<TmdbStreamResolver.StreamResult.PlayableLink, Pair<String, Int>> {
+        val result = HashMap<TmdbStreamResolver.StreamResult.PlayableLink, Pair<String, Int>>()
+        if (!PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
+            val usedNames = HashSet<String>()
+            links.forEachIndexed { index, link ->
+                if (link.url.isBlank()) return@forEachIndexed
+                var name = link.label.ifBlank { "Server ${index + 1}" }
+                if (!usedNames.add(name.lowercase())) name = "$name ${usedNames.size + 1}"
+                result[link] = name to 0
+            }
+        } else {
+            val usedNames = HashSet<String>()
+            links.filter { it.url.isNotBlank() }
+                .groupBy { it.host.ifBlank { it.label }.ifBlank { "Server" } }
+                .forEach { (_, groupLinks) ->
+                    var name = groupLinks.first().host
+                        .ifBlank { groupLinks.first().label }
+                        .ifBlank { "Server" }
+                    if (!usedNames.add(name.lowercase())) name = "$name ${usedNames.size + 1}"
+                    groupLinks.forEachIndexed { idx, link ->
+                        if (link.url.isNotBlank()) result[link] = name to idx
+                    }
+                }
+        }
+        return result
+    }
+
+    private fun isTmdbRowSelected(
+        ep: Episode?,
+        nameAndIdx: Pair<String, Int>?,
+    ): Boolean {
+        if (ep == null || nameAndIdx == null) return false
+        return ep.selectedExtractor == nameAndIdx.first && ep.selectedVideo == nameAndIdx.second
+    }
+
+    // --- chips ---
+
+    private fun buildChips() {
+        chipsGroup.removeAllViews()
+        chipByIndex.clear()
+        chipsScroll.isVisible = true
+        val inflater = LayoutInflater.from(activity)
+        val listCount = if (tmdbSession != null) tmdbGroups.size else groups.size
+        for (index in 0 until listCount) {
+            val chip = inflater.inflate(
+                R.layout.item_tmdb_chip, chipsGroup, false,
+            ) as Chip
+            chip.isCheckable = true
+            chip.isClickable = true
+            chip.isFocusable = true
+            chip.setTextColor(activity.resources.getColorStateList(R.color.chip_text_color))
+            chip.isChecked = index == if (tmdbSession != null) tmdbSelectedIndex else selectedIndex
+            chip.setOnClickListener {
+                if (tmdbSession != null) selectTmdbGroup(index) else selectGroup(index)
+            }
+            FocusEffectUtil.applyFocusListener(chip)
+            chipsGroup.addView(chip)
+            chipByIndex.add(chip)
+        }
+        renderChipStates()
+    }
+
+    private fun renderChipStates() {
+        chipByIndex.forEachIndexed { index, chip ->
+            if (tmdbSession != null) {
+                val group = tmdbGroups.getOrNull(index) ?: return@forEachIndexed
+                chip.text = when (val st = group.state) {
+                    is TmdbGroupState.Loading -> "${group.name} ·"
+                    is TmdbGroupState.Failed -> "${group.name} (failed)"
+                    is TmdbGroupState.Ready -> {
+                        val playable = st.links.count { it.url.isNotBlank() } +
+                            st.recommendations.size + st.infos.size
+                        if (playable > 0) group.name else "${group.name} ·"
+                    }
+                }
+            } else {
+                val group = groups.getOrNull(index) ?: return@forEachIndexed
+                chip.text = when (val st = group.state) {
+                    is AnimeGroupState.Loading -> "${group.name} ·"
+                    is AnimeGroupState.Failed -> "${group.name} (failed)"
+                    is AnimeGroupState.Ready -> if (st.servers.isNotEmpty()) group.name else "${group.name} ·"
+                }
+            }
+        }
+    }
+
+    // --- row refresh ---
+
+    private fun refreshRows() {
+        rows.clear()
+        if (tmdbSession != null) {
+            refreshTmdbRows()
+        } else {
+            refreshAnimeRows()
         }
         adapter.notifyDataSetChanged()
     }
 
-    private fun refreshTmdbRows() {
-        val extractor = tmdbExtractors.getOrNull(tmdbSelectedExtractor)
-        if (extractor != null) {
-            extractor.videos.forEachIndexed { idx, _ ->
-                rows.add(Row.TmdbStream(extractor, idx))
-            }
-        }
-        if (tmdbExtrasResolved && tmdbExtras.isNotEmpty()) {
-            val session = tmdbSession
-            tmdbExtras.sortedByDescending { it.popularity }.take(12).forEach { rec ->
-                rows.add(Row.Extra(rec, session?.stremioAddon))
-            }
-        }
-    }
+    // --- text helpers (parity with the servers screen) ---
 
     private fun splitServerTitle(name: String): Triple<String, String?, String?> {
         val audioRx = Regex("\\b(sub|dub|softsub|hardsub)\\b", RegexOption.IGNORE_CASE)
@@ -558,6 +1209,25 @@ class ServerRailController(
     }
 
     private fun cleanServerName(name: String): String = splitServerTitle(name).first
+
+    private fun splitStreamLabel(label: String): Pair<String, String?> {
+        val idx = label.indexOf(" · ")
+        return if (idx > 0) {
+            label.substring(0, idx) to label.substring(idx + 3)
+        } else {
+            label to null
+        }
+    }
+
+    private fun multiLineNote(text: String?): String? {
+        val cleaned = text?.replace('\u200b', ' ')?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: return null
+        val lines = cleaned.split(Regex("\n|\\s*[·•|]\\s*"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        return if (lines.isEmpty()) null else lines.joinToString("\n")
+    }
 
     // --- actions ---
 
@@ -596,53 +1266,94 @@ class ServerRailController(
         activity.restartWithServer()
     }
 
-    private fun switchTmdbStream(extractor: VideoExtractor, videoIdx: Int) {
-        val m = media
-        val ep = currentEpisode() ?: return
-        ep.selectedExtractor = extractor.server.name
-        ep.selectedVideo = videoIdx
-        m.selected?.server = extractor.server.name
-        m.selected?.video = videoIdx
-        model.saveSelected(m.id, m.selected!!)
-        Logger.log("SERVER_RAIL: tmdb switch via ${extractor.server.name} video=$videoIdx")
-        activity.restartWithServer()
+    private fun playTmdbStream(link: TmdbStreamResolver.StreamResult.PlayableLink, group: TmdbGroup) {
+        val state = group.state as? TmdbGroupState.Ready ?: return
+        val session = tmdbSession ?: return
+        val playable = state.links.filter { it.url.isNotBlank() }
+        if (playable.isEmpty()) return
+        val (season, epNum) = tmdbSeasonEp()
+        Logger.log("SERVER_RAIL: tmdb play '${session.detail.displayTitle}' via ${group.name} label='${link.label}'")
+        activity.lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                TmdbStreamResolver.launchPlayer(
+                    activity,
+                    session.mediaId,
+                    session.mediaType,
+                    session.detail,
+                    group.source,
+                    season,
+                    epNum,
+                    playable,
+                    link.label,
+                    stremioAddon = group.addon,
+                )
+            }.onFailure {
+                Logger.log(android.util.Log.ERROR, "SERVER_RAIL: tmdb play failed: ${it.message}")
+            }
+            activity.runOnUiThread {
+                if (!activity.isFinishing) activity.finish()
+            }
+        }
     }
 
-    private fun openExtra(item: TmdbMedia, addon: ani.sanin.settings.StremioAddon?) {
-        val type = if (item.type == "tv") "tv" else "movie"
-        val intent = when {
-            item.id > 0 -> android.content.Intent(activity, TmdbDetailsActivity::class.java)
-                .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
-                .putExtra(TmdbDetailsActivity.ARG_MEDIA_ID, item.id)
-            !item.imdbId.isNullOrBlank() -> android.content.Intent(activity, TmdbDetailsActivity::class.java)
-                .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
-                .putExtra(TmdbDetailsActivity.ARG_IMDB_ID, item.imdbId)
-                .putExtra(TmdbDetailsActivity.ARG_TITLE, item.displayTitle)
-                .apply {
-                    addon?.let { putExtra(TmdbDetailsActivity.ARG_SOURCE_ADDON, it.transportUrl) }
-                }
-            else -> null
-        } ?: return
-        activity.startActivity(intent)
-        activity.finish()
+    private fun openInfoExternal(link: TmdbStreamResolver.StreamResult.PlayableLink, addon: StremioAddon?) {
+        val url = link.externalUrl ?: return
+        if (!url.startsWith("stremio://", ignoreCase = true)) {
+            runCatching {
+                activity.startActivity(
+                    android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(url),
+                    )
+                )
+            }.onFailure {
+                Logger.log("SERVER_RAIL: external open failed url=$url error=${it.message}")
+            }
+            return
+        }
+        val target = TmdbExtras.parseStremioTarget(url) ?: run {
+            Logger.log("SERVER_RAIL: invalid stremio link url=$url")
+            return
+        }
+        val (typeHint, id) = target
+        activity.lifecycleScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                runCatching { Tmdb.findByImdb(id, typeHint) }.getOrNull()
+            }
+            if (activity.isFinishing || activity.isDestroyed) return@launch
+            if (found != null) {
+                activity.startActivity(
+                    android.content.Intent(activity, TmdbDetailsActivity::class.java)
+                        .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, found.type)
+                        .putExtra(TmdbDetailsActivity.ARG_MEDIA_ID, found.id)
+                )
+            } else {
+                activity.startActivity(
+                    android.content.Intent(activity, TmdbDetailsActivity::class.java)
+                        .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, typeHint)
+                        .putExtra(TmdbDetailsActivity.ARG_IMDB_ID, id)
+                        .putExtra(TmdbDetailsActivity.ARG_TITLE, link.label.trim().takeIf { it.isNotBlank() })
+                        .apply {
+                            addon?.let {
+                                putExtra(TmdbDetailsActivity.ARG_SOURCE_ADDON, it.transportUrl)
+                            }
+                        }
+                )
+            }
+            activity.finish()
+        }
     }
 
     // --- adapter ---
 
     private inner class RailAdapter : RecyclerView.Adapter<RailViewHolder>() {
 
-        override fun getItemViewType(position: Int): Int = when (rows[position]) {
-            is Row.Extra -> 2
-            is Row.Label -> 0
-            else -> 1
-        }
+        override fun getItemViewType(position: Int): Int =
+            if (rows[position] is Row.Extra) 2 else 1
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RailViewHolder {
             val inf = LayoutInflater.from(parent.context)
             return when (viewType) {
-                0 -> ItemTmdbStreamsTextBinding.inflate(inf, parent, false).let {
-                    RailViewHolder(RailViewHolderType.TEXT, it.root, textB = it)
-                }
                 2 -> ItemTmdbStreamsExtraBinding.inflate(inf, parent, false).let {
                     RailViewHolder(RailViewHolderType.EXTRA, it.root, extraB = it)
                 }
@@ -656,21 +1367,22 @@ class ServerRailController(
 
         override fun onBindViewHolder(holder: RailViewHolder, position: Int) {
             when (val row = rows[position]) {
-                is Row.Label -> holder.bindLabel(row)
                 is Row.Header -> holder.bindHeader(row)
+                is Row.TrackHeader -> holder.bindTrackHeader(row)
+                is Row.Track -> holder.bindTrack(row, position)
                 is Row.Video -> holder.bindVideo(row)
-                is Row.TmdbStream -> holder.bindTmdbStream(row)
+                is Row.Stream -> holder.bindStream(row)
+                is Row.Info -> holder.bindInfo(row)
                 is Row.Extra -> holder.bindExtra(row)
             }
         }
     }
 
-    private enum class RailViewHolderType { TEXT, ROW, EXTRA }
+    private enum class RailViewHolderType { ROW, EXTRA }
 
     private inner class RailViewHolder(
         val type: RailViewHolderType,
         root: View,
-        private val textB: ItemTmdbStreamsTextBinding? = null,
         private val rowB: ItemTmdbServerRowBinding? = null,
         private val extraB: ItemTmdbStreamsExtraBinding? = null,
     ) : RecyclerView.ViewHolder(root) {
@@ -698,21 +1410,26 @@ class ServerRailController(
             itemView.layoutParams = lp
         }
 
-        fun bindLabel(row: Row.Label) {
-            textB?.tmdbStreamsText?.text = row.text
-            itemView.isClickable = false
-            itemView.isFocusable = false
+        private fun focusCorners() {
+            val d = itemView.resources.displayMetrics.density
+            FocusEffectUtil.applyFocusListener(
+                itemView,
+                floatArrayOf(16f, 16f, 16f, 16f, 16f, 16f, 16f, 16f).map { it * d }
+                    .toFloatArray(),
+            )
         }
 
-        /** SubHead-style header above a merged grey card. */
+        /** SubHead-style header above a merged grey card (or host grouping in TMDB mode). */
         fun bindHeader(row: Row.Header) {
             val b = rowB ?: return
             b.root.background = null
             b.urlQuality.text = row.name
             b.urlQuality.textSize = 14f
             b.urlQuality.alpha = 0.6f
-            b.urlQuality.setTextColor(b.root.context.getThemeColor(
-                com.google.android.material.R.attr.colorOnSurface))
+            b.urlQuality.setTypeface(null, android.graphics.Typeface.NORMAL)
+            b.urlQuality.setTextColor(
+                b.root.context.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+            )
             b.urlNote.isVisible = false
             b.urlAudio.isVisible = false
             b.urlTag.text = row.tag
@@ -726,22 +1443,91 @@ class ServerRailController(
             setRowMargins(12, 4)
         }
 
+        /** Bold white header for the Tracks tab (Video / Audio sections). */
+        fun bindTrackHeader(row: Row.TrackHeader) {
+            val b = rowB ?: return
+            b.root.background = null
+            b.urlQuality.text = row.name
+            b.urlQuality.textSize = 15f
+            b.urlQuality.alpha = 1f
+            b.urlQuality.setTypeface(null, android.graphics.Typeface.BOLD)
+            b.urlQuality.setTextColor(Color.WHITE)
+            b.urlNote.isVisible = false
+            b.urlAudio.isVisible = false
+            b.urlTag.isVisible = false
+            b.urlSize.isVisible = false
+            b.urlSub.isVisible = false
+            b.urlDownload.isVisible = false
+            b.root.setOnClickListener(null)
+            itemView.isClickable = false
+            itemView.isFocusable = false
+            setRowMargins(12, 4)
+        }
+
+        fun bindTrack(row: Row.Track, position: Int) {
+            val b = rowB ?: return
+            GlassPill.applyServerRowCard(
+                b.root,
+                cornerRadiusDp = 14f,
+                showTopRim = true,
+                selected = row.active,
+            )
+            b.urlQuality.text = row.entry.label
+            b.urlQuality.textSize = 15f
+            b.urlQuality.alpha = 1f
+            b.urlQuality.setTypeface(null, android.graphics.Typeface.NORMAL)
+            b.urlQuality.setTextColor(
+                b.root.context.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+            )
+            b.urlNote.isVisible = false
+            b.urlAudio.isVisible = false
+            b.urlTag.isVisible = false
+            b.urlSize.isVisible = false
+            b.urlSub.isVisible = false
+            b.urlDownload.isVisible = false
+            b.root.setOnClickListener {
+                activity.onSetTrackGroupOverride(
+                    row.entry.group,
+                    row.entry.type,
+                    row.entry.index,
+                )
+                rebuildTracks()
+                recycler.post {
+                    recycler.scrollToPosition(position)
+                    recycler.post {
+                        recycler.findViewHolderForAdapterPosition(position)
+                            ?.itemView?.requestFocus()
+                    }
+                }
+            }
+            itemView.isFocusable = true
+            focusCorners()
+            setRowMargins(6, 0)
+        }
+
         fun bindVideo(row: Row.Video) {
             val b = rowB ?: return
             val video = row.extractor.videos.getOrNull(row.idx)
+            val m = media
+            val selected = m.selected?.sourceIndex == row.group.index &&
+                m.selected?.server == row.extractor.server.name &&
+                m.selected?.video == row.idx
             GlassPill.applyServerRowCard(
                 b.root,
                 cornerRadiusDp = 14f,
                 topRounded = row.isFirst,
                 bottomRounded = row.isLast,
                 showTopRim = row.isFirst,
+                selected = selected,
             )
             b.urlQuality.text =
                 video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
             b.urlQuality.textSize = 15f
             b.urlQuality.alpha = 1f
-            b.urlQuality.setTextColor(b.root.context.getThemeColor(
-                com.google.android.material.R.attr.colorSecondary))
+            b.urlQuality.setTypeface(null, android.graphics.Typeface.NORMAL)
+            b.urlQuality.setTextColor(
+                b.root.context.getThemeColor(com.google.android.material.R.attr.colorSecondary)
+            )
             val note = listOfNotNull(
                 when (video?.format) {
                     VideoType.M3U8 -> "M3U8"
@@ -756,12 +1542,25 @@ class ServerRailController(
                 b.urlNote.text = note
                 b.urlNote.isVisible = true
             }
-            val audio = if (row.server != null) {
-                splitServerTitle(row.server.name).third?.uppercase()
-                    ?: row.server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
-            } else null
-            b.urlTag.text = audio
-            b.urlTag.isVisible = !audio.isNullOrBlank()
+            if (selected) {
+                b.urlTag.text = "▶ Playing"
+                b.urlTag.setTextColor(
+                    b.root.context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+                )
+                b.urlTag.alpha = 1f
+                b.urlTag.isVisible = true
+            } else {
+                val audio = if (row.server != null) {
+                    splitServerTitle(row.server.name).third?.uppercase()
+                        ?: row.server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
+                } else null
+                b.urlTag.text = audio
+                b.urlTag.setTextColor(
+                    b.root.context.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+                )
+                b.urlTag.alpha = 0.6f
+                b.urlTag.isVisible = !audio.isNullOrBlank()
+            }
             b.urlSize.isVisible = false
             b.urlSub.isVisible = false
             b.urlDownload.isVisible = false
@@ -771,32 +1570,64 @@ class ServerRailController(
                 if (row.isFirst) (if (row.server != null) 6 else 0) else 1,
                 0,
             )
-            FocusEffectUtil.applyFocusListener(
-                itemView,
-                floatArrayOf(16f, 16f, 16f, 16f, 16f, 16f, 16f, 16f).map { it * itemView.resources.displayMetrics.density }
-                    .toFloatArray(),
-            )
+            focusCorners()
         }
 
-        fun bindTmdbStream(row: Row.TmdbStream) {
+        fun bindStream(row: Row.Stream) {
             val b = rowB ?: return
-            val video = row.extractor.videos.getOrNull(row.idx)
-            GlassPill.applyServerRowCard(b.root, cornerRadiusDp = 14f, showTopRim = true)
-            val quality = video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
+            GlassPill.applyServerRowCard(
+                b.root,
+                cornerRadiusDp = 14f,
+                showTopRim = true,
+                selected = row.selected,
+            )
+            val (quality, hint) = splitStreamLabel(row.link.label)
             b.urlQuality.text = quality
             b.urlQuality.textSize = 15f
             b.urlQuality.alpha = 1f
-            b.urlQuality.setTextColor(b.root.context.getThemeColor(
-                com.google.android.material.R.attr.colorSecondary))
+            b.urlQuality.setTypeface(null, android.graphics.Typeface.NORMAL)
+            b.urlQuality.setTextColor(
+                b.root.context.getThemeColor(com.google.android.material.R.attr.colorSecondary)
+            )
             val note = listOfNotNull(
-                when (video?.format) {
-                    VideoType.M3U8 -> "M3U8"
-                    VideoType.DASH -> "DASH"
-                    else -> null
-                },
-                video?.extraNote?.takeIf { it.isNotBlank() },
-            ).joinToString(" · ")
+                row.link.host.takeIf { it.isNotBlank() },
+                multiLineNote(row.link.details) ?: hint?.takeIf { it.isNotBlank() },
+            ).joinToString("\n")
             if (note.isBlank()) {
+                b.urlNote.isVisible = false
+            } else {
+                b.urlNote.text = note
+                b.urlNote.isVisible = true
+            }
+            if (row.selected) {
+                b.urlTag.text = "▶ Playing"
+                b.urlTag.setTextColor(
+                    b.root.context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+                )
+                b.urlTag.alpha = 1f
+                b.urlTag.isVisible = true
+            } else {
+                b.urlTag.isVisible = false
+            }
+            b.urlSize.isVisible = false
+            b.urlSub.isVisible = false
+            b.urlDownload.isVisible = false
+            b.root.setOnClickListener { playTmdbStream(row.link, row.group) }
+            itemView.isFocusable = true
+            focusCorners()
+        }
+
+        fun bindInfo(row: Row.Info) {
+            val b = rowB ?: return
+            GlassPill.applyServerRowCard(b.root, cornerRadiusDp = 14f, showTopRim = true)
+            b.urlQuality.text = row.link.label
+            b.urlQuality.textSize = 15f
+            b.urlQuality.alpha = 1f
+            b.urlQuality.setTextColor(
+                b.root.context.getThemeColor(com.google.android.material.R.attr.colorSecondary)
+            )
+            val note = multiLineNote(row.link.details)
+            if (note.isNullOrBlank()) {
                 b.urlNote.isVisible = false
             } else {
                 b.urlNote.text = note
@@ -806,13 +1637,15 @@ class ServerRailController(
             b.urlSize.isVisible = false
             b.urlSub.isVisible = false
             b.urlDownload.isVisible = false
-            b.root.setOnClickListener { switchTmdbStream(row.extractor, row.idx) }
-            itemView.isFocusable = true
-            FocusEffectUtil.applyFocusListener(
-                itemView,
-                floatArrayOf(16f, 16f, 16f, 16f, 16f, 16f, 16f, 16f).map { it * itemView.resources.displayMetrics.density }
-                    .toFloatArray(),
-            )
+            if (row.link.externalUrl != null) {
+                b.root.setOnClickListener { openInfoExternal(row.link, row.addon) }
+                itemView.isFocusable = true
+            } else {
+                b.root.setOnClickListener(null)
+                itemView.isClickable = false
+                itemView.isFocusable = false
+            }
+            focusCorners()
         }
 
         fun bindExtra(row: Row.Extra) {
@@ -847,11 +1680,26 @@ class ServerRailController(
             }
             b.root.setOnClickListener { openExtra(row.item, row.addon) }
             itemView.isFocusable = true
-            FocusEffectUtil.applyFocusListener(
-                itemView,
-                floatArrayOf(16f, 16f, 16f, 16f, 16f, 16f, 16f, 16f).map { it * itemView.resources.displayMetrics.density }
-                    .toFloatArray(),
-            )
+            focusCorners()
+        }
+
+        private fun openExtra(item: TmdbMedia, addon: StremioAddon?) {
+            val type = if (item.type == "tv") "tv" else "movie"
+            val intent = when {
+                item.id > 0 -> android.content.Intent(activity, TmdbDetailsActivity::class.java)
+                    .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
+                    .putExtra(TmdbDetailsActivity.ARG_MEDIA_ID, item.id)
+                !item.imdbId.isNullOrBlank() -> android.content.Intent(activity, TmdbDetailsActivity::class.java)
+                    .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, type)
+                    .putExtra(TmdbDetailsActivity.ARG_IMDB_ID, item.imdbId)
+                    .putExtra(TmdbDetailsActivity.ARG_TITLE, item.displayTitle)
+                    .apply {
+                        addon?.let { putExtra(TmdbDetailsActivity.ARG_SOURCE_ADDON, it.transportUrl) }
+                    }
+                else -> null
+            } ?: return
+            activity.startActivity(intent)
+            activity.finish()
         }
     }
 }
