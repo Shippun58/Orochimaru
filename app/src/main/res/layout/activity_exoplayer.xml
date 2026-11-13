@@ -24,10 +24,11 @@
 
         <include layout="@layout/drawer_tracks_rail" />
 
+        <include layout="@layout/drawer_server_rail" />
+
     </FrameLayout>
 
     <include layout="@layout/drawer_episode_rail" />
 
     <include layout="@layout/drawer_subtitle_rail" />
-    <include layout="@layout/drawer_server_rail" />
 </androidx.drawerlayout.widget.DrawerLayout>

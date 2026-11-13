@@ -5,6 +5,7 @@
     android:id="@+id/serverDrawer"
     android:layout_width="340dp"
     android:layout_height="match_parent"
+    android:layout_gravity="start"
     android:background="#E6101010"
     android:visibility="gone"
     android:focusable="true"

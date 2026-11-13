@@ -5,18 +5,24 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.HorizontalScrollView
+import androidx.cardview.widget.CardView
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.cloudstream.Rpdb
 import ani.sanin.cloudstream.TmdbDetailsActivity
+import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.tmdb.TmdbMedia
 import ani.sanin.cloudstream.TmdbExtras
 import ani.sanin.cloudstream.TmdbStreamResolver
-import ani.sanin.databinding.ItemServerRailRowBinding
+import ani.sanin.databinding.ItemTmdbServerRowBinding
+import ani.sanin.databinding.ItemTmdbStreamsExtraBinding
 import ani.sanin.databinding.ItemTmdbStreamsTextBinding
+import ani.sanin.getThemeColor
 import ani.sanin.limitedAsyncMap
+import ani.sanin.loadImage
 import ani.sanin.media.Media
 import ani.sanin.media.MediaDetailsViewModel
 import ani.sanin.media.anime.getEpisode
@@ -26,9 +32,11 @@ import ani.sanin.parsers.AnimeSources
 import ani.sanin.parsers.HAnimeSources
 import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
+import ani.sanin.parsers.VideoType
 import ani.sanin.parsers.WatchSources
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
+import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
 import com.google.android.material.chip.Chip
@@ -39,9 +47,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * In-player server rail: compact version of the servers screen.
- * Anime mode: source chips + per-source servers, honoring the load-mode pref.
- * TMDB mode: current session streams + extras.
+ * In-player server rail: a mini version of the servers screen.
+ * Anime mode: source chips + per-source servers (grey containers, top rim, grouped cards).
+ * TMDB mode: server chips + quality rows + extras, mirroring the TMDB servers screen.
  */
 class ServerRailController(
     private val activity: ExoplayerView,
@@ -58,15 +66,15 @@ class ServerRailController(
     private val media: Media get() = ExoplayerView.media
 
     private sealed class Row {
-        data class Label(val text: String, val dim: Boolean = true) : Row()
-        object ReloadStreams : Row()
-        data class ServerHead(val name: String, val tag: String?) : Row()
+        data class Label(val text: String) : Row()
+        data class Header(val name: String, val tag: String?) : Row()
         data class Video(
             val group: Group,
             val extractor: VideoExtractor,
             val idx: Int,
-            val quality: String?,
-            val tag: String?,
+            val isFirst: Boolean,
+            val isLast: Boolean,
+            val server: VideoServer?,
         ) : Row()
 
         data class TmdbStream(val extractor: VideoExtractor, val idx: Int) : Row()
@@ -104,6 +112,10 @@ class ServerRailController(
     private val tmdbSession: TmdbStreamResolver.SyntheticSession? by lazy {
         TmdbStreamResolver.sessionFor(media.id)
     }
+
+    private var tmdbExtractors: List<VideoExtractor> = emptyList()
+    private var tmdbSelectedExtractor = 0
+    private var tmdbExtrasResolved = false
 
     init {
         recycler.layoutManager = LinearLayoutManager(activity)
@@ -143,7 +155,9 @@ class ServerRailController(
     fun isOpen(): Boolean = content.visibility == View.VISIBLE
 
     fun focusFirst() {
-        val focusable = rows.indexOfFirst { it is Row.Video || it is Row.TmdbStream || it is Row.Extra }
+        val focusable = rows.indexOfFirst {
+            it is Row.Video || it is Row.TmdbStream || it is Row.Extra
+        }
         if (focusable >= 0) {
             recycler.post {
                 recycler.scrollToPosition(focusable)
@@ -171,40 +185,25 @@ class ServerRailController(
     // --- TMDB mode ---
 
     private fun buildTmdbRows() {
-        chipsScroll.isVisible = false
         val ep = currentEpisode()
-        val extractors = ep?.extractors.orEmpty().filterNotNull()
-        rows.add(Row.Label("Streams", dim = false))
-        if (extractors.isEmpty()) {
-            rows.add(Row.Label("Loading streams…"))
-        } else {
-            extractors.forEachIndexed { idx, ex ->
-                rows.add(Row.TmdbStream(ex, idx))
-            }
-        }
-        rows.add(Row.ReloadStreams)
+        tmdbExtractors = ep?.extractors.orEmpty().filterNotNull()
+        tmdbSelectedExtractor = 0
+        buildChips()
+        refreshRows()
         val session = tmdbSession ?: return
         if (session.stremioAddon == null) return
-        rows.add(Row.Label("Extras", dim = false))
-        rows.add(Row.Label("Loading extras…"))
         activity.lifecycleScope.launch(Dispatchers.IO) {
             val recs = resolveTmdbExtras(session)
             activity.runOnUiThread {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                val idx = rows.indexOfFirst { it is Row.Label && it.text == "Loading extras…" }
-                if (idx >= 0) {
-                    if (recs.isEmpty()) rows[idx] = Row.Label("No extras found")
-                    else {
-                        rows.removeAt(idx)
-                        recs.sortedByDescending { it.popularity }.take(12).forEach { rec ->
-                            rows.add(Row.Extra(rec, session.stremioAddon))
-                        }
-                    }
-                    adapter.notifyDataSetChanged()
-                }
+                tmdbExtrasResolved = true
+                tmdbExtras = recs
+                refreshRows()
             }
         }
     }
+
+    private var tmdbExtras: List<TmdbMedia> = emptyList()
 
     private suspend fun resolveTmdbExtras(
         session: TmdbStreamResolver.SyntheticSession,
@@ -240,7 +239,6 @@ class ServerRailController(
     // --- Anime mode ---
 
     private fun buildAnimeGroups() {
-        chipsScroll.isVisible = true
         groups.clear()
         chipByIndex.clear()
         arrivalCounter = 0
@@ -333,6 +331,7 @@ class ServerRailController(
                             group.extractors.add(extractor)
                             activity.runOnUiThread {
                                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                                renderChipStates()
                                 refreshRows()
                             }
                         }, servers)
@@ -402,54 +401,122 @@ class ServerRailController(
         chipsGroup.removeAllViews()
         chipByIndex.clear()
         val inflater = LayoutInflater.from(activity)
-        groups.forEachIndexed { index, group ->
-            val chip = inflater.inflate(
-                R.layout.item_tmdb_chip, chipsGroup, false,
-            ) as Chip
-            chip.text = group.name
-            chip.isCheckable = true
-            chip.isClickable = true
-            chip.isFocusable = true
-            chip.setTextColor(activity.resources.getColorStateList(R.color.chip_text_color))
-            chip.isChecked = index == selectedIndex
-            chip.setOnClickListener { selectGroup(index) }
-            FocusEffectUtil.applyFocusListener(chip)
-            chipsGroup.addView(chip)
-            chipByIndex.add(chip)
+        if (tmdbSession != null) {
+            chipsScroll.isVisible = true
+            tmdbExtractors.forEachIndexed { index, extractor ->
+                val chip = inflater.inflate(
+                    R.layout.item_tmdb_chip, chipsGroup, false,
+                ) as Chip
+                chip.text = cleanServerName(extractor.server.name)
+                chip.isCheckable = true
+                chip.isClickable = true
+                chip.isFocusable = true
+                chip.setTextColor(activity.resources.getColorStateList(R.color.chip_text_color))
+                chip.isChecked = index == tmdbSelectedExtractor
+                chip.setOnClickListener { selectTmdbExtractor(index) }
+                FocusEffectUtil.applyFocusListener(chip)
+                chipsGroup.addView(chip)
+                chipByIndex.add(chip)
+            }
+        } else {
+            groups.forEachIndexed { index, group ->
+                val chip = inflater.inflate(
+                    R.layout.item_tmdb_chip, chipsGroup, false,
+                ) as Chip
+                chip.text = group.name
+                chip.isCheckable = true
+                chip.isClickable = true
+                chip.isFocusable = true
+                chip.setTextColor(activity.resources.getColorStateList(R.color.chip_text_color))
+                chip.isChecked = index == selectedIndex
+                chip.setOnClickListener { selectGroup(index) }
+                FocusEffectUtil.applyFocusListener(chip)
+                chipsGroup.addView(chip)
+                chipByIndex.add(chip)
+            }
+            renderChipStates()
         }
+    }
+
+    private fun renderChipStates() {
+        chipByIndex.forEachIndexed { index, chip ->
+            val group = groups.getOrNull(index) ?: return@forEachIndexed
+            chip.text = when (group.state) {
+                is GroupState.Loading -> "${group.name} ·"
+                is GroupState.Failed -> "${group.name} (failed)"
+                is GroupState.Ready -> group.name
+            }
+        }
+    }
+
+    private fun selectTmdbExtractor(index: Int) {
+        if (index !in tmdbExtractors.indices) return
+        tmdbSelectedExtractor = index
+        buildChips()
+        refreshRows()
     }
 
     private fun refreshRows() {
         rows.clear()
+        if (tmdbSession != null) {
+            refreshTmdbRows()
+        } else {
+            refreshAnimeRows()
+        }
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun refreshAnimeRows() {
         val group = groups.getOrNull(selectedIndex)
         if (group == null) {
             adapter.notifyDataSetChanged()
             return
         }
-        rows.add(Row.Label("${group.name} · servers", dim = false))
         when (val state = group.state) {
-            is GroupState.Loading -> rows.add(Row.Label("Loading ${group.name}…"))
+            is GroupState.Loading -> {}
             is GroupState.Failed -> rows.add(Row.Label(state.reason))
             is GroupState.Ready -> {
                 if (state.servers.isEmpty()) {
                     rows.add(Row.Label("Nothing found in ${group.name}"))
-                } else {
+                } else if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
                     state.servers.forEach { server ->
                         val ex = group.extractors.firstOrNull { it.server.name == server.name }
                         val hasVideos = ex?.videos?.isNotEmpty() == true
-                        if (group.extractionDone && !hasVideos) return@forEach
-                        rows.add(Row.ServerHead(cleanServerName(server.name), serverAudioTag(server)))
+                        if (group.extractionDone && !hasVideos) {
+                            return@forEach
+                        }
+                        val (_, _, parsedAudio) = splitServerTitle(server.name)
+                        rows.add(Row.Header(cleanServerName(server.name), parsedAudio?.uppercase()
+                            ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()))
                         if (hasVideos) {
-                            ex.videos.forEachIndexed { idx, video ->
+                            ex.videos.forEachIndexed { idx, _ ->
                                 rows.add(
                                     Row.Video(
                                         group, ex, idx,
-                                        quality = video.quality?.takeIf { it > 0 }?.let { "${it}p" }
-                                            ?: "Auto",
-                                        tag = serverAudioTag(server),
+                                        isFirst = idx == 0,
+                                        isLast = idx == ex.videos.lastIndex,
+                                        server = server,
                                     )
                                 )
                             }
+                        }
+                    }
+                } else {
+                    state.servers.forEach { server ->
+                        val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                            ?: return@forEach
+                        if (group.extractionDone && ex.videos.isEmpty()) {
+                            return@forEach
+                        }
+                        ex.videos.forEachIndexed { idx, _ ->
+                            rows.add(
+                                Row.Video(
+                                    group, ex, idx,
+                                    isFirst = idx == 0,
+                                    isLast = idx == ex.videos.lastIndex,
+                                    server = server,
+                                )
+                            )
                         }
                     }
                 }
@@ -458,27 +525,39 @@ class ServerRailController(
         adapter.notifyDataSetChanged()
     }
 
-    private fun cleanServerName(name: String): String {
-        val audio = Regex("\\b(sub|dub|softsub|hardsub)\\b", RegexOption.IGNORE_CASE)
-        val quality = Regex("\\b(\\d{3,4}\\s*p|auto|unknown)\\b", RegexOption.IGNORE_CASE)
+    private fun refreshTmdbRows() {
+        val extractor = tmdbExtractors.getOrNull(tmdbSelectedExtractor)
+        if (extractor != null) {
+            extractor.videos.forEachIndexed { idx, _ ->
+                rows.add(Row.TmdbStream(extractor, idx))
+            }
+        }
+        if (tmdbExtrasResolved && tmdbExtras.isNotEmpty()) {
+            val session = tmdbSession
+            tmdbExtras.sortedByDescending { it.popularity }.take(12).forEach { rec ->
+                rows.add(Row.Extra(rec, session?.stremioAddon))
+            }
+        }
+    }
+
+    private fun splitServerTitle(name: String): Triple<String, String?, String?> {
+        val audioRx = Regex("\\b(sub|dub|softsub|hardsub)\\b", RegexOption.IGNORE_CASE)
+        val qualityRx = Regex("\\b(\\d{3,4}\\s*p|auto|unknown)\\b", RegexOption.IGNORE_CASE)
+        val audio = audioRx.find(name)?.groupValues?.getOrNull(1)
+        val quality = qualityRx.find(name)?.groupValues?.getOrNull(1)
         var cleaned = name
-            .replace(audio, " ")
-            .replace(quality, " ")
+            .replace(audioRx, " ")
+            .replace(qualityRx, " ")
             .replace(Regex("[()\\[\\]]"), " ")
             .replace(Regex("\\s*[-–·|]\\s*"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
             .trim('-', '·', '|', ' ')
         if (cleaned.isBlank()) cleaned = name
-        return cleaned
+        return Triple(cleaned, quality, audio)
     }
 
-    private fun serverAudioTag(server: VideoServer): String? {
-        val parsed = Regex("\\b(sub|dub)\\b", RegexOption.IGNORE_CASE)
-            .find(server.name)?.groupValues?.getOrNull(1)
-        return (parsed?.uppercase()
-            ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase())
-    }
+    private fun cleanServerName(name: String): String = splitServerTitle(name).first
 
     // --- actions ---
 
@@ -552,17 +631,18 @@ class ServerRailController(
 
     private inner class RailAdapter : RecyclerView.Adapter<RailViewHolder>() {
 
-        override fun getItemViewType(position: Int): Int =
-            if (rows[position] is Row.Label) 0 else 1
+        override fun getItemViewType(position: Int): Int = when (rows[position]) {
+            is Row.Extra -> 2
+            is Row.Label -> 0
+            else -> 1
+        }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RailViewHolder {
             val inf = LayoutInflater.from(parent.context)
-            return if (viewType == 0) {
-                val b = ItemTmdbStreamsTextBinding.inflate(inf, parent, false)
-                RailViewHolder(b.root, textB = b)
-            } else {
-                val b = ItemServerRailRowBinding.inflate(inf, parent, false)
-                RailViewHolder(b.root, rowB = b)
+            return when (viewType) {
+                0 -> RailViewHolder(RailViewHolderType.TEXT, textB = ItemTmdbStreamsTextBinding.inflate(inf, parent, false))
+                2 -> RailViewHolder(RailViewHolderType.EXTRA, extraB = ItemTmdbStreamsExtraBinding.inflate(inf, parent, false))
+                else -> RailViewHolder(RailViewHolderType.ROW, rowB = ItemTmdbServerRowBinding.inflate(inf, parent, false))
             }
         }
 
@@ -571,8 +651,7 @@ class ServerRailController(
         override fun onBindViewHolder(holder: RailViewHolder, position: Int) {
             when (val row = rows[position]) {
                 is Row.Label -> holder.bindLabel(row)
-                is Row.ReloadStreams -> holder.bindReload()
-                is Row.ServerHead -> holder.bindServerHead(row)
+                is Row.Header -> holder.bindHeader(row)
                 is Row.Video -> holder.bindVideo(row)
                 is Row.TmdbStream -> holder.bindTmdbStream(row)
                 is Row.Extra -> holder.bindExtra(row)
@@ -580,11 +659,40 @@ class ServerRailController(
         }
     }
 
+    private enum class RailViewHolderType { TEXT, ROW, EXTRA }
+
     private inner class RailViewHolder(
-        root: View,
+        val type: RailViewHolderType,
         private val textB: ItemTmdbStreamsTextBinding? = null,
-        private val rowB: ItemServerRailRowBinding? = null,
-    ) : RecyclerView.ViewHolder(root) {
+        private val rowB: ItemTmdbServerRowBinding? = null,
+        private val extraB: ItemTmdbStreamsExtraBinding? = null,
+    ) : RecyclerView.ViewHolder(
+        textB?.root ?: rowB?.root ?: extraB?.root ?: View(itemViewContext())
+    ) {
+        private fun itemViewContext(): android.content.Context = activity
+
+        init {
+            rowB?.let {
+                (it.root as CardView).apply {
+                    setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    cardElevation = 0f
+                }
+            }
+            extraB?.let {
+                (it.root as CardView).apply {
+                    setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    cardElevation = 0f
+                }
+            }
+        }
+
+        private fun setRowMargins(topDp: Int, bottomDp: Int) {
+            val lp = itemView.layoutParams as? RecyclerView.LayoutParams ?: return
+            val d = itemView.resources.displayMetrics.density
+            lp.topMargin = (topDp * d).toInt()
+            lp.bottomMargin = (bottomDp * d).toInt()
+            itemView.layoutParams = lp
+        }
 
         fun bindLabel(row: Row.Label) {
             textB?.tmdbStreamsText?.text = row.text
@@ -592,95 +700,154 @@ class ServerRailController(
             itemView.isFocusable = false
         }
 
-        fun bindReload() {
-            textB?.tmdbStreamsText?.text = "Reload streams"
-            itemView.isFocusable = true
-            itemView.isClickable = true
-            itemView.setOnClickListener {
-                val m = media
-                TmdbStreamResolver.invalidateLinks(m.id)
-                val ep = currentEpisode()
-                if (ep != null) {
-                    activity.lifecycleScope.launch(Dispatchers.IO) {
-                        runCatching {
-                            TmdbStreamResolver.populateSyntheticEpisode(activity, m, ep)
-                        }
-                        activity.runOnUiThread {
-                            if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                            rebuild()
-                            focusFirst()
-                        }
-                    }
-                }
-            }
-            FocusEffectUtil.applyFocusListener(itemView)
-        }
-
-        fun bindServerHead(row: Row.ServerHead) {
+        /** SubHead-style header above a merged grey card. */
+        fun bindHeader(row: Row.Header) {
             val b = rowB ?: return
-            b.serverRailRowTitle.text = row.name
-            b.serverRailRowTitle.alpha = 0.6f
-            val meta = row.tag
-            if (meta.isNullOrBlank()) {
-                b.serverRailRowMeta.isVisible = false
-            } else {
-                b.serverRailRowMeta.text = meta
-                b.serverRailRowMeta.isVisible = true
-            }
+            b.root.background = null
+            b.urlQuality.text = row.name
+            b.urlQuality.textSize = 14f
+            b.urlQuality.alpha = 0.6f
+            b.urlQuality.setTextColor(b.root.context.getThemeColor(
+                com.google.android.material.R.attr.colorOnSurface))
+            b.urlNote.isVisible = false
+            b.urlAudio.isVisible = false
+            b.urlTag.text = row.tag
+            b.urlTag.isVisible = !row.tag.isNullOrBlank()
+            b.urlSize.isVisible = false
+            b.urlSub.isVisible = false
+            b.urlDownload.isVisible = false
+            b.root.setOnClickListener(null)
             itemView.isClickable = false
             itemView.isFocusable = false
+            setRowMargins(12, 4)
         }
 
         fun bindVideo(row: Row.Video) {
             val b = rowB ?: return
-            b.serverRailRowTitle.text = cleanServerName(row.extractor.server.name)
-            b.serverRailRowTitle.alpha = 1f
-            val meta = listOfNotNull(row.quality, row.tag).joinToString(" · ")
-            if (meta.isBlank()) {
-                b.serverRailRowMeta.isVisible = false
+            val video = row.extractor.videos.getOrNull(row.idx)
+            GlassPill.applyServerRowCard(
+                b.root,
+                cornerRadiusDp = 14f,
+                topRounded = row.isFirst,
+                bottomRounded = row.isLast,
+                showTopRim = row.isFirst,
+            )
+            b.urlQuality.text =
+                video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
+            b.urlQuality.textSize = 15f
+            b.urlQuality.alpha = 1f
+            b.urlQuality.setTextColor(b.root.context.getThemeColor(
+                com.google.android.material.R.attr.colorSecondary))
+            val note = listOfNotNull(
+                when (video?.format) {
+                    VideoType.M3U8 -> "M3U8"
+                    VideoType.DASH -> "DASH"
+                    else -> null
+                },
+                video?.extraNote?.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
+            if (note.isBlank()) {
+                b.urlNote.isVisible = false
             } else {
-                b.serverRailRowMeta.text = meta
-                b.serverRailRowMeta.isVisible = true
+                b.urlNote.text = note
+                b.urlNote.isVisible = true
             }
+            val audio = if (row.server != null) {
+                splitServerTitle(row.server.name).third?.uppercase()
+                    ?: row.server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
+            } else null
+            b.urlTag.text = audio
+            b.urlTag.isVisible = !audio.isNullOrBlank()
+            b.urlSize.isVisible = false
+            b.urlSub.isVisible = false
+            b.urlDownload.isVisible = false
+            b.root.setOnClickListener { switchServer(row.group, row.extractor, row.idx) }
             itemView.isFocusable = true
-            itemView.isClickable = true
-            itemView.setOnClickListener {
-                switchServer(row.group, row.extractor, row.idx)
-            }
-            FocusEffectUtil.applyFocusListener(itemView)
+            setRowMargins(
+                if (row.isFirst) (if (row.server != null) 6 else 0) else 1,
+                0,
+            )
+            FocusEffectUtil.applyFocusListener(
+                itemView,
+                floatArrayOf(16f, 16f, 16f, 16f, 16f, 16f, 16f, 16f).map { it * itemView.resources.displayMetrics.density }
+                    .toFloatArray(),
+            )
         }
 
         fun bindTmdbStream(row: Row.TmdbStream) {
             val b = rowB ?: return
-            b.serverRailRowTitle.text = cleanServerName(row.extractor.server.name)
-            b.serverRailRowTitle.alpha = 1f
-            b.serverRailRowMeta.text = "${row.extractor.videos.size} qualities"
-            b.serverRailRowMeta.isVisible = true
+            val video = row.extractor.videos.getOrNull(row.idx)
+            GlassPill.applyServerRowCard(b.root, cornerRadiusDp = 14f, showTopRim = true)
+            val quality = video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
+            b.urlQuality.text = quality
+            b.urlQuality.textSize = 15f
+            b.urlQuality.alpha = 1f
+            b.urlQuality.setTextColor(b.root.context.getThemeColor(
+                com.google.android.material.R.attr.colorSecondary))
+            val note = listOfNotNull(
+                when (video?.format) {
+                    VideoType.M3U8 -> "M3U8"
+                    VideoType.DASH -> "DASH"
+                    else -> null
+                },
+                video?.extraNote?.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
+            if (note.isBlank()) {
+                b.urlNote.isVisible = false
+            } else {
+                b.urlNote.text = note
+                b.urlNote.isVisible = true
+            }
+            b.urlTag.isVisible = false
+            b.urlSize.isVisible = false
+            b.urlSub.isVisible = false
+            b.urlDownload.isVisible = false
+            b.root.setOnClickListener { switchTmdbStream(row.extractor, row.idx) }
             itemView.isFocusable = true
-            itemView.isClickable = true
-            itemView.setOnClickListener { switchTmdbStream(row.extractor, row.idx) }
-            FocusEffectUtil.applyFocusListener(itemView)
+            FocusEffectUtil.applyFocusListener(
+                itemView,
+                floatArrayOf(16f, 16f, 16f, 16f, 16f, 16f, 16f, 16f).map { it * itemView.resources.displayMetrics.density }
+                    .toFloatArray(),
+            )
         }
 
         fun bindExtra(row: Row.Extra) {
-            val b = rowB ?: return
-            b.serverRailRowTitle.text = row.item.displayTitle
-            b.serverRailRowTitle.alpha = 1f
-            val year = row.item.releaseDate ?: row.item.firstAirDate
+            val b = extraB ?: return
+            GlassPill.applyServerRowCard(b.root, cornerRadiusDp = 14f, showTopRim = true)
+            b.tmdbExtraPoster.loadImage(
+                Rpdb.posterUrl(row.item.type, row.item.id) ?: (
+                    Tmdb.imageUrl(row.item.posterPath ?: row.item.backdropPath, 300)
+                        ?: if (row.item.posterPath?.startsWith("http") == true) row.item.posterPath else null
+                    )
+            )
+            b.tmdbExtraTitle.text = row.item.displayTitle
             val meta = listOfNotNull(
-                year?.takeIf { it.isNotBlank() }?.substringBefore("-"),
-                if (row.item.type == "tv") "TV" else "Movie",
-            ).joinToString(" · ")
+                String.format(java.util.Locale.US, "★ %.1f", row.item.voteAverage)
+                    .takeIf { row.item.voteAverage > 0 },
+                (row.item.releaseDate ?: row.item.firstAirDate).takeIf { !it.isNullOrBlank() },
+                String.format(java.util.Locale.US, "Popularity %.1f", row.item.popularity)
+                    .takeIf { row.item.popularity > 0 },
+            ).joinToString("  •  ")
             if (meta.isBlank()) {
-                b.serverRailRowMeta.isVisible = false
+                b.tmdbExtraMeta.isVisible = false
             } else {
-                b.serverRailRowMeta.text = meta
-                b.serverRailRowMeta.isVisible = true
+                b.tmdbExtraMeta.text = meta
+                b.tmdbExtraMeta.isVisible = true
             }
+            val overview = row.item.overview?.takeIf { it.isNotBlank() }
+            if (overview == null) {
+                b.tmdbExtraOverview.isVisible = false
+            } else {
+                b.tmdbExtraOverview.text = overview
+                b.tmdbExtraOverview.isVisible = true
+            }
+            b.root.setOnClickListener { openExtra(row.item, row.addon) }
             itemView.isFocusable = true
-            itemView.isClickable = true
-            itemView.setOnClickListener { openExtra(row.item, row.addon) }
-            FocusEffectUtil.applyFocusListener(itemView)
+            FocusEffectUtil.applyFocusListener(
+                itemView,
+                floatArrayOf(16f, 16f, 16f, 16f, 16f, 16f, 16f, 16f).map { it * itemView.resources.displayMetrics.density }
+                    .toFloatArray(),
+            )
         }
     }
 }
