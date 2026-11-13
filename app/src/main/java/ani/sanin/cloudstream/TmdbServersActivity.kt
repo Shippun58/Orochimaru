@@ -38,6 +38,7 @@ import com.google.android.material.chip.Chip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.view.View
 import android.widget.PopupMenu
 
 class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
@@ -100,6 +101,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var sourceAddonUrl: String? = null
     private val pluginEpisodes = mutableMapOf<Int, List<TmdbEpisode>>()
     private var launchingPlayer = false
+    private var initialFocusApplied = false
 
     private lateinit var serversBinding: ActivityTmdbServersBinding
     private var detail: TmdbDetail? = null
@@ -193,6 +195,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             refreshRows()
             resolveAll()
         }
+        wireServerFocusChain()
     }
 
     private fun setupCollapse() {
@@ -408,7 +411,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
-    private fun buildChips() {
+    private fun buildChips(focusKey: String? = null) {
         serversBinding.tmdbStreamsChips.removeAllViews()
         chipByIndex.clear()
         val inflater = android.view.LayoutInflater.from(this)
@@ -418,6 +421,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 serversBinding.tmdbStreamsChips,
                 false,
             ) as Chip
+            chip.id = View.generateViewId()
             chip.text = group.name
             chip.isCheckable = true
             chip.isClickable = true
@@ -431,7 +435,109 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             chipByIndex.add(chip)
             serversBinding.tmdbStreamsChips.addView(chip)
         }
+        applyChipFocusChain()
+        val selectedChipId = chipByIndex.getOrNull(selectedIndex)?.id
+        if (selectedChipId != null) {
+            serversBinding.tmdbServersRefreshAll.nextFocusDownId = selectedChipId
+            serversBinding.tmdbServersMakeDefault.nextFocusDownId = selectedChipId
+        }
+        if (focusKey != null) {
+            val index = groups.indexOfFirst { it.key == focusKey }
+            chipByIndex.getOrNull(index)?.requestFocus()
+        }
         renderChipStates()
+        focusInitialChip()
+    }
+
+    private fun wireServerFocusChain() {
+        val back = serversBinding.tmdbStreamsBack
+        val menu = serversBinding.tmdbServersMenu
+        val refresh = serversBinding.tmdbServersRefreshAll
+        val makeDefault = serversBinding.tmdbServersMakeDefault
+
+        back.nextFocusUpId = back.id
+        back.nextFocusLeftId = back.id
+        back.nextFocusRightId = menu.id
+        back.nextFocusDownId = refresh.id
+
+        menu.nextFocusUpId = menu.id
+        menu.nextFocusLeftId = back.id
+        menu.nextFocusRightId = menu.id
+        menu.nextFocusDownId = if (makeDefault.isVisible) makeDefault.id else refresh.id
+
+        refresh.nextFocusUpId = back.id
+        refresh.nextFocusLeftId = refresh.id
+        refresh.nextFocusRightId = if (makeDefault.isVisible) makeDefault.id else refresh.id
+
+        makeDefault.nextFocusUpId = menu.id
+        makeDefault.nextFocusLeftId = refresh.id
+        makeDefault.nextFocusRightId = makeDefault.id
+    }
+
+    private fun applyChipFocusChain() {
+        val refreshId = serversBinding.tmdbServersRefreshAll.id
+        val defaultId = serversBinding.tmdbServersMakeDefault
+            .takeIf { it.isVisible }?.id
+            ?: chipByIndex.firstOrNull()?.id
+            ?: View.NO_ID
+        chipByIndex.forEachIndexed { index, chip ->
+            chip.nextFocusUpId = refreshId
+            chip.nextFocusLeftId =
+                if (index == 0) defaultId else chipByIndex[index - 1].id
+            chip.nextFocusRightId =
+                if (index == chipByIndex.lastIndex) chip.id else chipByIndex[index + 1].id
+            chip.nextFocusDownId = View.NO_ID
+            val previous = chip.onFocusChangeListener
+            chip.setOnFocusChangeListener { v, hasFocus ->
+                previous?.onFocusChange(v, hasFocus)
+                if (hasFocus) {
+                    serversBinding.tmdbServersRefreshAll.nextFocusDownId = chip.id
+                    serversBinding.tmdbServersMakeDefault.nextFocusDownId = chip.id
+                }
+            }
+            chip.setOnKeyListener { _, keyCode, event ->
+                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when {
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        rowsAdapter.focusFirstFocusableRow()
+                        true
+                    }
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && index == 0 -> true
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT &&
+                        index == chipByIndex.lastIndex -> true
+                    else -> false
+                }
+            }
+        }
+    }
+
+    private fun focusSelectedChip(): Boolean {
+        val chip = chipByIndex.getOrNull(selectedIndex)
+            ?: chipByIndex.firstOrNull()
+            ?: return false
+        return if (chip.isAttachedToWindow) {
+            chip.requestFocus()
+        } else {
+            serversBinding.tmdbStreamsChips.post { chip.requestFocus() }
+            true
+        }
+    }
+
+    private fun focusInitialChip() {
+        if (initialFocusApplied) return
+        serversBinding.tmdbStreamsChips.post {
+            if (initialFocusApplied) return@post
+            if (chipByIndex.isEmpty()) return@post
+            val current = currentFocus
+            if (current == null || current === serversBinding.tmdbStreamsBack ||
+                current === serversBinding.tmdbServersMenu ||
+                current === serversBinding.tmdbServersRefreshAll ||
+                current === serversBinding.tmdbServersMakeDefault
+            ) {
+                focusSelectedChip()
+            }
+            initialFocusApplied = true
+        }
     }
 
     private fun renderChipStates() {
@@ -731,9 +837,12 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         runOnUiThread {
             if (isFinishing || isDestroyed) return@runOnUiThread
             val selectedKey = groups.getOrNull(selectedIndex)?.key
+            val focusedKey = chipByIndex.indexOfFirst { it.hasFocus() }
+                .takeIf { it >= 0 }
+                ?.let { groups.getOrNull(it)?.key }
             groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
             selectedIndex = groups.indexOfFirst { it.key == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
-            buildChips()
+            buildChips(focusedKey)
             refreshRows()
         }
     }
@@ -1026,6 +1135,46 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
         override fun getItemCount(): Int = rows.size
 
+        fun focusFirstFocusableRow(): Boolean {
+            val position = rows.indexOfFirst { isFocusableRow(it) }
+            if (position < 0) return false
+            fun focus(): Boolean {
+                val holder = serversBinding.tmdbStreamsRows
+                    .findViewHolderForAdapterPosition(position) ?: return false
+                return when (holder) {
+                    is HeadVH -> holder.binding.tmdbStreamsGroupRefresh.requestFocus()
+                    else -> holder.itemView.requestFocus()
+                }
+            }
+            if (focus()) return true
+            serversBinding.tmdbStreamsRows.scrollToPosition(position)
+            serversBinding.tmdbStreamsRows.post { focus() }
+            return true
+        }
+
+        private fun isFocusableRow(row: Row): Boolean = when (row) {
+            is Row.Head, is Row.Stream, is Row.Info, is Row.Extra -> true
+            else -> false
+        }
+
+        private fun isLastFocusableRow(position: Int): Boolean {
+            if (position < 0) return false
+            for (i in position + 1 until rows.size) {
+                if (isFocusableRow(rows[i])) return false
+            }
+            return true
+        }
+
+        private fun trapRowKeys(position: Int, keyCode: Int, event: android.view.KeyEvent): Boolean {
+            if (event.action != android.view.KeyEvent.ACTION_DOWN) return false
+            return when (keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> true
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> isLastFocusableRow(position)
+                else -> false
+            }
+        }
+
         override fun onBindViewHolder(
             holder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
             position: Int
@@ -1058,6 +1207,9 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
             init {
                 itemView.isFocusable = false
+                binding.tmdbStreamsGroupRefresh.setOnKeyListener { _, keyCode, event ->
+                    trapRowKeys(bindingAdapterPosition, keyCode, event)
+                }
             }
 
             fun bind(group: Group) {
@@ -1086,6 +1238,9 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 }
                 GlassPill.applyServerRowCard(binding.root, cornerRadiusDp = 14f, showTopRim = true)
                 itemView.isFocusable = true
+                itemView.setOnKeyListener { _, keyCode, event ->
+                    trapRowKeys(bindingAdapterPosition, keyCode, event)
+                }
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(
                     itemView,
@@ -1144,6 +1299,9 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 }
                 GlassPill.applyServerRowCard(binding.root, cornerRadiusDp = 14f, showTopRim = true)
                 itemView.isFocusable = true
+                itemView.setOnKeyListener { _, keyCode, event ->
+                    trapRowKeys(bindingAdapterPosition, keyCode, event)
+                }
                 val r = 16f * itemView.resources.displayMetrics.density
                 FocusEffectUtil.applyFocusListener(
                     itemView,

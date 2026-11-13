@@ -173,24 +173,6 @@
                     android:alpha="0.25"
                     android:background="#FFFFFFFF" />
 
-                <HorizontalScrollView
-                    android:id="@+id/tmdbStreamsChipScroll"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:scrollbars="none"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:paddingTop="10dp"
-                    android:clipToPadding="false">
-
-                    <com.google.android.material.chip.ChipGroup
-                        android:id="@+id/tmdbStreamsChips"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        app:singleLine="true"
-                        app:chipSpacingHorizontal="10dp" />
-                </HorizontalScrollView>
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -256,6 +238,24 @@
                         android:textSize="12sp"
                         android:textColor="@color/tmdb_neutral_text" />
                 </LinearLayout>
+
+                <HorizontalScrollView
+                    android:id="@+id/tmdbStreamsChipScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="4dp"
+                    android:clipToPadding="false">
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/tmdbStreamsChips"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:singleLine="true"
+                        app:chipSpacingHorizontal="10dp" />
+                </HorizontalScrollView>
             </LinearLayout>
 
             <androidx.recyclerview.widget.RecyclerView
