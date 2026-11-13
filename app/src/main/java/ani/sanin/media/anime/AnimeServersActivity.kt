@@ -109,6 +109,12 @@ class AnimeServersActivity : AppCompatActivity() {
     private val groupJobs = mutableMapOf<Int, kotlinx.coroutines.Job>()
     private var arrivalCounter = 0
     private var pendingAutoPlay = false
+    private var launchingPlayer = false
+
+    override fun onResume() {
+        super.onResume()
+        launchingPlayer = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -660,6 +666,8 @@ class AnimeServersActivity : AppCompatActivity() {
     ) {
         val m = media ?: return
         val ep = m.anime?.episodes?.getEpisode(epKey) ?: group.episode ?: return
+        if (launchingPlayer) return
+        launchingPlayer = true
         val videoIdx = forcedVideo
             ?: m.selected?.video?.takeIf { it in extractor.videos.indices && autoVideo }
             ?: extractor.videos.indexOfFirst { it.preferred }.takeIf { it >= 0 }

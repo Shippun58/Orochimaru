@@ -928,7 +928,7 @@ object TmdbStreamResolver {
         episodesOverride: Map<String, Episode>? = null,
         load: LoadResponse? = null,
         stremioAddon: StremioAddon? = null,
-    ) {
+    ): Boolean {
         val id = syntheticId(mediaId)
         sessions[id] = SyntheticSession(mediaId, mediaType, d, source, load, stremioAddon = stremioAddon)
         if (sessions.size > 24) {
@@ -938,9 +938,9 @@ object TmdbStreamResolver {
         val currentKey = if (mediaType == "tv") {
             episodeKey(season ?: 1, epNumber ?: 1)
         } else "1"
-        val current = episodes[currentKey] ?: episodes.values.firstOrNull() ?: return
+        val current = episodes[currentKey] ?: episodes.values.firstOrNull() ?: return false
         val extractors = buildExtractors(links)
-        if (extractors.isEmpty()) return
+        if (extractors.isEmpty()) return false
         current.extractors = extractors.toMutableList()
         current.extractorsSource = 0
         current.allStreams = true
@@ -993,12 +993,14 @@ object TmdbStreamResolver {
             "TMDB_PLAY: launching ExoplayerView for ${mediaType} id=$id title='$title' " +
                 "eps=${episodes.size} current='$currentKey' picked='$pickedLabel'"
         )
-        ExoplayerView.media = media
-        ExoplayerView.initialized = true
-        context.startActivity(
-            Intent(context, ExoplayerView::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-        return
+        withContext(Dispatchers.Main.immediate) {
+            ExoplayerView.media = media
+            ExoplayerView.initialized = true
+            context.startActivity(
+                Intent(context, ExoplayerView::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+        return true
     }
 }

@@ -99,6 +99,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var imdbId: String? = null
     private var sourceAddonUrl: String? = null
     private val pluginEpisodes = mutableMapOf<Int, List<TmdbEpisode>>()
+    private var launchingPlayer = false
 
     private lateinit var serversBinding: ActivityTmdbServersBinding
     private var detail: TmdbDetail? = null
@@ -113,6 +114,11 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var pluginLoad: LoadResponse? = null
     private val groupJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
     private var arrivalCounter = 0
+
+    override fun onResume() {
+        super.onResume()
+        launchingPlayer = false
+    }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
@@ -733,10 +739,12 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     }
 
     private fun play(link: TmdbStreamResolver.StreamResult.PlayableLink, group: Group) {
+        if (launchingPlayer) return
         val state = group.state as? GroupState.Ready ?: return
         val d = detail ?: return
         val playable = state.links.filter { it.url.isNotBlank() }
         if (playable.isEmpty()) return
+        launchingPlayer = true
         saveLastPlayed()
         Logger.log("TMDB_SERVERS: play '${d.displayTitle}' via ${group.name} label='${link.label}'")
         val overrideEpisodes = if (group.pluginLoad != null) {
@@ -747,20 +755,26 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             }
         } else null
         lifecycleScope.launch(Dispatchers.IO) {
-            TmdbStreamResolver.launchPlayer(
-                this@TmdbServersActivity,
-                mediaId,
-                mediaType,
-                d,
-                group.source,
-                season,
-                epNumber,
-                playable,
-                link.label,
-                episodesOverride = overrideEpisodes,
-                load = group.pluginLoad,
-                stremioAddon = group.addon,
-            )
+            val launched = runCatching {
+                TmdbStreamResolver.launchPlayer(
+                    this@TmdbServersActivity,
+                    mediaId,
+                    mediaType,
+                    d,
+                    group.source,
+                    season,
+                    epNumber,
+                    playable,
+                    link.label,
+                    episodesOverride = overrideEpisodes,
+                    load = group.pluginLoad,
+                    stremioAddon = group.addon,
+                )
+            }.getOrElse {
+                Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: launch failed: ${it.message}")
+                false
+            }
+            if (!launched) runOnUiThread { launchingPlayer = false }
         }
     }
 

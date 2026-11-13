@@ -376,6 +376,7 @@ class ServerRailController(
 ) {
 
     private val media: Media get() = ExoplayerView.media
+    private var launching = false
 
     private sealed class Row {
         data class Header(val name: String, val tag: String?) : Row()
@@ -1232,9 +1233,11 @@ class ServerRailController(
     // --- actions ---
 
     private fun switchServer(group: Group, extractor: VideoExtractor, videoIdx: Int) {
+        if (launching) return
         val m = media
         val epKey = m.anime?.selectedEpisode ?: return
         val ep = m.anime?.episodes?.getEpisode(epKey) ?: group.episode ?: return
+        launching = true
         if (ep.extractorsSource != group.index) {
             ep.extractors = mutableListOf()
             ep.extractorsSource = group.index
@@ -1267,14 +1270,16 @@ class ServerRailController(
     }
 
     private fun playTmdbStream(link: TmdbStreamResolver.StreamResult.PlayableLink, group: TmdbGroup) {
+        if (launching) return
         val state = group.state as? TmdbGroupState.Ready ?: return
         val session = tmdbSession ?: return
         val playable = state.links.filter { it.url.isNotBlank() }
         if (playable.isEmpty()) return
+        launching = true
         val (season, epNum) = tmdbSeasonEp()
         Logger.log("SERVER_RAIL: tmdb play '${session.detail.displayTitle}' via ${group.name} label='${link.label}'")
         activity.lifecycleScope.launch(Dispatchers.IO) {
-            runCatching {
+            val launched = runCatching {
                 TmdbStreamResolver.launchPlayer(
                     activity,
                     session.mediaId,
@@ -1287,12 +1292,11 @@ class ServerRailController(
                     link.label,
                     stremioAddon = group.addon,
                 )
-            }.onFailure {
+            }.getOrElse {
                 Logger.log(android.util.Log.ERROR, "SERVER_RAIL: tmdb play failed: ${it.message}")
+                false
             }
-            activity.runOnUiThread {
-                if (!activity.isFinishing) activity.finish()
-            }
+            if (!launched) activity.runOnUiThread { launching = false }
         }
     }
 

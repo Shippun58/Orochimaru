@@ -2939,7 +2939,6 @@ class ExoplayerView :
             exoPlayer.currentPosition,
         )
         startActivity(Intent(this, ExoplayerView::class.java))
-        finish()
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
@@ -5510,7 +5509,7 @@ class ExoplayerView :
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         finishAndRemoveTask()
-        startActivity(intent)
+        startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     override fun onDestroy() {
