@@ -2894,7 +2894,6 @@ class ExoplayerView :
         LiveHelper.unregisterPlayer(exoPlayer)
         liveSupportRegistered = false
         exoPlayer.release()
-        VideoCache.release()
         mediaSession?.release()
     }
 

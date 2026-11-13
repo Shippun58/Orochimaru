@@ -1481,7 +1481,16 @@ class ServerRailController(
             )
             b.urlNote.isVisible = false
             b.urlAudio.isVisible = false
-            b.urlTag.isVisible = false
+            if (row.active) {
+                b.urlTag.text = "▶ Playing"
+                b.urlTag.setTextColor(
+                    b.root.context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+                )
+                b.urlTag.alpha = 1f
+                b.urlTag.isVisible = true
+            } else {
+                b.urlTag.isVisible = false
+            }
             b.urlSize.isVisible = false
             b.urlSub.isVisible = false
             b.urlDownload.isVisible = false
@@ -1567,7 +1576,7 @@ class ServerRailController(
             b.root.setOnClickListener { switchServer(row.group, row.extractor, row.idx) }
             itemView.isFocusable = true
             setRowMargins(
-                if (row.isFirst) (if (row.server != null) 6 else 0) else 1,
+                if (row.isFirst) (if (row.server != null) 2 else 0) else 1,
                 0,
             )
             focusCorners()
