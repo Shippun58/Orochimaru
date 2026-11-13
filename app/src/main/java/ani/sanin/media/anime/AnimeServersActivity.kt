@@ -566,7 +566,7 @@ class AnimeServersActivity : AppCompatActivity() {
             Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' failed: ${e.message}")
             group.state = GroupState.Failed(e.message ?: "Failed")
             m.anime?.selectedEpisode?.let { key ->
-                RailRepo.failAnime(RailRepo.animeKey(m.id, key, group.index), e.message ?: "Failed")
+                AnimeRailCache.fail(AnimeRailCache.key(m.id, key, group.index), e.message ?: "Failed")
             }
         }
         onResolved(group)
@@ -578,8 +578,8 @@ class AnimeServersActivity : AppCompatActivity() {
         if (ready.servers.isEmpty()) return
         val epKey = m.anime?.selectedEpisode ?: return
         val extractors = synchronized(group.extractorLock) { group.extractors.toList() }
-        RailRepo.seedAnime(
-            RailRepo.animeKey(m.id, epKey, group.index),
+        AnimeRailCache.seed(
+            AnimeRailCache.key(m.id, epKey, group.index),
             AnimeEntry(
                 servers = ready.servers,
                 extractors = extractors,

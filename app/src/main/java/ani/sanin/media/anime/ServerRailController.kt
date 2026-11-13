@@ -90,6 +90,15 @@ internal class AnimeEntry(
 
 private class TmdbEntry(val state: TmdbGroupState, val done: Boolean)
 
+internal object AnimeRailCache {
+    fun key(mediaId: Int, epKey: String?, sourceIndex: Int) =
+        RailRepo.animeKey(mediaId, epKey, sourceIndex)
+
+    fun seed(key: String, entry: AnimeEntry) = RailRepo.seedAnime(key, entry)
+
+    fun fail(key: String, reason: String) = RailRepo.failAnime(key, reason)
+}
+
 // ---------------------------------------------------------------------
 // RailRepo: process-level resolution + cache.
 // Jobs are NOT tied to any activity, so they survive player restarts
@@ -97,7 +106,7 @@ private class TmdbEntry(val state: TmdbGroupState, val done: Boolean)
 // never re-resolves a source that already succeeded.
 // ---------------------------------------------------------------------
 
-internal object RailRepo {
+private object RailRepo {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
 
