@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
@@ -29,15 +30,18 @@ import ani.sanin.media.MediaDetailsViewModel
 import ani.sanin.parsers.AnimeParser
 import ani.sanin.parsers.AnimeSources
 import ani.sanin.parsers.HAnimeSources
+import ani.sanin.parsers.NativeAnimeParser
 import ani.sanin.parsers.Video
 import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
 import ani.sanin.parsers.VideoType
 import ani.sanin.parsers.WatchSources
+import ani.sanin.px
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.snackString
 import ani.sanin.util.Logger
+import ani.sanin.util.customAlertDialog
 import com.google.android.material.chip.Chip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -94,7 +98,7 @@ class AnimeServersActivity : AppCompatActivity() {
         val parser: AnimeParser,
     ) {
         var state: GroupState = GroupState.Loading
-        var rank = 2
+        var rank = 1
         var arrivalSeq = Int.MAX_VALUE
         var episode: Episode? = null
         val extractors = mutableListOf<VideoExtractor>()
@@ -108,7 +112,7 @@ class AnimeServersActivity : AppCompatActivity() {
     private var selectedIndex = 0
     private val rowsAdapter = RowsAdapter()
     private val groupJobs = mutableMapOf<Int, kotlinx.coroutines.Job>()
-    private var arrivalCounter = 0
+    private val arrivalCounter = java.util.concurrent.atomic.AtomicInteger(0)
     private var pendingAutoPlay = false
     private var launchingPlayer = false
     private var initialFocusApplied = false
@@ -152,7 +156,7 @@ class AnimeServersActivity : AppCompatActivity() {
         serversBinding.tmdbStreamsRows.adapter = rowsAdapter
         serversBinding.tmdbStreamsBack.setOnClickListener { finish() }
         serversBinding.tmdbServersRefreshAll.setOnClickListener { refreshAll() }
-        serversBinding.tmdbServersMenu.setOnClickListener { showLoadModeMenu(it) }
+        serversBinding.tmdbServersMenu.setOnClickListener { showLoadModeMenu() }
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbStreamsBack)
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbServersRefreshAll)
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbServersMenu)
@@ -294,7 +298,7 @@ class AnimeServersActivity : AppCompatActivity() {
     private fun buildGroups() {
         groups.clear()
         chipByIndex.clear()
-        arrivalCounter = 0
+        arrivalCounter.set(0)
         sources.list.forEachIndexed { index, lazier ->
             val listName = lazier.name
             if (listName.equals("Local", ignoreCase = true)) return@forEachIndexed
@@ -318,23 +322,27 @@ class AnimeServersActivity : AppCompatActivity() {
                 false,
             ) as Chip
             chip.id = View.generateViewId()
+            chip.tag = group.index
             chip.text = group.name
             chip.isCheckable = true
             chip.isClickable = true
             chip.isFocusable = true
             chip.setTextColor(resources.getColorStateList(R.color.chip_text_color))
+            if (group.parser is NativeAnimeParser) {
+                chip.isChipIconVisible = true
+                chip.chipIcon = ContextCompat.getDrawable(chip.context, R.drawable.ic_chip_dot)
+                chip.chipIconSize = 5f.px.toFloat()
+            }
             chip.isChecked = index == selectedIndex
-            chip.setOnClickListener { selectGroup(index) }
+            chip.setOnClickListener {
+                val currentIndex = groups.indexOfFirst { it.index == group.index }
+                if (currentIndex >= 0) selectGroup(currentIndex)
+            }
             FocusEffectUtil.applyFocusListener(chip)
             chipByIndex.add(chip)
             serversBinding.tmdbStreamsChips.addView(chip)
         }
         applyChipFocusChain()
-        val selectedChipId = chipByIndex.getOrNull(selectedIndex)?.id
-        if (selectedChipId != null) {
-            serversBinding.tmdbServersRefreshAll.nextFocusDownId = selectedChipId
-            serversBinding.tmdbServersMakeDefault.nextFocusDownId = selectedChipId
-        }
         if (focusSource != null) {
             val index = groups.indexOfFirst { it.index == focusSource }
             chipByIndex.getOrNull(index)?.requestFocus()
@@ -369,6 +377,34 @@ class AnimeServersActivity : AppCompatActivity() {
     }
 
     private fun applyChipFocusChain() {
+        chipByIndex.forEach { chip ->
+            val previous = chip.onFocusChangeListener
+            chip.setOnFocusChangeListener { v, hasFocus ->
+                previous?.onFocusChange(v, hasFocus)
+                if (hasFocus) {
+                    serversBinding.tmdbServersRefreshAll.nextFocusDownId = chip.id
+                    serversBinding.tmdbServersMakeDefault.nextFocusDownId = chip.id
+                }
+            }
+            chip.setOnKeyListener { _, keyCode, event ->
+                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                val index = chipByIndex.indexOf(chip)
+                when {
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        rowsAdapter.focusFirstFocusableRow()
+                        true
+                    }
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && index == 0 -> true
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT &&
+                        index == chipByIndex.lastIndex -> true
+                    else -> false
+                }
+            }
+        }
+        relinkChipNeighbours()
+    }
+
+    private fun relinkChipNeighbours() {
         val refreshId = serversBinding.tmdbServersRefreshAll.id
         val defaultId = serversBinding.tmdbServersMakeDefault
             .takeIf { it.isVisible }?.id
@@ -381,27 +417,11 @@ class AnimeServersActivity : AppCompatActivity() {
             chip.nextFocusRightId =
                 if (index == chipByIndex.lastIndex) chip.id else chipByIndex[index + 1].id
             chip.nextFocusDownId = View.NO_ID
-            val previous = chip.onFocusChangeListener
-            chip.setOnFocusChangeListener { v, hasFocus ->
-                previous?.onFocusChange(v, hasFocus)
-                if (hasFocus) {
-                    serversBinding.tmdbServersRefreshAll.nextFocusDownId = chip.id
-                    serversBinding.tmdbServersMakeDefault.nextFocusDownId = chip.id
-                }
-            }
-            chip.setOnKeyListener { _, keyCode, event ->
-                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                when {
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        rowsAdapter.focusFirstFocusableRow()
-                        true
-                    }
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && index == 0 -> true
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT &&
-                        index == chipByIndex.lastIndex -> true
-                    else -> false
-                }
-            }
+        }
+        val selectedChipId = chipByIndex.getOrNull(selectedIndex)?.id
+        if (selectedChipId != null) {
+            serversBinding.tmdbServersRefreshAll.nextFocusDownId = selectedChipId
+            serversBinding.tmdbServersMakeDefault.nextFocusDownId = selectedChipId
         }
     }
 
@@ -438,11 +458,23 @@ class AnimeServersActivity : AppCompatActivity() {
         chipByIndex.forEachIndexed { index, chip ->
             val group = groups.getOrNull(index) ?: return@forEachIndexed
             chip.isChecked = index == selectedIndex
-            chip.text = when (group.state) {
+            chip.text = when (val state = group.state) {
                 is GroupState.Loading -> "${group.name} ·"
                 is GroupState.Failed -> "${group.name} (failed)"
-                is GroupState.Ready -> group.name
+                is GroupState.Ready ->
+                    if (state.servers.isEmpty()) "${group.name} (empty)" else group.name
             }
+        }
+    }
+
+    private var rowRefreshPending = false
+
+    private fun scheduleRowsRefresh() {
+        if (rowRefreshPending) return
+        rowRefreshPending = true
+        serversBinding.tmdbStreamsRows.post {
+            rowRefreshPending = false
+            if (!isFinishing && !isDestroyed) refreshRows(scrollToTop = false)
         }
     }
 
@@ -536,15 +568,20 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private suspend fun resolveAll() {
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-        val targets = if (mode == 1) listOf(selectedIndex) else groups.indices
+        val targets = if (mode == 1) {
+            listOf(selectedIndex)
+        } else {
+            groups.indices.sortedBy { if (it == selectedIndex) 0 else 1 }
+        }
         if (mode == 1) {
             groups.forEachIndexed { i, g ->
                 if (i != selectedIndex) {
                     groupJobs.remove(i)?.cancel()
-                    g.state = GroupState.Loading
-                    g.rank = 2
-                    g.arrivalSeq = Int.MAX_VALUE
+                    markLoading(g)
                 }
+            }
+            if (groups.getOrNull(selectedIndex)?.state is GroupState.Failed) {
+                groups.getOrNull(selectedIndex)?.let { markLoading(it) }
             }
             renderChipStates()
             refreshRows()
@@ -554,31 +591,29 @@ class AnimeServersActivity : AppCompatActivity() {
         groupJobs.values.toList().forEach { it.join() }
     }
 
-    private fun showLoadModeMenu(anchor: View) {
-        val menu = android.widget.PopupMenu(this, anchor, android.view.Gravity.END)
-        menu.menuInflater.inflate(R.menu.menu_tmdb_servers_load, menu.menu)
-        val parallelItem = menu.menu.findItem(R.id.tmdbServersLoadModeParallel)
-        val onSelectItem = menu.menu.findItem(R.id.tmdbServersLoadModeOnSelect)
-        parallelItem.isCheckable = true
-        onSelectItem.isCheckable = true
-        fun syncChecks() {
-            val current = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-            parallelItem.isChecked = current == 0
-            onSelectItem.isChecked = current == 1
-        }
-        syncChecks()
-        menu.setOnMenuItemClickListener { item ->
-            val mode = when (item.itemId) {
-                R.id.tmdbServersLoadModeParallel -> 0
-                R.id.tmdbServersLoadModeOnSelect -> 1
-                else -> return@setOnMenuItemClickListener true
+    private fun markLoading(group: Group) {
+        group.state = GroupState.Loading
+        group.rank = 1
+        group.arrivalSeq = Int.MAX_VALUE
+    }
+
+    private fun showLoadModeMenu() {
+        val current = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        customAlertDialog()
+            .setTitle("Server loading mode")
+            .singleChoiceItems(
+                arrayOf(
+                    "Load servers parallel across all addons simultaneously",
+                    "Load servers on source click",
+                ),
+                if (current == 1) 1 else 0,
+            ) { which ->
+                val mode = if (which == 1) 1 else 0
+                PrefManager.setVal(PrefName.TmdbServersLoadMode, mode)
+                Logger.log("ANIME_SERVERS: load mode set $mode")
+                lifecycleScope.launch { resolveAll() }
             }
-            PrefManager.setVal(PrefName.TmdbServersLoadMode, mode)
-            syncChecks()
-            lifecycleScope.launch { resolveAll() }
-            true
-        }
-        menu.show()
+            .show()
     }
 
     private fun launchGroupResolution(index: Int) {
@@ -628,6 +663,7 @@ class AnimeServersActivity : AppCompatActivity() {
             group.extractionDone = false
             Logger.log("ANIME_SERVERS: '${group.name}' ok ${servers.size} servers")
             seedRailCache(group, done = false)
+            onResolved(group)
             if (servers.isNotEmpty()) {
                 val link = target.link
                 val sEp = target.sEpisode
@@ -643,7 +679,7 @@ class AnimeServersActivity : AppCompatActivity() {
                             runOnUiThread {
                                 if (isFinishing || isDestroyed) return@runOnUiThread
                                 maybeAutoPlay(group, extractor)
-                                if (groups.getOrNull(selectedIndex) === group) refreshRows(scrollToTop = false)
+                                if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
                             }
                         }, servers)
                     }.onFailure {
@@ -655,7 +691,7 @@ class AnimeServersActivity : AppCompatActivity() {
             seedRailCache(group, done = true)
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (groups.getOrNull(selectedIndex) === group) refreshRows(scrollToTop = false)
+                if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
                 if (pendingAutoPlay && group.index == (m.selected?.sourceIndex ?: -1)) {
                     pendingAutoPlay = false
                     m.selected?.server = null
@@ -699,20 +735,57 @@ class AnimeServersActivity : AppCompatActivity() {
         val ready = (group.state as? GroupState.Ready)?.servers?.isNotEmpty() == true
         group.rank = when {
             ready -> 0
-            group.state is GroupState.Failed -> 1
+            group.state is GroupState.Loading -> 1
             else -> 2
         }
-        if (group.rank == 0) group.arrivalSeq = arrivalCounter++
+        if (group.rank == 0 && group.arrivalSeq == Int.MAX_VALUE) {
+            group.arrivalSeq = arrivalCounter.getAndIncrement()
+        }
         runOnUiThread {
             if (isFinishing || isDestroyed) return@runOnUiThread
             val selectedKey = groups.getOrNull(selectedIndex)?.index
             val focusedSource = chipByIndex.indexOfFirst { it.hasFocus() }
                 .takeIf { it >= 0 }
                 ?.let { groups.getOrNull(it)?.index }
-            groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
+            groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.index }))
             selectedIndex = groups.indexOfFirst { it.index == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
+            syncChipsAfterSort(focusedSource)
+            if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
+        }
+    }
+
+    private fun syncChipsAfterSort(focusedSource: Int? = null) {
+        if (chipByIndex.size != groups.size) {
             buildChips(focusedSource)
-            refreshRows()
+            return
+        }
+        val currentOrder = chipByIndex.mapNotNull { it.tag as? Int }
+        val newOrder = groups.map { it.index }
+        if (currentOrder == newOrder) {
+            renderChipStates()
+            relinkChipNeighbours()
+            return
+        }
+        val focusedId = currentFocus?.id
+        val byIndex = chipByIndex.associateBy { it.tag as Int }
+        val parent = serversBinding.tmdbStreamsChips
+        parent.removeAllViews()
+        chipByIndex.clear()
+        groups.forEach { group ->
+            val chip = byIndex[group.index] ?: return@forEach
+            parent.addView(chip)
+            chipByIndex.add(chip)
+        }
+        relinkChipNeighbours()
+        renderChipStates()
+        val targetId = if (focusedSource != null) {
+            val position = groups.indexOfFirst { it.index == focusedSource }
+            chipByIndex.getOrNull(position)?.id
+        } else {
+            focusedId
+        }
+        if (targetId != null) {
+            chipByIndex.firstOrNull { it.id == targetId }?.requestFocus()
         }
     }
 
@@ -744,9 +817,11 @@ class AnimeServersActivity : AppCompatActivity() {
             groups.forEachIndexed { i, g ->
                 if (i != index) {
                     groupJobs.remove(i)?.cancel()
-                    g.state = GroupState.Loading
+                    markLoading(g)
                 }
             }
+            if (groups[index].state is GroupState.Failed) markLoading(groups[index])
+            renderChipStates()
             launchGroupResolution(index)
         } else if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
             if (groups[index].state is GroupState.Loading) launchGroupResolution(index)
@@ -757,7 +832,7 @@ class AnimeServersActivity : AppCompatActivity() {
         Logger.log("ANIME_SERVERS: refresh all")
         groupJobs.values.toList().forEach { it.cancel() }
         groupJobs.clear()
-        groups.forEach { it.state = GroupState.Loading }
+        groups.forEach { markLoading(it) }
         renderChipStates()
         refreshRows()
         snackString(R.string.tmdb_servers_refreshed_all)
@@ -767,7 +842,7 @@ class AnimeServersActivity : AppCompatActivity() {
     private fun refreshGroup(index: Int) {
         val group = groups.getOrNull(index) ?: return
         Logger.log("ANIME_SERVERS: refresh group '${group.name}'")
-        group.state = GroupState.Loading
+        markLoading(group)
         renderChipStates()
         if (selectedIndex == index) refreshRows()
         lifecycleScope.launch { launchGroupResolution(index) }
@@ -778,7 +853,6 @@ class AnimeServersActivity : AppCompatActivity() {
     private fun playVideo(extractor: VideoExtractor, videoIdx: Int, group: Group) {
         val m = media ?: return
         m.selected?.sourceIndex = group.index
-        model.saveSelected(m.id, m.selected!!)
         lifecycleScope.launch {
             if (isFinishing || isDestroyed) return@launch
             if (extractor.videos.isEmpty()) {

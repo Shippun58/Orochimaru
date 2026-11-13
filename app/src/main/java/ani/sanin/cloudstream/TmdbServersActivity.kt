@@ -31,6 +31,7 @@ import ani.sanin.themes.ThemeManager
 import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
+import ani.sanin.util.customAlertDialog
 import androidx.lifecycle.lifecycleScope
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
@@ -39,7 +40,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.view.View
-import android.widget.PopupMenu
 
 class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
@@ -73,8 +73,9 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val pluginLoad: LoadResponse? = null,
     ) {
         var state: GroupState = GroupState.Loading
-        var rank: Int = 2
+        var rank: Int = 1
         var arrivalSeq: Int = Int.MAX_VALUE
+        var order: Int = 0
     }
 
     private sealed class Row {
@@ -115,7 +116,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var headerCollapseMax = 0
     private var pluginLoad: LoadResponse? = null
     private val groupJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
-    private var arrivalCounter = 0
+    private val arrivalCounter = java.util.concurrent.atomic.AtomicInteger(0)
 
     override fun onResume() {
         super.onResume()
@@ -155,7 +156,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         serversBinding.tmdbStreamsRows.adapter = rowsAdapter
         serversBinding.tmdbStreamsBack.setOnClickListener { finish() }
         serversBinding.tmdbServersRefreshAll.setOnClickListener { refreshAll() }
-        serversBinding.tmdbServersMenu.setOnClickListener { showLoadModeMenu(it) }
+        serversBinding.tmdbServersMenu.setOnClickListener { showLoadModeMenu() }
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbStreamsBack)
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbServersRefreshAll)
         FocusEffectUtil.applyFocusListener(serversBinding.tmdbServersMenu)
@@ -373,7 +374,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private fun buildGroups() {
         groups.clear()
         chipByIndex.clear()
-        arrivalCounter = 0
+        arrivalCounter.set(0)
         pluginSourceId?.let { pluginSourceId ->
             val source = CsRepos.installed(this).firstOrNull { it.id == pluginSourceId }
             if (source != null) {
@@ -409,6 +410,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 )
             )
         }
+        groups.forEachIndexed { index, group -> group.order = index }
     }
 
     private fun buildChips(focusKey: String? = null) {
@@ -422,6 +424,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 false,
             ) as Chip
             chip.id = View.generateViewId()
+            chip.tag = group.key
             chip.text = group.name
             chip.isCheckable = true
             chip.isClickable = true
@@ -430,17 +433,15 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 resources.getColorStateList(R.color.chip_text_color)
             )
             chip.isChecked = index == selectedIndex
-            chip.setOnClickListener { selectGroup(index) }
+            chip.setOnClickListener {
+                val currentIndex = groups.indexOfFirst { it.key == group.key }
+                if (currentIndex >= 0) selectGroup(currentIndex)
+            }
             FocusEffectUtil.applyFocusListener(chip)
             chipByIndex.add(chip)
             serversBinding.tmdbStreamsChips.addView(chip)
         }
         applyChipFocusChain()
-        val selectedChipId = chipByIndex.getOrNull(selectedIndex)?.id
-        if (selectedChipId != null) {
-            serversBinding.tmdbServersRefreshAll.nextFocusDownId = selectedChipId
-            serversBinding.tmdbServersMakeDefault.nextFocusDownId = selectedChipId
-        }
         if (focusKey != null) {
             val index = groups.indexOfFirst { it.key == focusKey }
             chipByIndex.getOrNull(index)?.requestFocus()
@@ -475,6 +476,34 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     }
 
     private fun applyChipFocusChain() {
+        chipByIndex.forEach { chip ->
+            val previous = chip.onFocusChangeListener
+            chip.setOnFocusChangeListener { v, hasFocus ->
+                previous?.onFocusChange(v, hasFocus)
+                if (hasFocus) {
+                    serversBinding.tmdbServersRefreshAll.nextFocusDownId = chip.id
+                    serversBinding.tmdbServersMakeDefault.nextFocusDownId = chip.id
+                }
+            }
+            chip.setOnKeyListener { _, keyCode, event ->
+                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                val index = chipByIndex.indexOf(chip)
+                when {
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        rowsAdapter.focusFirstFocusableRow()
+                        true
+                    }
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && index == 0 -> true
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT &&
+                        index == chipByIndex.lastIndex -> true
+                    else -> false
+                }
+            }
+        }
+        relinkChipNeighbours()
+    }
+
+    private fun relinkChipNeighbours() {
         val refreshId = serversBinding.tmdbServersRefreshAll.id
         val defaultId = serversBinding.tmdbServersMakeDefault
             .takeIf { it.isVisible }?.id
@@ -487,27 +516,11 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             chip.nextFocusRightId =
                 if (index == chipByIndex.lastIndex) chip.id else chipByIndex[index + 1].id
             chip.nextFocusDownId = View.NO_ID
-            val previous = chip.onFocusChangeListener
-            chip.setOnFocusChangeListener { v, hasFocus ->
-                previous?.onFocusChange(v, hasFocus)
-                if (hasFocus) {
-                    serversBinding.tmdbServersRefreshAll.nextFocusDownId = chip.id
-                    serversBinding.tmdbServersMakeDefault.nextFocusDownId = chip.id
-                }
-            }
-            chip.setOnKeyListener { _, keyCode, event ->
-                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                when {
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        rowsAdapter.focusFirstFocusableRow()
-                        true
-                    }
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && index == 0 -> true
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT &&
-                        index == chipByIndex.lastIndex -> true
-                    else -> false
-                }
-            }
+        }
+        val selectedChipId = chipByIndex.getOrNull(selectedIndex)?.id
+        if (selectedChipId != null) {
+            serversBinding.tmdbServersRefreshAll.nextFocusDownId = selectedChipId
+            serversBinding.tmdbServersMakeDefault.nextFocusDownId = selectedChipId
         }
     }
 
@@ -544,15 +557,19 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         chipByIndex.forEachIndexed { index, chip ->
             val group = groups.getOrNull(index) ?: return@forEachIndexed
             chip.isChecked = index == selectedIndex
-            chip.text = when (group.state) {
+            chip.text = when (val state = group.state) {
                 is GroupState.Loading -> "${group.name} ·"
                 is GroupState.Failed -> "${group.name} (failed)"
-                is GroupState.Ready -> group.name
+                is GroupState.Ready -> {
+                    val hasContent = state.links.any { it.url.isNotBlank() } ||
+                        state.recommendations.isNotEmpty() || state.infos.isNotEmpty()
+                    if (hasContent) group.name else "${group.name} (empty)"
+                }
             }
         }
     }
 
-    private fun refreshRows() {
+    private fun refreshRows(scrollToTop: Boolean = true) {
         rows.clear()
         val group = groups.getOrNull(selectedIndex)
         if (group == null) {
@@ -593,7 +610,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             }
         }
         rowsAdapter.notifyDataSetChanged()
-        serversBinding.tmdbStreamsRows.scrollToPosition(0)
+        if (scrollToTop) serversBinding.tmdbStreamsRows.scrollToPosition(0)
         Logger.log(
             "TMDB_SERVERS: rows for '${group.name}' count=${rows.size} state=${stateLabel(group.state)}"
         )
@@ -608,17 +625,21 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     }
 
     private suspend fun resolveAll() {
-        val d = detail ?: return
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-        val targets = if (mode == 1) listOf(selectedIndex) else groups.indices
+        val targets = if (mode == 1) {
+            listOf(selectedIndex)
+        } else {
+            groups.indices.sortedBy { if (it == selectedIndex) 0 else 1 }
+        }
         if (mode == 1) {
             groups.forEachIndexed { i, g ->
                 if (i != selectedIndex) {
                     groupJobs.remove(g.key)?.cancel()
-                    g.state = GroupState.Loading
-                    g.rank = 2
-                    g.arrivalSeq = Int.MAX_VALUE
+                    markLoading(g)
                 }
+            }
+            if (groups.getOrNull(selectedIndex)?.state is GroupState.Failed) {
+                groups.getOrNull(selectedIndex)?.let { markLoading(it) }
             }
             renderChipStates()
             refreshRows()
@@ -628,34 +649,29 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         groupJobs.values.toList().forEach { it.join() }
     }
 
-    private fun showLoadModeMenu(anchor: android.view.View) {
-        val menu = android.widget.PopupMenu(this, anchor, android.view.Gravity.END)
-        menu.menuInflater.inflate(R.menu.menu_tmdb_servers_load, menu.menu)
-        val parallelItem = menu.menu.findItem(R.id.tmdbServersLoadModeParallel)
-        val onSelectItem = menu.menu.findItem(R.id.tmdbServersLoadModeOnSelect)
-        parallelItem.isCheckable = true
-        onSelectItem.isCheckable = true
-        fun syncChecks() {
-            val current = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-            Logger.log("TMDB_SERVERS: load mode current=$current")
-            parallelItem.isChecked = current == 0
-            onSelectItem.isChecked = current == 1
-        }
-        syncChecks()
-        menu.setOnMenuItemClickListener { item ->
-            val mode = when (item.itemId) {
-                R.id.tmdbServersLoadModeParallel -> 0
-                R.id.tmdbServersLoadModeOnSelect -> 1
-                else -> return@setOnMenuItemClickListener true
+    private fun markLoading(group: Group) {
+        group.state = GroupState.Loading
+        group.rank = 1
+        group.arrivalSeq = Int.MAX_VALUE
+    }
+
+    private fun showLoadModeMenu() {
+        val current = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        customAlertDialog()
+            .setTitle("Server loading mode")
+            .singleChoiceItems(
+                arrayOf(
+                    "Load servers parallel across all addons simultaneously",
+                    "Load servers on source click",
+                ),
+                if (current == 1) 1 else 0,
+            ) { which ->
+                val mode = if (which == 1) 1 else 0
+                PrefManager.setVal(PrefName.TmdbServersLoadMode, mode)
+                Logger.log("TMDB_SERVERS: load mode set $mode")
+                lifecycleScope.launch { resolveAll() }
             }
-            PrefManager.setVal(PrefName.TmdbServersLoadMode, mode)
-            val stored = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-            Logger.log("TMDB_SERVERS: load mode set $mode stored=$stored")
-            syncChecks()
-            lifecycleScope.launch { resolveAll() }
-            true
-        }
-        menu.show()
+            .show()
     }
 
     private fun launchGroupResolution(index: Int) {
@@ -700,9 +716,11 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             groups.forEachIndexed { i, g ->
                 if (i != index) {
                     groupJobs.remove(g.key)?.cancel()
-                    g.state = GroupState.Loading
+                    markLoading(g)
                 }
             }
+            if (groups[index].state is GroupState.Failed) markLoading(groups[index])
+            renderChipStates()
             launchGroupResolution(index)
         } else if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
             if (groups[index].state is GroupState.Loading) launchGroupResolution(index)
@@ -714,7 +732,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         groupJobs.values.toList().forEach { it.cancel() }
         groupJobs.clear()
         TmdbStreamResolver.invalidateLinks(mediaId)
-        groups.forEach { it.state = GroupState.Loading }
+        groups.forEach { markLoading(it) }
         renderChipStates()
         refreshRows()
         snackString(R.string.tmdb_servers_refreshed_all)
@@ -725,7 +743,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val group = groups.getOrNull(index) ?: return
         Logger.log("TMDB_SERVERS: refresh group '${group.name}'")
         TmdbStreamResolver.invalidateLinks(mediaId, group.name)
-        group.state = GroupState.Loading
+        markLoading(group)
         renderChipStates()
         if (selectedIndex == index) refreshRows()
         lifecycleScope.launch { launchGroupResolution(index) }
@@ -830,20 +848,57 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
         group.rank = when {
             playable > 0 -> 0
-            group.state is GroupState.Failed -> 1
+            group.state is GroupState.Loading -> 1
             else -> 2
         }
-        if (group.rank == 0) group.arrivalSeq = arrivalCounter++
+        if (group.rank == 0 && group.arrivalSeq == Int.MAX_VALUE) {
+            group.arrivalSeq = arrivalCounter.getAndIncrement()
+        }
         runOnUiThread {
             if (isFinishing || isDestroyed) return@runOnUiThread
             val selectedKey = groups.getOrNull(selectedIndex)?.key
             val focusedKey = chipByIndex.indexOfFirst { it.hasFocus() }
                 .takeIf { it >= 0 }
                 ?.let { groups.getOrNull(it)?.key }
-            groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
+            groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.order }))
             selectedIndex = groups.indexOfFirst { it.key == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
+            syncChipsAfterSort(focusedKey)
+            if (groups.getOrNull(selectedIndex) === group) refreshRows(scrollToTop = false)
+        }
+    }
+
+    private fun syncChipsAfterSort(focusedKey: String? = null) {
+        if (chipByIndex.size != groups.size) {
             buildChips(focusedKey)
-            refreshRows()
+            return
+        }
+        val currentOrder = chipByIndex.mapNotNull { it.tag as? String }
+        val newOrder = groups.map { it.key }
+        if (currentOrder == newOrder) {
+            renderChipStates()
+            relinkChipNeighbours()
+            return
+        }
+        val focusedId = currentFocus?.id
+        val byKey = chipByIndex.associateBy { it.tag as String }
+        val parent = serversBinding.tmdbStreamsChips
+        parent.removeAllViews()
+        chipByIndex.clear()
+        groups.forEach { group ->
+            val chip = byKey[group.key] ?: return@forEach
+            parent.addView(chip)
+            chipByIndex.add(chip)
+        }
+        relinkChipNeighbours()
+        renderChipStates()
+        val targetId = if (focusedKey != null) {
+            val position = groups.indexOfFirst { it.key == focusedKey }
+            chipByIndex.getOrNull(position)?.id
+        } else {
+            focusedId
+        }
+        if (targetId != null) {
+            chipByIndex.firstOrNull { it.id == targetId }?.requestFocus()
         }
     }
 
