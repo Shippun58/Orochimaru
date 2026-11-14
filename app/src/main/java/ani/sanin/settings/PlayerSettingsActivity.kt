@@ -255,6 +255,16 @@ class PlayerSettingsActivity :
                     },
                     isEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N,
                 ),
+                SubscreenBuilder.Entry(
+                    title = "Decoder",
+                    desc = "Hardware is fastest; Hardware+ falls back to software; Software is most compatible.",
+                    iconRes = R.drawable.ic_baseline_extension_24,
+                    choice = SubscreenBuilder.Choice(
+                        title = "Decoder",
+                        options = arrayOf("Hardware", "Hardware+", "Software"),
+                        currentIndex = PrefManager.getVal<Int>(PrefName.DecodingMode).coerceIn(0, 2),
+                    ) { idx -> PrefManager.setVal(PrefName.DecodingMode, idx) },
+                ),
             )),
         ))
     }

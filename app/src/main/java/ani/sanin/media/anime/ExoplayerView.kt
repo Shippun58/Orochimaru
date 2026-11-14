@@ -104,6 +104,7 @@ import androidx.media3.exoplayer.drm.FrameworkMediaDrm
 import androidx.media3.exoplayer.drm.DrmSessionManager
 import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
 import androidx.media3.exoplayer.drm.HttpMediaDrmCallback
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 
 import androidx.media3.session.MediaSession
@@ -2709,6 +2710,25 @@ class ExoplayerView :
         }
     }
 
+    private fun videoDecoderSelector(mode: Int): MediaCodecSelector =
+        MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+            val infos = MediaCodecSelector.DEFAULT.getDecoderInfos(
+                mimeType,
+                requiresSecureDecoder,
+                requiresTunnelingDecoder,
+            )
+            if (!mimeType.startsWith("video/")) {
+                infos
+            } else {
+                when (mode) {
+                    0 -> infos.filter { it.isHardwareAccelerated }
+                    1 -> infos.filter { it.isHardwareAccelerated } +
+                        infos.filterNot { it.isHardwareAccelerated }
+                    else -> infos.filterNot { it.isHardwareAccelerated }
+                }
+            }
+        }
+
     private fun buildExoplayer() {
 
         renderCustomSubtitle("", "")
@@ -2757,8 +2777,10 @@ class ExoplayerView :
         val alreadyHandled = storedSource == "manual" || storedSource == "auto"
         speechRecorder.setEnabled(autoSyncPrefEnabled && !alreadyHandled)
         Logger.log("Libass: Calling SubtitleSyncRenderersFactory.withAssSupport()")
+        val decoderMode = PrefManager.getVal<Int>(PrefName.DecodingMode).coerceIn(0, 2)
         val renderersFactory = SubtitleSyncRenderersFactory(this, speechRecorder)
-            .setEnableDecoderFallback(false)
+            .setMediaCodecSelector(videoDecoderSelector(decoderMode))
+            .setEnableDecoderFallback(decoderMode != 0)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
             .withAssSupport(handler)
 
