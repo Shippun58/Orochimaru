@@ -8,6 +8,8 @@ import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
@@ -43,6 +45,7 @@ import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 class SubtitleRailController(
@@ -145,7 +148,11 @@ class SubtitleRailController(
                 when (holder) {
                     is RailAdapter.RailViewHolder -> {
                         val item = rows.getOrNull(index)
-                        val view = if (item?.isToggle == true) holder.binding.subtitleToggle else holder.itemView
+                        val view = if (item?.isToggle == true && !holder.itemView.isFocusable) {
+                            holder.binding.subtitleToggle
+                        } else {
+                            holder.itemView
+                        }
                         if (view.isFocusable) view.requestFocus() else fallback?.requestFocus()
                     }
                     is RailAdapter.ActionViewHolder -> {
@@ -331,21 +338,9 @@ class SubtitleRailController(
             )
             if (otherExtractors.isNotEmpty() && !crossServerRequested) {
                 actions.add(
-                    RailAction("More sources", enabled = subtitlesEnabled) {
+                    RailAction("Cross Server", enabled = subtitlesEnabled) {
                         crossServerRequested = true
                         rebuild()
-                    }
-                )
-            }
-            if (embeddedTracks.isNotEmpty()) {
-                actions.add(
-                    RailAction("Off (embedded)", enabled = subtitlesEnabled) {
-                        activity.onSetTrackGroupOverride(
-                            activity.subtitleRailDummyTrack(),
-                            C.TRACK_TYPE_TEXT,
-                            0,
-                        )
-                        close()
                     }
                 )
             }
@@ -782,17 +777,20 @@ class SubtitleRailController(
                     FocusEffectUtil.applyFocusListener(binding.root)
                     binding.subtitleTitle.text = item.label
                     binding.subtitleTitle.setTextColor(themePrimary)
-                    binding.subtitleTitle.textSize = 12f
+                    binding.subtitleTitle.textSize = 14f
                 }
 
                 item.isToggle -> {
                     setRowMargins(binding.root, 8, 4, 8, 4)
-                    FocusEffectUtil.applyFocusListener(binding.root)
+                    binding.root.isFocusable = true
+                    FocusEffectUtil.applyFocusListener(
+                        binding.root,
+                        cornerRadiusPx = dp(14).toFloat(),
+                    )
                     binding.subtitleTitle.text = item.label
                     binding.subtitleTitle.setTextColor(Color.WHITE)
                     binding.subtitleTitle.textSize = 16f
                     binding.subtitleToggle.visibility = View.VISIBLE
-                    binding.subtitleToggle.isFocusable = true
                     binding.subtitleToggle.isChecked = subtitlesEnabled
                     binding.subtitleToggle.setOnCheckedChangeListener { _, checked ->
                         if (checked != PrefManager.getVal<Boolean>(PrefName.Subtitles)) {
@@ -882,6 +880,29 @@ class SubtitleRailController(
             binding.subtitleActionRow.removeAllViews()
             item.actions.forEach { action ->
                 binding.subtitleActionRow.addView(buildActionButton(binding.root.context, action))
+            }
+
+            val context = binding.root.context
+            val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+            var downX = 0f
+            var downY = 0f
+            binding.root.setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = event.rawX
+                        downY = event.rawY
+                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = abs(event.rawX - downX)
+                        val dy = abs(event.rawY - downY)
+                        if (dy > touchSlop && dy > dx) {
+                            view.parent?.requestDisallowInterceptTouchEvent(false)
+                        }
+                    }
+                }
+                false
             }
         }
     }
