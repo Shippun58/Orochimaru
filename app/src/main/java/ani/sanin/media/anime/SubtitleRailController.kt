@@ -336,9 +336,13 @@ class SubtitleRailController(
                     close()
                 }
             )
-            if (otherExtractors.isNotEmpty() && !crossServerRequested) {
+            if (otherExtractors.isNotEmpty()) {
                 actions.add(
                     RailAction("Cross Server", enabled = subtitlesEnabled) {
+                        if (crossServerRequested) {
+                            val prefix = "${episode.number}|"
+                            attemptedServers.removeAll { it.startsWith(prefix) }
+                        }
                         crossServerRequested = true
                         rebuild()
                     }
@@ -911,7 +915,7 @@ class SubtitleRailController(
         return MaterialButton(context).apply {
             text = action.label
             isAllCaps = false
-            textSize = 12f
+            textSize = 11f
             typeface = ResourcesCompat.getFont(context, R.font.poppins_semi_bold)
             setTextColor(Color.WHITE)
             backgroundTintList = ColorStateList.valueOf(TRANSPARENT)
@@ -920,14 +924,14 @@ class SubtitleRailController(
             cornerRadius = dp(20)
             insetTop = 0
             insetBottom = 0
-            minHeight = dp(36)
+            minHeight = dp(34)
             minWidth = 0
             gravity = Gravity.CENTER
-            setPadding(dp(14), 0, dp(14), 0)
+            setPadding(dp(10), 0, dp(10), 0)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                dp(36),
-            ).apply { marginEnd = dp(6) }
+                dp(34),
+            ).apply { marginEnd = dp(4) }
             isEnabled = action.enabled
             alpha = if (action.enabled) 1f else 0.4f
             isFocusable = action.enabled
