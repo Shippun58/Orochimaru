@@ -62,6 +62,9 @@ class App : Application() {
             }
         }
         PrefManager.init(this)
+        Injekt.importModule(AppModule(this))
+        Injekt.importModule(PreferenceModule(this))
+        initializeNetwork()
         ani.sanin.download.DownloadManager.init(this)
 
         val crashlytics =
@@ -73,9 +76,6 @@ class App : Application() {
             LogcatBuffer.start()
             Logger.log(Log.WARN, "App: Logging started")
         }
-
-        Injekt.importModule(AppModule(this))
-        Injekt.importModule(PreferenceModule(this))
 
         val useMaterialYou: Boolean = PrefManager.getVal(PrefName.UseMaterialYou)
         if (useMaterialYou) {
@@ -92,8 +92,6 @@ class App : Application() {
             }
         }
         crashlytics.setCustomKey("device Info", SettingsActivity.getDeviceInfo())
-
-        initializeNetwork()
 
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             runCatching { android.webkit.WebView(this).destroy() }
