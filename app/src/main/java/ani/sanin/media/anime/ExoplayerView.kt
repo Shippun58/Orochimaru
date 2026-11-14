@@ -400,6 +400,7 @@ class ExoplayerView :
     private var isInitialized = false
     private var isPlayerPlaying = true
     private var changingServer = false
+    private var recreating = false
     private var autoContinuePending = false
     private var autoContinueServer: String? = null
     private var playerReleased = false
@@ -1735,8 +1736,7 @@ class ExoplayerView :
                 } else {
                     media.anime!!.selectedEpisode = nextKey
                     model.setMedia(media)
-                    model.epChanged.value = true
-                    model.onEpisodeClick(media, nextKey, supportFragmentManager, false, prev)
+                    toast(getString(R.string.source_error))
                 }
                 return
             }
@@ -2163,14 +2163,12 @@ class ExoplayerView :
                 "Player: no extractor '${episode.selectedExtractor}' on ep '${episode.number}' " +
                     "(have ${episode.extractors?.filterNotNull()?.size ?: 0}) — aborting media build"
             )
-            if (autoContinuePending) {
-                autoContinuePending = false
-                autoContinueServer = null
-                toast(getString(R.string.source_error))
-                val failedKey = media.anime?.selectedEpisode
-                if (failedKey != null) serverRailController?.openForEpisode(failedKey)
-                else serverRailController?.open()
-            }
+            autoContinuePending = false
+            autoContinueServer = null
+            toast(getString(R.string.source_error))
+            val failedKey = media.anime?.selectedEpisode
+            if (failedKey != null) serverRailController?.openForEpisode(failedKey)
+            else serverRailController?.open()
             return
         }
         extractor = ext
@@ -2183,14 +2181,12 @@ class ExoplayerView :
                 "Player: no video at index ${episode.selectedVideo} for server '${ext.server.name}' " +
                     "(videos=${ext.videos.size}) on ep '${episode.number}' — aborting media build"
             )
-            if (autoContinuePending) {
-                autoContinuePending = false
-                autoContinueServer = null
-                toast(getString(R.string.source_error))
-                val failedKey = media.anime?.selectedEpisode
-                if (failedKey != null) serverRailController?.openForEpisode(failedKey)
-                else serverRailController?.open()
-            }
+            autoContinuePending = false
+            autoContinueServer = null
+            toast(getString(R.string.source_error))
+            val failedKey = media.anime?.selectedEpisode
+            if (failedKey != null) serverRailController?.openForEpisode(failedKey)
+            else serverRailController?.open()
             return
         }
         autoContinuePending = false
@@ -3034,26 +3030,14 @@ class ExoplayerView :
     private fun sourceClick() {
         Logger.log("Player: sourceClick — opening server rail (server=${media.selected?.server ?: "none"}, ep=${episode.number})")
         val controller = serverRailController
-        if (controller == null) {
-            changingServer = true
-            media.selected!!.server = null
-            PrefManager.setCustomVal(
-                "${media.id}_${media.anime!!.selectedEpisode}",
-                exoPlayer.currentPosition,
-            )
-            model.saveSelected(media.id, media.selected!!)
-            model.onEpisodeClick(
-                media,
-                episode.number,
-                this.supportFragmentManager,
-                launch = false,
-            )
-        } else {
-            PrefManager.setCustomVal(
-                "${media.id}_${media.anime!!.selectedEpisode}",
-                exoPlayer.currentPosition,
-            )
+        PrefManager.setCustomVal(
+            "${media.id}_${media.anime!!.selectedEpisode}",
+            exoPlayer.currentPosition,
+        )
+        if (controller != null) {
             controller.open()
+        } else {
+            toast(getString(R.string.source_error))
         }
     }
 
@@ -3064,6 +3048,7 @@ class ExoplayerView :
                 exoPlayer.currentPosition,
             )
         }
+        recreating = true
         recreate()
     }
 
@@ -5658,6 +5643,7 @@ class ExoplayerView :
     @SuppressLint("UnsafeIntentLaunch")
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        recreating = true
         recreate()
     }
 
@@ -5688,7 +5674,7 @@ class ExoplayerView :
         speechRecorder.release()
 
         super.onDestroy()
-        finishAndRemoveTask()
+        if (!recreating && !isChangingConfigurations) finishAndRemoveTask()
     }
 
     @Suppress("DEPRECATION")

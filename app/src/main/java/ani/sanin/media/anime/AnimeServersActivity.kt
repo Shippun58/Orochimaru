@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnNextLayout
 import androidx.core.view.isVisible
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -345,7 +346,11 @@ class AnimeServersActivity : AppCompatActivity() {
         applyChipFocusChain()
         if (focusSource != null) {
             val index = groups.indexOfFirst { it.index == focusSource }
-            chipByIndex.getOrNull(index)?.requestFocus()
+            val chip = chipByIndex.getOrNull(index)
+            if (chip != null) {
+                if (chip.isAttachedToWindow) chip.requestFocus()
+                else serversBinding.tmdbStreamsChips.post { chip.requestFocus() }
+            }
         }
         renderChipStates()
         focusInitialChip()
@@ -374,6 +379,21 @@ class AnimeServersActivity : AppCompatActivity() {
         makeDefault.nextFocusUpId = menu.id
         makeDefault.nextFocusLeftId = refresh.id
         makeDefault.nextFocusRightId = makeDefault.id
+
+        val downToChipsOrRows = View.OnKeyListener { _, keyCode, event ->
+            if (event.action != android.view.KeyEvent.ACTION_DOWN ||
+                keyCode != android.view.KeyEvent.KEYCODE_DPAD_DOWN
+            ) {
+                return@OnKeyListener false
+            }
+            val rect = android.graphics.Rect()
+            val chipsVisible = serversBinding.tmdbStreamsChips
+                .getGlobalVisibleRect(rect) && rect.height() > 0
+            if (chipsVisible && focusSelectedChip()) true
+            else rowsAdapter.focusFirstFocusableRow()
+        }
+        refresh.setOnKeyListener(downToChipsOrRows)
+        makeDefault.setOnKeyListener(downToChipsOrRows)
     }
 
     private fun applyChipFocusChain() {
@@ -418,10 +438,12 @@ class AnimeServersActivity : AppCompatActivity() {
                 if (index == chipByIndex.lastIndex) chip.id else chipByIndex[index + 1].id
             chip.nextFocusDownId = View.NO_ID
         }
-        val selectedChipId = chipByIndex.getOrNull(selectedIndex)?.id
-        if (selectedChipId != null) {
-            serversBinding.tmdbServersRefreshAll.nextFocusDownId = selectedChipId
-            serversBinding.tmdbServersMakeDefault.nextFocusDownId = selectedChipId
+        val downChipId = chipByIndex.firstOrNull { it.hasFocus() }?.id
+            ?: chipByIndex.getOrNull(selectedIndex)?.id
+            ?: chipByIndex.firstOrNull()?.id
+        if (downChipId != null) {
+            serversBinding.tmdbServersRefreshAll.nextFocusDownId = downChipId
+            serversBinding.tmdbServersMakeDefault.nextFocusDownId = downChipId
         }
     }
 
@@ -478,7 +500,51 @@ class AnimeServersActivity : AppCompatActivity() {
         }
     }
 
+    private fun focusedRow(): Pair<Row, Int>? {
+        val focused = currentFocus ?: return null
+        if (!isInsideRows(focused)) return null
+        val item = serversBinding.tmdbStreamsRows.findContainingItemView(focused) ?: return null
+        val position = serversBinding.tmdbStreamsRows.getChildAdapterPosition(item)
+        val row = rows.getOrNull(position) ?: return null
+        return row to item.top
+    }
+
+    private fun isInsideRows(view: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current === serversBinding.tmdbStreamsRows) return true
+            current = current.parent as? View
+        }
+        return false
+    }
+
+    private fun rowKey(row: Row): String? = when (row) {
+        is Row.Head -> "h:${row.group.index}"
+        is Row.Server -> "s:${row.group.index}:${row.server.name}"
+        is Row.Video -> "v:${row.group.index}:${row.extractor.server.name}:${row.videoIdx}"
+        is Row.Text -> null
+    }
+
+    private fun restoreRowFocus(key: String, offset: Int) {
+        val position = rows.indexOfFirst { rowKey(it) == key }
+        if (position >= 0) {
+            (serversBinding.tmdbStreamsRows.layoutManager as? LinearLayoutManager)
+                ?.scrollToPositionWithOffset(position, offset)
+            serversBinding.tmdbStreamsRows.doOnNextLayout {
+                if (isFinishing || isDestroyed) return@doOnNextLayout
+                if (!rowsAdapter.focusRowAt(position)) rowsAdapter.focusFirstFocusableRow()
+            }
+        } else {
+            serversBinding.tmdbStreamsRows.post {
+                if (!isFinishing && !isDestroyed) rowsAdapter.focusFirstFocusableRow()
+            }
+        }
+    }
+
     private fun refreshRows(scrollToTop: Boolean = true) {
+        val focusedRow = focusedRow()
+        val restoreKey = focusedRow?.first?.let { rowKey(it) }
+        val restoreOffset = focusedRow?.second ?: 0
         rows.clear()
         val group = groups.getOrNull(selectedIndex)
         if (group == null) {
@@ -535,6 +601,7 @@ class AnimeServersActivity : AppCompatActivity() {
         }
         rowsAdapter.notifyDataSetChanged()
         if (scrollToTop) serversBinding.tmdbStreamsRows.scrollToPosition(0)
+        if (restoreKey != null) restoreRowFocus(restoreKey, restoreOffset)
         Logger.log(
             "ANIME_SERVERS: rows for '${group.name}' count=${rows.size} state=${stateLabel(group.state)}"
         )
@@ -663,7 +730,7 @@ class AnimeServersActivity : AppCompatActivity() {
             group.extractionDone = false
             Logger.log("ANIME_SERVERS: '${group.name}' ok ${servers.size} servers")
             seedRailCache(group, done = false)
-            onResolved(group)
+            onResolved(group, refreshRows = false)
             if (servers.isNotEmpty()) {
                 val link = target.link
                 val sEp = target.sEpisode
@@ -731,7 +798,7 @@ class AnimeServersActivity : AppCompatActivity() {
         )
     }
 
-    private fun onResolved(group: Group) {
+    private fun onResolved(group: Group, refreshRows: Boolean = true) {
         val ready = (group.state as? GroupState.Ready)?.servers?.isNotEmpty() == true
         group.rank = when {
             ready -> 0
@@ -750,7 +817,7 @@ class AnimeServersActivity : AppCompatActivity() {
             groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.index }))
             selectedIndex = groups.indexOfFirst { it.index == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
             syncChipsAfterSort(focusedSource)
-            if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
+            if (refreshRows && groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
         }
     }
 
@@ -789,14 +856,15 @@ class AnimeServersActivity : AppCompatActivity() {
         }
         relinkChipNeighbours()
         renderChipStates()
-        val targetId = if (focusedSource != null) {
+        val target = if (focusedSource != null) {
             val position = groups.indexOfFirst { it.index == focusedSource }
-            chipByIndex.getOrNull(position)?.id
-        } else {
-            focusedId
-        }
-        if (targetId != null) {
-            chipByIndex.firstOrNull { it.id == targetId }?.requestFocus()
+            chipByIndex.getOrNull(position)
+        } else if (focusedId != null) {
+            chipByIndex.firstOrNull { it.id == focusedId }
+        } else null
+        if (target != null) {
+            if (target.isAttachedToWindow) target.requestFocus()
+            else parent.post { target.requestFocus() }
         }
     }
 
@@ -973,6 +1041,23 @@ class AnimeServersActivity : AppCompatActivity() {
             return true
         }
 
+        fun focusRowAt(position: Int): Boolean {
+            if (position !in rows.indices) return false
+            val holder = serversBinding.tmdbStreamsRows
+                .findViewHolderForAdapterPosition(position) ?: return false
+            return when (holder) {
+                is HeadVH -> holder.binding.tmdbStreamsGroupRefresh.requestFocus()
+                else -> holder.itemView.requestFocus()
+            }
+        }
+
+        private fun nextFocusablePosition(from: Int): Int {
+            for (i in from.coerceAtLeast(0) until rows.size) {
+                if (isFocusableRow(rows[i])) return i
+            }
+            return -1
+        }
+
         private fun isFocusableRow(row: Row): Boolean = when (row) {
             is Row.Head, is Row.Video -> true
             else -> false
@@ -1021,6 +1106,19 @@ class AnimeServersActivity : AppCompatActivity() {
             init {
                 itemView.isFocusable = false
                 binding.tmdbStreamsGroupRefresh.setOnKeyListener { _, keyCode, event ->
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+                        keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                    ) {
+                        val next = nextFocusablePosition(bindingAdapterPosition + 1)
+                        if (next >= 0) {
+                            serversBinding.tmdbStreamsRows.scrollToPosition(next)
+                            serversBinding.tmdbStreamsRows.doOnNextLayout {
+                                if (isFinishing || isDestroyed) return@doOnNextLayout
+                                if (!focusRowAt(next)) focusFirstFocusableRow()
+                            }
+                            return@setOnKeyListener true
+                        }
+                    }
                     trapRowKeys(bindingAdapterPosition, keyCode, event)
                 }
             }
@@ -1172,6 +1270,7 @@ class AnimeServersActivity : AppCompatActivity() {
                     binding.root.setOnClickListener { playVideo(extractor, videoIdx, group) }
                 }
                 itemView.isFocusable = true
+                itemView.isClickable = true
                 setRowMargins(
                     if (isFirst) (if (server != null) 6 else 0) else 1,
                     0,

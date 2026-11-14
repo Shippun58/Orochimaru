@@ -500,7 +500,6 @@ class ServerRailController(
     private var selectedIndex = 0
     private var tmdbSelectedIndex = 0
     private var currentTab: Tab = Tab.SOURCES
-    private var keepTabFocus = false
     private var targetEpisodeKey: String? = null
     private val adapter = RailAdapter()
     private var arrivalCounter = 0
@@ -536,17 +535,27 @@ class ServerRailController(
         tabs.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         tabs.nextFocusUpId = closeButton.id
         tabs.nextFocusLeftId = tabs.id
-        tabs.nextFocusRightId = tabs.id
+        tabs.nextFocusRightId = closeButton.id
         FocusEffectUtil.applyFocusListener(tabs)
+        tabs.addTab(tabs.newTab().setText(R.string.sources))
+        tabs.addTab(tabs.newTab().setText(R.string.tracks))
         tabs.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    moveTab(-1)
-                    true
+                    if (currentTab == Tab.TRACKS) {
+                        moveTab(-1)
+                        true
+                    } else false
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    moveTab(1)
+                    if (currentTab == Tab.SOURCES) {
+                        moveTab(1)
+                        true
+                    } else false
+                }
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    closeButton.requestFocus()
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -558,11 +567,9 @@ class ServerRailController(
                 else -> false
             }
         }
-        tabs.addTab(tabs.newTab().setText(R.string.sources))
-        tabs.addTab(tabs.newTab().setText(R.string.tracks))
         tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
-                switchTab(if (tab.position == 1) Tab.TRACKS else Tab.SOURCES, focusList = !keepTabFocus)
+                switchTab(if (tab.position == 1) Tab.TRACKS else Tab.SOURCES)
             }
 
             override fun onTabUnselected(tab: TabLayout.Tab) {}
@@ -599,21 +606,19 @@ class ServerRailController(
         }
     }
 
-    private fun switchTab(tab: Tab, focusList: Boolean = true) {
+    private fun switchTab(tab: Tab) {
         if (currentTab == tab) return
         currentTab = tab
         applyTabVisibility()
         if (tab == Tab.TRACKS) rebuildTracks() else rebuild()
-        if (focusList) focusFirst()
     }
 
     private fun moveTab(delta: Int) {
         val index = if (currentTab == Tab.SOURCES) 0 else 1
         val next = (index + delta).coerceIn(0, 1)
         if (next == index) return
-        keepTabFocus = true
         tabs.getTabAt(next)?.select()
-        keepTabFocus = false
+        tabs.requestFocus()
     }
 
     private fun applyTabVisibility() {

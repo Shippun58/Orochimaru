@@ -32,6 +32,7 @@ import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
+import androidx.core.view.doOnNextLayout
 import androidx.lifecycle.lifecycleScope
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
@@ -444,7 +445,11 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         applyChipFocusChain()
         if (focusKey != null) {
             val index = groups.indexOfFirst { it.key == focusKey }
-            chipByIndex.getOrNull(index)?.requestFocus()
+            val chip = chipByIndex.getOrNull(index)
+            if (chip != null) {
+                if (chip.isAttachedToWindow) chip.requestFocus()
+                else serversBinding.tmdbStreamsChips.post { chip.requestFocus() }
+            }
         }
         renderChipStates()
         focusInitialChip()
@@ -473,6 +478,21 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         makeDefault.nextFocusUpId = menu.id
         makeDefault.nextFocusLeftId = refresh.id
         makeDefault.nextFocusRightId = makeDefault.id
+
+        val downToChipsOrRows = View.OnKeyListener { _, keyCode, event ->
+            if (event.action != android.view.KeyEvent.ACTION_DOWN ||
+                keyCode != android.view.KeyEvent.KEYCODE_DPAD_DOWN
+            ) {
+                return@OnKeyListener false
+            }
+            val rect = android.graphics.Rect()
+            val chipsVisible = serversBinding.tmdbStreamsChips
+                .getGlobalVisibleRect(rect) && rect.height() > 0
+            if (chipsVisible && focusSelectedChip()) true
+            else rowsAdapter.focusFirstFocusableRow()
+        }
+        refresh.setOnKeyListener(downToChipsOrRows)
+        makeDefault.setOnKeyListener(downToChipsOrRows)
     }
 
     private fun applyChipFocusChain() {
@@ -517,10 +537,12 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 if (index == chipByIndex.lastIndex) chip.id else chipByIndex[index + 1].id
             chip.nextFocusDownId = View.NO_ID
         }
-        val selectedChipId = chipByIndex.getOrNull(selectedIndex)?.id
-        if (selectedChipId != null) {
-            serversBinding.tmdbServersRefreshAll.nextFocusDownId = selectedChipId
-            serversBinding.tmdbServersMakeDefault.nextFocusDownId = selectedChipId
+        val downChipId = chipByIndex.firstOrNull { it.hasFocus() }?.id
+            ?: chipByIndex.getOrNull(selectedIndex)?.id
+            ?: chipByIndex.firstOrNull()?.id
+        if (downChipId != null) {
+            serversBinding.tmdbServersRefreshAll.nextFocusDownId = downChipId
+            serversBinding.tmdbServersMakeDefault.nextFocusDownId = downChipId
         }
     }
 
@@ -569,7 +591,52 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
+    private fun focusedRow(): Pair<Row, Int>? {
+        val focused = currentFocus ?: return null
+        if (!isInsideRows(focused)) return null
+        val item = serversBinding.tmdbStreamsRows.findContainingItemView(focused) ?: return null
+        val position = serversBinding.tmdbStreamsRows.getChildAdapterPosition(item)
+        val row = rows.getOrNull(position) ?: return null
+        return row to item.top
+    }
+
+    private fun isInsideRows(view: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current === serversBinding.tmdbStreamsRows) return true
+            current = current.parent as? View
+        }
+        return false
+    }
+
+    private fun rowKey(row: Row): String? = when (row) {
+        is Row.Head -> "h:${row.group.key}"
+        is Row.Stream -> "s:${row.group.key}:${row.link.url}"
+        is Row.Info -> "i:${row.link.url}"
+        is Row.Extra -> "e:${row.media.type}:${row.media.id}"
+        is Row.SubHead, is Row.Text -> null
+    }
+
+    private fun restoreRowFocus(key: String, offset: Int) {
+        val position = rows.indexOfFirst { rowKey(it) == key }
+        if (position >= 0) {
+            (serversBinding.tmdbStreamsRows.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                ?.scrollToPositionWithOffset(position, offset)
+            serversBinding.tmdbStreamsRows.doOnNextLayout {
+                if (isFinishing || isDestroyed) return@doOnNextLayout
+                if (!rowsAdapter.focusRowAt(position)) rowsAdapter.focusFirstFocusableRow()
+            }
+        } else {
+            serversBinding.tmdbStreamsRows.post {
+                if (!isFinishing && !isDestroyed) rowsAdapter.focusFirstFocusableRow()
+            }
+        }
+    }
+
     private fun refreshRows(scrollToTop: Boolean = true) {
+        val focusedRow = focusedRow()
+        val restoreKey = focusedRow?.first?.let { rowKey(it) }
+        val restoreOffset = focusedRow?.second ?: 0
         rows.clear()
         val group = groups.getOrNull(selectedIndex)
         if (group == null) {
@@ -611,6 +678,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
         rowsAdapter.notifyDataSetChanged()
         if (scrollToTop) serversBinding.tmdbStreamsRows.scrollToPosition(0)
+        if (restoreKey != null) restoreRowFocus(restoreKey, restoreOffset)
         Logger.log(
             "TMDB_SERVERS: rows for '${group.name}' count=${rows.size} state=${stateLabel(group.state)}"
         )
@@ -902,14 +970,15 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
         relinkChipNeighbours()
         renderChipStates()
-        val targetId = if (focusedKey != null) {
+        val target = if (focusedKey != null) {
             val position = groups.indexOfFirst { it.key == focusedKey }
-            chipByIndex.getOrNull(position)?.id
-        } else {
-            focusedId
-        }
-        if (targetId != null) {
-            chipByIndex.firstOrNull { it.id == targetId }?.requestFocus()
+            chipByIndex.getOrNull(position)
+        } else if (focusedId != null) {
+            chipByIndex.firstOrNull { it.id == focusedId }
+        } else null
+        if (target != null) {
+            if (target.isAttachedToWindow) target.requestFocus()
+            else parent.post { target.requestFocus() }
         }
     }
 
@@ -1218,6 +1287,23 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             return true
         }
 
+        fun focusRowAt(position: Int): Boolean {
+            if (position !in rows.indices) return false
+            val holder = serversBinding.tmdbStreamsRows
+                .findViewHolderForAdapterPosition(position) ?: return false
+            return when (holder) {
+                is HeadVH -> holder.binding.tmdbStreamsGroupRefresh.requestFocus()
+                else -> holder.itemView.requestFocus()
+            }
+        }
+
+        private fun nextFocusablePosition(from: Int): Int {
+            for (i in from.coerceAtLeast(0) until rows.size) {
+                if (isFocusableRow(rows[i])) return i
+            }
+            return -1
+        }
+
         private fun isFocusableRow(row: Row): Boolean = when (row) {
             is Row.Head, is Row.Stream, is Row.Info, is Row.Extra -> true
             else -> false
@@ -1274,6 +1360,19 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             init {
                 itemView.isFocusable = false
                 binding.tmdbStreamsGroupRefresh.setOnKeyListener { _, keyCode, event ->
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+                        keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                    ) {
+                        val next = nextFocusablePosition(bindingAdapterPosition + 1)
+                        if (next >= 0) {
+                            serversBinding.tmdbStreamsRows.scrollToPosition(next)
+                            serversBinding.tmdbStreamsRows.doOnNextLayout {
+                                if (isFinishing || isDestroyed) return@doOnNextLayout
+                                if (!focusRowAt(next)) focusFirstFocusableRow()
+                            }
+                            return@setOnKeyListener true
+                        }
+                    }
                     trapRowKeys(bindingAdapterPosition, keyCode, event)
                 }
             }
@@ -1332,6 +1431,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 binding.urlSub.isVisible = false
                 binding.urlDownload.isVisible = false
                 binding.root.setOnClickListener { play(link, group) }
+                itemView.isFocusable = true
+                itemView.isClickable = true
             }
 
             fun bindInfo(link: TmdbStreamResolver.StreamResult.PlayableLink, addon: StremioAddon? = null) {
@@ -1348,6 +1449,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 binding.urlDownload.isVisible = false
                 if (link.externalUrl != null) {
                     binding.root.setOnClickListener { openExternal(link, addon) }
+                    itemView.isFocusable = true
+                    itemView.isClickable = true
                 } else {
                     binding.root.setOnClickListener(null)
                     itemView.isClickable = false
