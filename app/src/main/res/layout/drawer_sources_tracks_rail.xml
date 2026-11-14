@@ -24,13 +24,11 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            app:tabBackground="@android:color/transparent"
             app:tabGravity="fill"
             app:tabIndicatorColor="?attr/colorPrimary"
             app:tabMode="fixed"
             app:tabPaddingEnd="12dp"
             app:tabPaddingStart="12dp"
-            app:tabRippleColor="@android:color/transparent"
             app:tabTextAppearance="@style/NavBarText"
             app:tabTextColor="@color/tmdb_neutral_text" />
 

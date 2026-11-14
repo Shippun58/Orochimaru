@@ -6052,7 +6052,8 @@ class ExoplayerView :
         if (serverRailController?.isOpen() == true) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (!isRailChipFocused() && !isServerStripFocused() && !isServerTabsFocused()) {
+                    val onClose = currentFocus === serverDrawerClose
+                    if (!onClose && !isRailChipFocused() && !isServerStripFocused() && !isServerTabsFocused()) {
                         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                             serverRailController?.close()
                         }
@@ -6136,72 +6137,49 @@ class ExoplayerView :
                 val commentOpen = episodeCommentPanel.visibility == View.VISIBLE
                 val serverOpen = serverRailController?.isOpen() == true
                 if (epOpen || subOpen || commentOpen || serverOpen) {
+                    val rv: RecyclerView? = when {
+                        subOpen -> subtitleDrawerList
+                        epOpen -> episodeDrawerList
+                        commentOpen -> episodeCommentList
+                        serverOpen -> serverRailList
+                        else -> null
+                    }
+                    val fallback: View? = when {
+                        subOpen -> subtitleDrawerClose
+                        epOpen -> episodeDrawerClose
+                        commentOpen -> episodeCommentClose
+                        serverOpen -> serverDrawerClose
+                        else -> null
+                    }
                     val focused = currentFocus
-                    if (focused != null) {
-                        val insideRail = isDescendantOf(focused, episodeDrawerContent) ||
+                    val insideRail = focused != null && (
+                        isDescendantOf(focused, episodeDrawerContent) ||
                             isDescendantOf(focused, subtitleDrawerContent) ||
                             isDescendantOf(focused, episodeCommentPanel) ||
                             isDescendantOf(focused, serverDrawerContent)
-                        if (!insideRail) {
-
+                        )
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        if (focused == null || !insideRail) {
                             Logger.log("Player rail focus escaped on ${if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) "UP" else "DOWN"}, refocusing")
-                            when {
-                                subOpen -> focusFirstVisibleFocusable(subtitleDrawerList, subtitleDrawerClose)
-                                epOpen -> focusFirstVisibleFocusable(episodeDrawerList, episodeDrawerClose)
-                                commentOpen -> focusFirstVisibleFocusable(episodeCommentList, episodeCommentClose)
-                                serverOpen -> focusFirstVisibleFocusable(serverRailList, serverDrawerClose)
-                            }
+                            if (rv != null && fallback != null) focusFirstVisibleFocusable(rv, fallback)
                             return true
                         }
-
-                        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                            val rv: RecyclerView? = when {
-                                subOpen && isDescendantOf(focused, subtitleDrawerContent) -> subtitleDrawerList
-                                epOpen && isDescendantOf(focused, episodeDrawerContent) -> episodeDrawerList
-                                commentOpen && isDescendantOf(focused, episodeCommentPanel) -> episodeCommentList
-                                serverOpen && isDescendantOf(focused, serverDrawerContent) -> serverRailList
-                                else -> null
-                            }
-                            if (rv != null) {
-
-                                var item: View? = focused
-                                while (item != null && item.parent !== rv) {
-                                    item = item.parent as? View
-                                }
-                                val pos = item?.let { rv.getChildAdapterPosition(it) }
-                                    ?: RecyclerView.NO_POSITION
-                                if (pos != RecyclerView.NO_POSITION) {
-                                    val last = (rv.adapter?.itemCount ?: 0) - 1
-                                    if (pos == last) {
-
-                                        Logger.log("Player rail at bottom, DPAD_DOWN consumed to prevent wrap to top")
-                                        if (rv.canScrollVertically(1)) rv.smoothScrollBy(0, 80)
-                                        return true
-                                    }
-
-                                    val lm = rv.layoutManager as? LinearLayoutManager
-                                    val lastVisible = lm?.findLastVisibleItemPosition() ?: -1
-                                    if (pos >= lastVisible && rv.canScrollVertically(1)) {
-                                        rv.smoothScrollToPosition((pos + 1).coerceAtMost(last))
-                                    }
-                                }
-                            }
+                        if (rv != null && fallback != null && moveRailFocus(rv, fallback, event.keyCode)) {
+                            return true
                         }
-                    } else if (event.action == KeyEvent.ACTION_DOWN) {
-
-                        Logger.log("Player rail no focus on ${if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) "UP" else "DOWN"}, restoring")
-                        when {
-                            subOpen -> focusFirstVisibleFocusable(subtitleDrawerList, subtitleDrawerClose)
-                            epOpen -> focusFirstVisibleFocusable(episodeDrawerList, episodeDrawerClose)
-                            commentOpen -> focusFirstVisibleFocusable(episodeCommentList, episodeCommentClose)
-                            serverOpen -> focusFirstVisibleFocusable(serverRailList, serverDrawerClose)
-                        }
-                        return true
                     }
+                    return super.dispatchKeyEvent(event)
                 }
                 return false
             }
             KEYCODE_DPAD_LEFT, KEYCODE_DPAD_RIGHT -> {
+                val railFocused = currentFocus?.let { focused ->
+                    isDescendantOf(focused, episodeDrawerContent) ||
+                        isDescendantOf(focused, subtitleDrawerContent) ||
+                        isDescendantOf(focused, episodeCommentPanel) ||
+                        isDescendantOf(focused, serverDrawerContent)
+                } ?: false
+                if (isAnyRailOpen() && railFocused) return super.dispatchKeyEvent(event)
                 if (progressFocused) {
                     if (event.action == KeyEvent.ACTION_DOWN) {
                         ensureControllerVisible()
@@ -6344,6 +6322,68 @@ class ExoplayerView :
         val focused = currentFocus ?: return false
         return this::serverRailTabs.isInitialized &&
             (focused === serverRailTabs || isDescendantOf(focused, serverRailTabs))
+    }
+
+
+    private fun moveRailFocus(rv: RecyclerView, fallback: View, keyCode: Int): Boolean {
+        val focused = currentFocus ?: return false
+        if (focused === rv) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return false
+            focusFirstVisibleFocusable(rv, fallback)
+            return true
+        }
+        var item: View? = focused
+        while (item != null && item.parent !== rv) item = item.parent as? View
+        if (item == null) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && rv !== serverRailList) {
+                focusFirstVisibleFocusable(rv, fallback)
+                return true
+            }
+            return false
+        }
+        val pos = rv.getChildAdapterPosition(item)
+        if (pos == RecyclerView.NO_POSITION) return false
+
+        val step = if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+        val count = rv.adapter?.itemCount ?: 0
+        if (count == 0) return false
+        val lm = rv.layoutManager as? LinearLayoutManager
+        val firstVisible = lm?.findFirstVisibleItemPosition() ?: 0
+        val lastVisible = lm?.findLastVisibleItemPosition() ?: (count - 1)
+        val range = if (step > 0) {
+            (pos + 1..lastVisible).filter { it in 0 until count }
+        } else {
+            (pos - 1 downTo firstVisible).filter { it in 0 until count }
+        }
+        for (i in range) {
+            val view = rv.findViewHolderForAdapterPosition(i)?.itemView ?: continue
+            if (view.isShown && view.isFocusable && view.requestFocus()) return true
+        }
+
+        val next = pos + step
+        if (next !in 0 until count) {
+            if (step > 0) {
+                Logger.log("Player rail at bottom, DPAD_DOWN consumed to prevent wrap to top")
+                if (rv.canScrollVertically(1)) rv.smoothScrollBy(0, 80)
+                return true
+            }
+            return false
+        }
+        if (step < 0 && !rv.canScrollVertically(-1)) return false
+
+        rv.scrollToPosition(next)
+        rv.post {
+            var target = next
+            while (target in 0 until count) {
+                val view = rv.findViewHolderForAdapterPosition(target)?.itemView
+                if (view != null && view.isShown && view.isFocusable) {
+                    view.requestFocus()
+                    return@post
+                }
+                target += step
+            }
+        }
+        return true
     }
 
     private fun focusFirstVisibleFocusable(rv: RecyclerView, fallback: View) {

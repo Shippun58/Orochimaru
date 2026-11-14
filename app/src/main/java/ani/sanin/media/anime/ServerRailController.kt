@@ -531,42 +531,11 @@ class ServerRailController(
         makeDefaultCheck.setOnCheckedChangeListener { _, checked ->
             PrefManager.setVal(PrefName.MakeDefault, checked)
         }
-        tabs.isFocusable = true
-        tabs.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-        tabs.nextFocusUpId = closeButton.id
-        tabs.nextFocusLeftId = tabs.id
-        tabs.nextFocusRightId = closeButton.id
-        FocusEffectUtil.applyFocusListener(tabs)
+        tabs.isFocusable = false
+        tabs.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         tabs.addTab(tabs.newTab().setText(R.string.sources))
         tabs.addTab(tabs.newTab().setText(R.string.tracks))
-        tabs.setOnKeyListener { _, keyCode, event ->
-            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    if (currentTab == Tab.TRACKS) {
-                        moveTab(-1)
-                        true
-                    } else false
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (currentTab == Tab.SOURCES) {
-                        moveTab(1)
-                        true
-                    } else false
-                }
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    closeButton.requestFocus()
-                    true
-                }
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    if (currentTab == Tab.TRACKS) {
-                        focusFirst()
-                        true
-                    } else false
-                }
-                else -> false
-            }
-        }
+        configureTabViews()
         tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
                 switchTab(if (tab.position == 1) Tab.TRACKS else Tab.SOURCES)
@@ -574,9 +543,7 @@ class ServerRailController(
 
             override fun onTabUnselected(tab: TabLayout.Tab) {}
 
-            override fun onTabReselected(tab: TabLayout.Tab) {
-                if (isOpen()) focusFirst()
-            }
+            override fun onTabReselected(tab: TabLayout.Tab) {}
         })
         applyTabVisibility()
     }
@@ -613,19 +580,66 @@ class ServerRailController(
         if (tab == Tab.TRACKS) rebuildTracks() else rebuild()
     }
 
-    private fun moveTab(delta: Int) {
-        val index = if (currentTab == Tab.SOURCES) 0 else 1
-        val next = (index + delta).coerceIn(0, 1)
-        if (next == index) return
-        tabs.getTabAt(next)?.select()
-        tabs.requestFocus()
+    private fun configureTabViews() {
+        val views = (0 until tabs.tabCount).mapNotNull { tabs.getTabAt(it)?.view }
+        views.forEach { view ->
+            if (view.id == View.NO_ID) view.id = View.generateViewId()
+            view.isFocusable = true
+            view.isFocusableInTouchMode = false
+            view.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
+        views.forEachIndexed { i, view ->
+            view.nextFocusUpId = closeButton.id
+            view.nextFocusDownId = if (i == 0) refreshAllView.id else recycler.id
+            view.nextFocusLeftId = views.getOrNull(i - 1)?.id ?: view.id
+            view.nextFocusRightId = views.getOrNull(i + 1)?.id ?: closeButton.id
+            view.setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) return@setOnFocusChangeListener
+                val target = if (i == 1) Tab.TRACKS else Tab.SOURCES
+                if (currentTab != target) tabs.getTabAt(i)?.select()
+            }
+            view.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        closeButton.requestFocus()
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (i == views.lastIndex) {
+                            closeButton.requestFocus()
+                            true
+                        } else false
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> i == 0
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (i == views.lastIndex) {
+                            focusFirst()
+                            true
+                        } else false
+                    }
+                    else -> false
+                }
+            }
+        }
     }
 
     private fun applyTabVisibility() {
         val sources = currentTab == Tab.SOURCES
         strip.isVisible = sources
         chipsScroll.isVisible = sources
-        tabs.nextFocusDownId = if (sources) refreshAllView.id else recycler.id
+        val selectedTabView = tabs.getTabAt(if (sources) 0 else 1)?.view
+        val selectedTabId = selectedTabView?.id ?: closeButton.id
+        refreshAllView.nextFocusUpId = selectedTabId
+        makeDefaultCheck.nextFocusUpId = selectedTabId
+        closeButton.nextFocusDownId = selectedTabId
+        closeButton.nextFocusLeftId = selectedTabId
+        closeButton.nextFocusRightId = closeButton.id
+        closeButton.nextFocusUpId = closeButton.id
+        recycler.nextFocusUpId = selectedTabId
+        val downId = if (sources) refreshAllView.id else recycler.id
+        tabs.getTabAt(0)?.view?.nextFocusDownId = downId
+        tabs.getTabAt(1)?.view?.nextFocusDownId = downId
     }
 
     /** Rebuilds the list for the Tracks tab: bold white Video header, then video tracks,
