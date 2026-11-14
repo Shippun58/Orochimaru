@@ -3,81 +3,85 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="48dp"
+    android:layout_height="wrap_content"
     android:layout_margin="8dp"
     android:focusable="true"
+    android:minHeight="48dp"
     app:cardCornerRadius="16dp"
-    app:cardElevation="0dp"
-    app:contentPadding="8dp">
-
-    <TextView
-        android:id="@+id/subtitleFlag"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:importantForAccessibility="no"
-        android:textSize="36sp"
-        android:alpha="0.3"
-        android:visibility="gone"
-        tools:text="🇯🇵" />
+    app:cardElevation="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:minHeight="48dp"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp">
 
-        <TextView
-            android:id="@+id/subtitleTitle"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:fontFamily="@font/poppins_bold"
-            android:maxLines="1"
-            android:textSize="16sp"
-            tools:text="English" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/subtitleTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins_semi_bold"
+                android:maxLines="1"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                tools:text="English" />
+
+            <TextView
+                android:id="@+id/subtitleProvider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:alpha="0.6"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins"
+                android:maxLines="1"
+                android:textColor="@android:color/white"
+                android:textSize="11sp"
+                android:visibility="gone"
+                tools:text="OpenSubtitles v3 (Stremio add-on)"
+                tools:visibility="visible" />
+        </LinearLayout>
 
         <ImageView
-            android:id="@+id/subtitleGlobe"
+            android:id="@+id/subtitleCheck"
             android:layout_width="18dp"
             android:layout_height="18dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="8dp"
             android:importantForAccessibility="no"
-            android:src="@drawable/ic_chrome_24"
+            android:src="@drawable/ic_baseline_check_24"
             android:visibility="gone"
-            tools:visibility="visible" />
-
-        <TextView
-            android:id="@+id/subtitleBadge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/subtitle_badge_bg"
-            android:fontFamily="@font/poppins_semi_bold"
-            android:gravity="center"
-            android:minWidth="26dp"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp"
-            android:textSize="10sp"
-            android:visibility="gone"
-            tools:text="OP"
             tools:visibility="visible" />
 
         <ani.sanin.ui.components.TomoeView
             android:id="@+id/subtitleSpinner"
             android:layout_width="18dp"
             android:layout_height="18dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="8dp"
             android:visibility="gone"
-            tools:visibility="visible" app:lottie_rawRes="@raw/tomoe" app:lottie_autoPlay="true" app:lottie_loop="true" app:lottie_speed="1.75" />
+            tools:visibility="visible"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_speed="1.75" />
 
         <Switch
             android:id="@+id/subtitleToggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:visibility="gone"
             tools:visibility="visible" />
     </LinearLayout>

@@ -81,7 +81,14 @@ object StremioSubtitles {
                         } else {
                             sub.displayLabel
                         }
-                        StremioSub(id = sub.id, url = sub.url, lang = sub.displayLabel, source = "wyzie", label = enrichedLabel)
+                        StremioSub(
+                            id = sub.id,
+                            url = sub.url,
+                            lang = sub.displayLabel,
+                            source = "wyzie",
+                            label = enrichedLabel,
+                            provider = "Wyzie (inbuilt)",
+                        )
                     }
                 }
             }
@@ -101,7 +108,14 @@ object StremioSubtitles {
                             if (response.isSuccessful && response.body != null) {
                                 val text = response.body!!.string()
                                 val data = Mapper.json.decodeFromString<StremioResponse>(text)
-                                result.addAll(data.subtitles.map { it.copy(source = "stremio") })
+                                result.addAll(
+                                    data.subtitles.map {
+                                        it.copy(
+                                            source = "stremio",
+                                            provider = "Stremio (inbuilt)",
+                                        )
+                                    }
+                                )
                             }
                         }
                     } catch (e: Exception) {
@@ -136,6 +150,7 @@ object StremioSubtitles {
                                     source = "stremio",
                                     label = track.label?.takeIf { it.isNotBlank() }
                                         ?: "${addon.manifest.name} (${track.lang})",
+                                    provider = "${addon.manifest.name} (Stremio add-on)",
                                 )
                             )
                         }
@@ -185,5 +200,6 @@ data class StremioSub(
     val lang: String,
     val source: String = "online",
     val label: String? = null,
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val provider: String? = null
 )

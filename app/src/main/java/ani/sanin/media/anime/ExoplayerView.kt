@@ -6033,7 +6033,9 @@ class ExoplayerView :
         if (this::subtitleDrawerContent.isInitialized && binding.root.isDrawerOpen(subtitleDrawerContent)) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (!isSubtitleHeaderFocused()) {
+                    val onActionPill =
+                        currentFocus is com.google.android.material.button.MaterialButton
+                    if (!isSubtitleHeaderFocused() && !onActionPill) {
                         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                             binding.root.closeDrawer(subtitleDrawerContent)
                         }
@@ -6357,7 +6359,7 @@ class ExoplayerView :
         }
         for (i in range) {
             val view = rv.findViewHolderForAdapterPosition(i)?.itemView ?: continue
-            if (view.isShown && view.isFocusable && view.requestFocus()) return true
+            if (focusFirstFocusableInRow(view)) return true
         }
 
         val next = pos + step
@@ -6376,8 +6378,7 @@ class ExoplayerView :
             var target = next
             while (target in 0 until count) {
                 val view = rv.findViewHolderForAdapterPosition(target)?.itemView
-                if (view != null && view.isShown && view.isFocusable) {
-                    view.requestFocus()
+                if (view != null && focusFirstFocusableInRow(view)) {
                     return@post
                 }
                 target += step
@@ -6392,9 +6393,18 @@ class ExoplayerView :
         val last = lm?.findLastVisibleItemPosition() ?: first
         for (i in first..last) {
             val item = rv.findViewHolderForAdapterPosition(i)?.itemView ?: continue
-            if (item.isFocusable && item.requestFocus()) return
+            if (focusFirstFocusableInRow(item)) return
         }
         fallback.requestFocus()
+    }
+
+    private fun focusFirstFocusableInRow(view: View): Boolean {
+        if (view.isShown && view.isFocusable && view.requestFocus()) return true
+        if (view !is ViewGroup) return false
+        for (i in 0 until view.childCount) {
+            if (focusFirstFocusableInRow(view.getChildAt(i))) return true
+        }
+        return false
     }
 
     private fun startExoPlayer() {

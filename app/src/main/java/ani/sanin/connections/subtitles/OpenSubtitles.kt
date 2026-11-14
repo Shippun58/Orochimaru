@@ -72,7 +72,8 @@ object OpenSubtitles {
                                             url = "${URL_PREFIX}${fileId}",
                                             lang = lang,
                                             label = if (isHi) "$fileName (HI)" else fileName,
-                                            source = "opensubtitles"
+                                            source = "opensubtitles",
+                                            provider = "OpenSubtitles (inbuilt)",
                                         )
                                     )
                                 } catch (_: Exception) {}
