@@ -10,15 +10,11 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <androidx.media3.ui.PlayerView
-            android:id="@+id/player_view"
+        <FrameLayout
+            android:id="@+id/player_view_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:gravity="center"
-            android:focusable="true"
-            app:animation_enabled="false"
-            app:resize_mode="fit"
-            app:show_buffering="when_playing" />
+            android:focusable="false" />
 
         <include layout="@layout/panel_episode_comments" />
 

@@ -624,6 +624,13 @@ class ExoplayerView :
 
         hideSystemBarsExtendView()
 
+        val playerViewContainer = findViewById<ViewGroup>(R.id.player_view_container)
+        val playerLayout = if (PrefManager.getVal<Int>(PrefName.VideoOutput) == 1) {
+            R.layout.player_view_texture
+        } else {
+            R.layout.player_view_surface
+        }
+        layoutInflater.inflate(playerLayout, playerViewContainer, true)
         playerView = findViewById(R.id.player_view)
 
         exoPlay = playerView.findViewById(androidx.media3.ui.R.id.exo_play)

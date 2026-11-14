@@ -310,6 +310,7 @@ enum class PrefName(val data: Pref) {
     AutoHideTimeout(Pref(Location.Player, Int::class, 5)),
     BufferSize(Pref(Location.Player, Int::class, 64)),
     DecodingMode(Pref(Location.Player, Int::class, 0)),
+    VideoOutput(Pref(Location.Player, Int::class, 0)),
     SubtitleRenderMode(Pref(Location.Player, Int::class, 0)),
 
     GestureSliders(Pref(Location.Player, Boolean::class, true)),

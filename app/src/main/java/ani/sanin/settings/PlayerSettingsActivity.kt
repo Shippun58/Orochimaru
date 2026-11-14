@@ -265,6 +265,16 @@ class PlayerSettingsActivity :
                         currentIndex = PrefManager.getVal<Int>(PrefName.DecodingMode).coerceIn(0, 2),
                     ) { idx -> PrefManager.setVal(PrefName.DecodingMode, idx) },
                 ),
+                SubscreenBuilder.Entry(
+                    title = "Video output",
+                    desc = "SurfaceView is fastest; TextureView fixes black video on some devices.",
+                    iconRes = R.drawable.ic_set_video,
+                    choice = SubscreenBuilder.Choice(
+                        title = "Video output",
+                        options = arrayOf("SurfaceView", "TextureView"),
+                        currentIndex = PrefManager.getVal<Int>(PrefName.VideoOutput).coerceIn(0, 1),
+                    ) { idx -> PrefManager.setVal(PrefName.VideoOutput, idx) },
+                ),
             )),
         ))
     }
