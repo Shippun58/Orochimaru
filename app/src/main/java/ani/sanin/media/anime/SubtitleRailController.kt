@@ -899,8 +899,6 @@ class SubtitleRailController(
             cornerRadius = dp(20)
             insetTop = 0
             insetBottom = 0
-            insetLeft = 0
-            insetRight = 0
             minHeight = dp(36)
             minWidth = 0
             gravity = Gravity.CENTER
