@@ -767,12 +767,23 @@ class AnimeServersActivity : AppCompatActivity() {
             return
         }
         val focusedId = currentFocus?.id
-        val byIndex = chipByIndex.associateBy { it.tag as Int }
+        val chipsByIndex = chipByIndex.groupBy { it.tag as? Int }
+        val used = HashMap<Int?, Int>()
+        val ordered = ArrayList<Chip>(chipByIndex.size)
+        groups.forEach { group ->
+            val list = chipsByIndex[group.index] ?: return@forEach
+            val position = used[group.index] ?: 0
+            if (position < list.size) {
+                ordered.add(list[position])
+                used[group.index] = position + 1
+            }
+        }
+        chipByIndex.forEach { chip -> if (chip !in ordered) ordered.add(chip) }
         val parent = serversBinding.tmdbStreamsChips
         parent.removeAllViews()
         chipByIndex.clear()
-        groups.forEach { group ->
-            val chip = byIndex[group.index] ?: return@forEach
+        ordered.forEach { chip ->
+            (chip.parent as? android.view.ViewGroup)?.removeView(chip)
             parent.addView(chip)
             chipByIndex.add(chip)
         }

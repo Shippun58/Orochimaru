@@ -880,12 +880,23 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             return
         }
         val focusedId = currentFocus?.id
-        val byKey = chipByIndex.associateBy { it.tag as String }
+        val chipsByKey = chipByIndex.groupBy { it.tag as? String }
+        val used = HashMap<String?, Int>()
+        val ordered = ArrayList<Chip>(chipByIndex.size)
+        groups.forEach { group ->
+            val list = chipsByKey[group.key] ?: return@forEach
+            val position = used[group.key] ?: 0
+            if (position < list.size) {
+                ordered.add(list[position])
+                used[group.key] = position + 1
+            }
+        }
+        chipByIndex.forEach { chip -> if (chip !in ordered) ordered.add(chip) }
         val parent = serversBinding.tmdbStreamsChips
         parent.removeAllViews()
         chipByIndex.clear()
-        groups.forEach { group ->
-            val chip = byKey[group.key] ?: return@forEach
+        ordered.forEach { chip ->
+            (chip.parent as? android.view.ViewGroup)?.removeView(chip)
             parent.addView(chip)
             chipByIndex.add(chip)
         }
