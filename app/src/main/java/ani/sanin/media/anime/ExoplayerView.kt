@@ -2721,10 +2721,10 @@ class ExoplayerView :
                 infos
             } else {
                 when (mode) {
-                    0 -> infos.filter { it.isHardwareAccelerated }
-                    1 -> infos.filter { it.isHardwareAccelerated } +
-                        infos.filterNot { it.isHardwareAccelerated }
-                    else -> infos.filterNot { it.isHardwareAccelerated }
+                    0 -> infos.filter { it.hardwareAccelerated }
+                    1 -> infos.filter { it.hardwareAccelerated } +
+                        infos.filterNot { it.hardwareAccelerated }
+                    else -> infos.filterNot { it.hardwareAccelerated }
                 }
             }
         }
