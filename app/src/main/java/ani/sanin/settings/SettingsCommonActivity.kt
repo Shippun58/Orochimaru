@@ -84,7 +84,10 @@ class SettingsCommonActivity : AppCompatActivity() {
                         title = "DNS Provider",
                         options = dnsNames,
                         currentIndex = PrefManager.getVal<Int>(PrefName.DohProvider),
-                    ) { idx -> PrefManager.setVal(PrefName.DohProvider, idx) },
+                    ) { idx ->
+                        PrefManager.setVal(PrefName.DohProvider, idx)
+                        restartApp()
+                    },
                 ),
                 SubscreenBuilder.Entry(
                     title = "User Agent",

@@ -5,6 +5,7 @@ import ani.sanin.FileUrl
 import ani.sanin.R
 import ani.sanin.currContext
 import ani.sanin.media.Media
+import ani.sanin.okHttpClient
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.util.Logger
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -111,7 +112,9 @@ abstract class BaseParser {
     }
 
     fun ping(): Triple<Int, Int?, String> {
-        val client = OkHttpClient()
+        val client = OkHttpClient.Builder()
+            .dns(okHttpClient.dns)
+            .build()
         var statusCode = 0
         var responseTime: Int? = null
         var responseMessage = ""

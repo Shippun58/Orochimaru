@@ -2343,7 +2343,9 @@ class ExoplayerView :
                 }
                 lifecycleScope.launch(Dispatchers.IO) {
                     try {
-                        val client = okhttp3.OkHttpClient()
+                        val client = okhttp3.OkHttpClient.Builder()
+                            .dns(okHttpClient.dns)
+                            .build()
                         val request = okhttp3.Request.Builder().url(extSubUrl).build()
                         val response = client.newCall(request).execute()
                         if (response.isSuccessful) {
@@ -2406,6 +2408,7 @@ class ExoplayerView :
                 .apply {
 
                     cookieJar(okHttpClient.cookieJar)
+                    dns(okHttpClient.dns)
                     ignoreAllSSLErrors()
                     followRedirects(true)
                     followSslRedirects(true)
@@ -4080,7 +4083,9 @@ class ExoplayerView :
                 android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Downloading subtitle from $resolvedUrl")
                 Logger.log("applyOnlineSubtitle: resolved url=$resolvedUrl")
 
-                val client = okhttp3.OkHttpClient()
+                val client = okhttp3.OkHttpClient.Builder()
+                    .dns(okHttpClient.dns)
+                    .build()
                 val request = okhttp3.Request.Builder()
                     .url(resolvedUrl)
                     .apply {

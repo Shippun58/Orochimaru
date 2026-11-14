@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.preference.PreferenceManager
 import com.lagradost.cloudstream3.Prerelease
 import ani.sanin.R
+import ani.sanin.okHttpClient
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.nicehttp.Requests
@@ -58,6 +59,7 @@ fun buildDefaultClient(context: Context, ignoreSSL: Boolean = false): OkHttpClie
                 8 -> addCanadianShieldDns()
                 else -> {  }
             }
+            runCatching { okHttpClient.dns }.getOrNull()?.let { this.dns(it) }
         }
 
         .build()

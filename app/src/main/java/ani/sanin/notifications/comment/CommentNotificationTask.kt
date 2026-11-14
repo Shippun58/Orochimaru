@@ -19,6 +19,7 @@ import ani.sanin.R
 import ani.sanin.connections.comments.CommentsAPI
 import ani.sanin.notifications.Task
 import ani.sanin.notifications.subscription.NotificationPopupActivity
+import ani.sanin.okHttpClient
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.util.Logger
@@ -32,7 +33,9 @@ class CommentNotificationTask : Task {
         try {
             withContext(Dispatchers.IO) {
                 PrefManager.init(context)
-                val client = OkHttpClient()
+                val client = OkHttpClient.Builder()
+                    .dns(okHttpClient.dns)
+                    .build()
                 CommentsAPI.fetchAuthToken(context, client)
                 val notificationResponse = CommentsAPI.getNotifications(client)
                 var notifications = notificationResponse?.notifications?.toMutableList()

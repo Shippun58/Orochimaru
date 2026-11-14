@@ -2,6 +2,7 @@ package ani.sanin.download
 
 import android.content.Context
 import ani.sanin.connections.LogoApi
+import ani.sanin.okHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -16,6 +17,7 @@ object DownloadMetadata {
     private const val IMAGE_EXT = "img"
 
     private val client = OkHttpClient.Builder()
+        .dns(okHttpClient.dns)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(12, TimeUnit.SECONDS)
         .build()

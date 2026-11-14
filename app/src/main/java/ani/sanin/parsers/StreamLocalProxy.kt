@@ -71,6 +71,7 @@ object StreamLocalProxy {
         okhttp3.ConnectionPool(30, 2, TimeUnit.MINUTES).let { pool ->
             OkHttpClient.Builder()
                 .cookieJar(okHttpClient.cookieJar)
+                .dns(okHttpClient.dns)
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .followRedirects(true)

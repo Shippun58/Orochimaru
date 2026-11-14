@@ -3,6 +3,7 @@ package ani.sanin.download
 import android.content.Context
 import android.util.Log
 import ani.sanin.parsers.VideoType
+import ani.sanin.okHttpClient
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import kotlinx.coroutines.CoroutineScope
@@ -367,6 +368,7 @@ class Downloader(
             }
             return OkHttpClient.Builder()
             .dispatcher(dispatcher)
+            .dns(okHttpClient.dns)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
