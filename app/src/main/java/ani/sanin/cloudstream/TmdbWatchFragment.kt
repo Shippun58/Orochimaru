@@ -403,13 +403,19 @@ class TmdbWatchFragment : Fragment() {
 
     private suspend fun loadPlugin() {
         val url = pluginUrl ?: return
-        val source = sources.firstOrNull { it.id == pluginSourceId } ?: run {
+        val sourceId = pluginSourceId ?: run {
+            snackString("Plugin source missing")
+            goBack()
+            return
+        }
+        val baseId = CsRuntime.pluginIdOf(sourceId)
+        val source = sources.firstOrNull { it.id == baseId } ?: run {
             snackString("Plugin not installed anymore")
             goBack()
             return
         }
         val api = withContext(Dispatchers.IO) {
-            CsRuntime.apisFor(requireContext(), source).firstOrNull()
+            CsRuntime.apiFor(requireContext(), source, sourceId)
         } ?: run {
             snackString("Could not load ${source.name}")
             goBack()
@@ -1095,7 +1101,7 @@ class TmdbWatchFragment : Fragment() {
     }
 
     private fun applyProviderId(id: String): Boolean {
-        val csIdx = sources.indexOfFirst { it.id == id }
+        val csIdx = sources.indexOfFirst { it.id == CsRuntime.pluginIdOf(id) }
         if (csIdx >= 0) {
             selectedSourceIndex = csIdx
             selectedStremioIndex = -1
@@ -1495,7 +1501,9 @@ class TmdbWatchFragment : Fragment() {
                     } else if (sources.isEmpty()) {
                         null to TmdbStreamResolver.StreamResult.Error(getString(R.string.tmdb_watch_no_sources))
                     } else if (pluginMode) {
-                        val home = sources.firstOrNull { it.id == pluginSourceId }
+                        val home = sources.firstOrNull {
+                            it.id == CsRuntime.pluginIdOf(pluginSourceId ?: "")
+                        }
                         val load = pluginLoad
                         if (home != null && load != null) {
                             home to TmdbStreamResolver.resolvePluginStreams(
@@ -1596,7 +1604,9 @@ class TmdbWatchFragment : Fragment() {
             }
             if (pluginMode) {
 
-                val home = sources.firstOrNull { it.id == pluginSourceId }
+                val home = sources.firstOrNull {
+                    it.id == CsRuntime.pluginIdOf(pluginSourceId ?: "")
+                }
                 val load = pluginLoad
                 if (home != null && load != null) {
                     val result = TmdbStreamResolver.resolvePluginStreams(requireContext(), home, load, season, ep)
@@ -1611,7 +1621,7 @@ class TmdbWatchFragment : Fragment() {
         val source = sources.getOrNull(selectedSourceIndex)
             ?: return TmdbStreamResolver.StreamResult.Error("Source not found")
         val load = pluginLoad
-        if (pluginMode && source.id == pluginSourceId && load != null) {
+        if (pluginMode && source.id == CsRuntime.pluginIdOf(pluginSourceId ?: "") && load != null) {
             return TmdbStreamResolver.resolvePluginStreams(requireContext(), source, load, season, ep)
         }
         return TmdbStreamResolver.resolveStreams(requireContext(), source, d, season, ep)

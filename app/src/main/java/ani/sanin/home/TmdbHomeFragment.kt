@@ -326,8 +326,10 @@ class TmdbHomeFragment : Fragment() {
     private fun load() {
         val sourceId = PrefManager.getVal<String>(PrefName.ContentSource)
         val stremioAddon = StremioAddonManager.addonForSourceId(sourceId)
+        val pluginId = CsRuntime.pluginIdOf(sourceId)
+        val apiIndex = CsRuntime.apiIndexOf(sourceId)
         val plugin = if (sourceId == "simkl" || sourceId == "tmdb") null
-            else CsRepos.installed(requireContext()).firstOrNull { it.id == sourceId }
+            else CsRepos.installed(requireContext()).firstOrNull { it.id == pluginId }
         loadJob?.cancel()
         binding.tmdbHomeSections.removeAllViews()
         loggedOutCtaButton = null
@@ -341,10 +343,10 @@ class TmdbHomeFragment : Fragment() {
                 return@launch
             }
 
-            loadBanner(plugin)
+            loadBanner(plugin, apiIndex)
 
             val hasPluginSections = if (plugin != null) {
-                loadPluginSections(plugin)
+                loadPluginSections(plugin, apiIndex)
             } else false
 
             val loggedOut = plugin == null && isSimklLoggedOut()
@@ -573,7 +575,10 @@ class TmdbHomeFragment : Fragment() {
         applyTmdbBannerFocusChain()
     }
 
-    private suspend fun loadBanner(plugin: CsInstalledSource? = null) {
+    private suspend fun loadBanner(
+        plugin: CsInstalledSource? = null,
+        apiIndex: Int? = null
+    ) {
 
         if (plugin != null) {
             genreNames = withContext(Dispatchers.IO) { Tmdb.genres().associate { it.id to it.name } }
@@ -584,7 +589,13 @@ class TmdbHomeFragment : Fragment() {
             val apis = withContext(Dispatchers.IO) {
                 CsRuntime.apisFor(requireContext(), plugin)
             }
-            for (api in apis) {
+            val targets = if (apiIndex != null) {
+                listOfNotNull(apis.getOrNull(apiIndex)?.let { apiIndex to it })
+            } else {
+                apis.mapIndexed { index, api -> index to api }
+            }
+            for ((index, api) in targets) {
+                val key = CsRuntime.sourceKey(plugin.id, index)
 
                 val pages = api.mainPage.filter { it.data.isNotBlank() }
                 for (page in pages) {
@@ -595,7 +606,7 @@ class TmdbHomeFragment : Fragment() {
                     }.getOrNull()
                     resp?.items?.forEach { list ->
                         list.list.take(10).forEach { sr ->
-                            bannerItems.add(BannerItem.Plugin(sr, plugin.id))
+                            bannerItems.add(BannerItem.Plugin(sr, key))
                         }
                     }
                     if (bannerItems.isNotEmpty()) break
@@ -609,7 +620,7 @@ class TmdbHomeFragment : Fragment() {
                     }.getOrNull()
                     resp?.items?.forEach { list ->
                         list.list.take(10).forEach { sr ->
-                            bannerItems.add(BannerItem.Plugin(sr, plugin.id))
+                            bannerItems.add(BannerItem.Plugin(sr, key))
                         }
                     }
                 }
@@ -620,7 +631,7 @@ class TmdbHomeFragment : Fragment() {
                     }.getOrNull()
                     if (!quick.isNullOrEmpty()) {
                         quick.take(10).forEach { sr ->
-                            bannerItems.add(BannerItem.Plugin(sr, plugin.id))
+                            bannerItems.add(BannerItem.Plugin(sr, key))
                         }
                     }
                 }
@@ -859,13 +870,23 @@ class TmdbHomeFragment : Fragment() {
         }
     }
 
-    private suspend fun loadPluginSections(source: CsInstalledSource): Boolean {
+    private suspend fun loadPluginSections(
+        source: CsInstalledSource,
+        apiIndex: Int? = null
+    ): Boolean {
         val apis = withContext(Dispatchers.IO) {
             CsRuntime.apisFor(requireContext(), source)
         }
         if (apis.isEmpty()) return false
+        val targets = if (apiIndex != null) {
+            listOfNotNull(apis.getOrNull(apiIndex)?.let { apiIndex to it })
+        } else {
+            apis.mapIndexed { index, api -> index to api }
+        }
         var added = false
-        for (api in apis) {
+        for ((index, api) in targets) {
+            val apiKey = CsRuntime.sourceKey(source.id, index)
+            var apiAdded = false
 
             val pages = api.mainPage.filter { it.data.isNotBlank() }
             if (pages.isNotEmpty()) {
@@ -877,8 +898,9 @@ class TmdbHomeFragment : Fragment() {
                     }.getOrNull()
                     resp?.items?.forEach { list ->
                         if (list.list.isNotEmpty()) {
-                            addPluginSection(list.name, list.list, source)
+                            addPluginSection(list.name, list.list, apiKey)
                             added = true
+                            apiAdded = true
                         }
                     }
                 }
@@ -891,18 +913,19 @@ class TmdbHomeFragment : Fragment() {
                 }.getOrNull()
                 resp?.items?.forEach { list ->
                     if (list.list.isNotEmpty()) {
-                        addPluginSection(list.name, list.list, source)
+                        addPluginSection(list.name, list.list, apiKey)
                         added = true
+                        apiAdded = true
                     }
                 }
             }
 
-            if (!added) {
+            if (!apiAdded) {
                 val quick = runCatching {
                     withContext(Dispatchers.IO) { api.quickSearch("") }
                 }.getOrNull()
                 if (!quick.isNullOrEmpty()) {
-                    addPluginSection("Popular", quick, source)
+                    addPluginSection("Popular", quick, apiKey)
                     added = true
                 }
             }
@@ -1084,7 +1107,7 @@ class TmdbHomeFragment : Fragment() {
     private fun addPluginSection(
         title: String,
         items: List<SearchResponse>,
-        source: CsInstalledSource
+        sourceKey: String
     ) {
         if (items.isEmpty()) return
 
@@ -1103,7 +1126,7 @@ class TmdbHomeFragment : Fragment() {
             adapter = PluginRowAdapter(items) { item ->
                 startActivity(
                     Intent(requireContext(), TmdbDetailsActivity::class.java)
-                        .putExtra(TmdbDetailsActivity.ARG_PLUGIN_SOURCE, source.id)
+                        .putExtra(TmdbDetailsActivity.ARG_PLUGIN_SOURCE, sourceKey)
                         .putExtra(TmdbDetailsActivity.ARG_PLUGIN_URL, item.url)
                 )
             }

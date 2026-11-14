@@ -30,6 +30,31 @@ object CsRuntime {
     var lastError: String? = null
         private set
 
+    fun sourceKey(pluginId: String, apiIndex: Int): String = "$pluginId#$apiIndex"
+
+    fun pluginIdOf(sourceId: String): String {
+        val index = apiIndexOf(sourceId) ?: return sourceId
+        return sourceId.substring(0, sourceId.lastIndexOf('#')).ifBlank { sourceId }
+    }
+
+    fun apiIndexOf(sourceId: String): Int? {
+        if (sourceId.startsWith("stremio:", ignoreCase = true)) return null
+        val idx = sourceId.lastIndexOf('#')
+        if (idx <= 0 || idx == sourceId.lastIndex) return null
+        return sourceId.substring(idx + 1).toIntOrNull()
+    }
+
+    fun apiFor(context: Context, source: CsInstalledSource, sourceId: String): MainAPI? {
+        val apis = apisFor(context, source)
+        val index = apiIndexOf(sourceId)
+        return if (index != null) apis.getOrNull(index) else apis.firstOrNull()
+    }
+
+    fun cachedApiName(sourceId: String): String? {
+        val index = apiIndexOf(sourceId) ?: return null
+        return apis[pluginIdOf(sourceId)]?.getOrNull(index)?.name
+    }
+
     @Synchronized
     fun load(context: Context, source: CsInstalledSource): Boolean {
 

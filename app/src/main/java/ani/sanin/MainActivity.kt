@@ -53,6 +53,7 @@ import ani.sanin.util.GlassEffectManager
 import ani.sanin.databinding.ActivityMainBinding
 import ani.sanin.databinding.DialogUserAgentBinding
 import ani.sanin.cloudstream.CsRepos
+import ani.sanin.cloudstream.CsRuntime
 import ani.sanin.home.AnimeFragment
 import ani.sanin.home.DiscoveryFragment
 import ani.sanin.home.HomeFragment
@@ -688,7 +689,8 @@ class MainActivity : AppCompatActivity() {
             val src = PrefManager.getVal<String>(PrefName.ContentSource)
             if (src == "simkl" || src == "tmdb") "Simkl"
             else StremioAddonManager.addonForSourceId(src)?.manifest?.name
-                ?: CsRepos.installed(this).firstOrNull { it.id == src }?.name
+                ?: CsRuntime.cachedApiName(src)
+                ?: CsRepos.installed(this).firstOrNull { it.id == CsRuntime.pluginIdOf(src) }?.name
                 ?: "Movie & TV"
         }
         binding.mainModeText.text = text

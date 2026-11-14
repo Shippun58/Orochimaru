@@ -21,7 +21,9 @@ import ani.sanin.util.LogcatBuffer
 import ani.sanin.util.Logger
 import ani.sanin.util.TvKeyboardUtil
 import com.lagradost.cloudstream3.CommonActivity
+import com.lagradost.cloudstream3.DownloaderTestImpl
 import com.google.android.material.color.DynamicColors
+import org.schabi.newpipe.extractor.NewPipe
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +67,8 @@ class App : Application() {
         Injekt.importModule(AppModule(this))
         Injekt.importModule(PreferenceModule(this))
         initializeNetwork()
+        runCatching { NewPipe.init(DownloaderTestImpl.getInstance()) }
+            .onFailure { Log.e("App", "Failed to initialize NewPipe downloader", it) }
         ani.sanin.download.DownloadManager.init(this)
 
         val crashlytics =

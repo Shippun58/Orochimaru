@@ -13,6 +13,11 @@ import android.content.res.Configuration
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import ani.sanin.R
 import ani.sanin.cloudstream.CsRepos
+import ani.sanin.cloudstream.CsRuntime
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ani.sanin.getThemeColor
 import ani.sanin.connections.anilist.Anilist
 import ani.sanin.connections.mal.MAL
@@ -313,61 +318,102 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
             }
         }
 
-        val installedSources = CsRepos.installed(requireContext())
-        val pluginNames = mutableListOf("Simkl")
-        val pluginIds = mutableListOf("simkl")
-        installedSources.forEach { src ->
-            pluginNames.add(src.name)
-            pluginIds.add(src.id)
+        suspend fun sourceEntries(): Pair<MutableList<String>, MutableList<String>> {
+            val names = mutableListOf("Simkl")
+            val ids = mutableListOf("simkl")
+            val ctx = requireContext().applicationContext
+            val installed = CsRepos.installed(ctx)
+            withContext(Dispatchers.IO) {
+                installed.forEach { src ->
+                    val apis = runCatching {
+                        CsRuntime.apisFor(ctx, src)
+                    }.getOrNull().orEmpty()
+                    if (apis.size <= 1) {
+                        names.add(src.name)
+                        ids.add(src.id)
+                    } else {
+                        apis.forEachIndexed { index, api ->
+                            names.add(api.name.ifBlank { src.name })
+                            ids.add(CsRuntime.sourceKey(src.id, index))
+                        }
+                    }
+                }
+            }
+            StremioAddonManager.homeSources().forEach { addon ->
+                names.add(addon.manifest.name)
+                ids.add(StremioAddonManager.sourceId(addon))
+            }
+            return names to ids
         }
-        StremioAddonManager.homeSources().forEach { addon ->
-            pluginNames.add(addon.manifest.name)
-            pluginIds.add(StremioAddonManager.sourceId(addon))
+
+        fun sourceLabel(names: List<String>, ids: List<String>, saved: String): String? {
+            val exact = ids.indexOfFirst { it.equals(saved, ignoreCase = true) }
+            if (exact >= 0) return names.getOrNull(exact)
+            CsRuntime.cachedApiName(saved)?.let { return it }
+            val base = CsRuntime.pluginIdOf(saved)
+            val baseIdx = ids.indexOfFirst { it.equals(base, ignoreCase = true) }
+            if (baseIdx >= 0) return names.getOrNull(baseIdx)
+            val apiIdx = ids.indexOfFirst { it.startsWith("$base#", ignoreCase = true) }
+            return names.getOrNull(apiIdx)
         }
 
         fun showSourcePicker() {
-            val savedSource = PrefManager.getVal<String>(PrefName.ContentSource)
-            Logger.log("MEDIA_TRACKER: picker sources=${pluginIds}")
-            Logger.log("MEDIA_TRACKER: current ContentSource=$savedSource")
-            val restoreIdx = pluginIds.indexOfFirst { it.equals(savedSource, ignoreCase = true) }
-            val currentIdx = if (restoreIdx >= 0) restoreIdx else 0
-            pluginNameView.text = pluginNames[currentIdx]
-
-            val adapterPos = if (currentIdx == 0) 1 else currentIdx + 3
-            val picker = SourcePickerAdapter(requireContext(), pluginNames, adapterPos, headerSecond = "Plugin")
-            requireContext().customAlertDialog().apply {
-                setTitle(R.string.home_metadata)
-                setWidthPx((240 * requireContext().resources.displayMetrics.density).toInt())
-
-                attach { d ->
-                    d.listView?.choiceMode = android.widget.ListView.CHOICE_MODE_NONE
+            viewLifecycleOwner.lifecycleScope.launch {
+                val (names, ids) = sourceEntries()
+                if (!isAdded) return@launch
+                val savedSource = PrefManager.getVal<String>(PrefName.ContentSource)
+                Logger.log("MEDIA_TRACKER: picker sources=$ids")
+                Logger.log("MEDIA_TRACKER: current ContentSource=$savedSource")
+                val baseRestore = ids.indexOfFirst {
+                    it.startsWith("${CsRuntime.pluginIdOf(savedSource)}#", ignoreCase = true)
                 }
-                singleChoiceAdapter(picker, adapterPos) { pos ->
+                val restoreIdx = ids.indexOfFirst { it.equals(savedSource, ignoreCase = true) }
+                    .takeIf { it >= 0 } ?: baseRestore
+                val currentIdx = if (restoreIdx >= 0) restoreIdx else 0
+                pluginNameView.text = sourceLabel(names, ids, savedSource) ?: names[currentIdx]
 
-                    val idx = when {
-                        pos == 1 -> 0
-                        pos >= 4 -> pos - 3
-                        else -> return@singleChoiceAdapter
-                    }
-                    if (idx !in pluginIds.indices || idx !in pluginNames.indices) {
-                        return@singleChoiceAdapter
-                    }
+                val adapterPos = if (currentIdx == 0) 1 else currentIdx + 3
+                val picker = SourcePickerAdapter(requireContext(), names, adapterPos, headerSecond = "Plugin")
+                requireContext().customAlertDialog().apply {
+                    setTitle(R.string.home_metadata)
+                    setWidthPx((240 * requireContext().resources.displayMetrics.density).toInt())
 
-                    picker.setChecked(pos)
-                    PrefManager.setVal(PrefName.ContentSource, pluginIds[idx])
-                    pluginNameView.text = pluginNames[idx]
-                    Logger.log(
-                        "MEDIA_TRACKER: selected '${pluginNames[idx]}' id=${pluginIds[idx]}"
-                    )
-                    (activity as? MainActivity)?.setContentMode("movie_tv")
+                    attach { d ->
+                        d.listView?.choiceMode = android.widget.ListView.CHOICE_MODE_NONE
+                    }
+                    singleChoiceAdapter(picker, adapterPos) { pos ->
+
+                        val idx = when {
+                            pos == 1 -> 0
+                            pos >= 4 -> pos - 3
+                            else -> return@singleChoiceAdapter
+                        }
+                        if (idx !in ids.indices || idx !in names.indices) {
+                            return@singleChoiceAdapter
+                        }
+
+                        picker.setChecked(pos)
+                        PrefManager.setVal(PrefName.ContentSource, ids[idx])
+                        pluginNameView.text = names[idx]
+                        Logger.log(
+                            "MEDIA_TRACKER: selected '${names[idx]}' id=${ids[idx]}"
+                        )
+                        (activity as? MainActivity)?.setContentMode("movie_tv")
+                    }
+                    show()
                 }
-                show()
             }
         }
 
-        pluginNameView.text = pluginNames.firstOrNull { it.equals(
-            PrefManager.getVal<String>(PrefName.ContentSource), ignoreCase = true
-        ) } ?: pluginNames[0]
+        val savedSourceInit = PrefManager.getVal<String>(PrefName.ContentSource)
+        pluginNameView.text = CsRuntime.cachedApiName(savedSourceInit)
+            ?: CsRepos.installed(requireContext())
+                .firstOrNull { it.id == CsRuntime.pluginIdOf(savedSourceInit) }?.name
+            ?: "Simkl"
+        viewLifecycleOwner.lifecycleScope.launch {
+            val (names, ids) = sourceEntries()
+            if (isAdded) pluginNameView.text = sourceLabel(names, ids, savedSourceInit) ?: pluginNameView.text
+        }
         pluginRowInner.setOnClickListener { showSourcePicker() }
         pluginNameView.setOnClickListener { showSourcePicker() }
         pluginArrow.setOnClickListener { showSourcePicker() }

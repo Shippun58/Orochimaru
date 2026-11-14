@@ -12,6 +12,8 @@ import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
+import java.security.MessageDigest
+import java.util.zip.ZipFile
 
 object CsRepos {
 
@@ -109,7 +111,13 @@ object CsRepos {
         withContext(Dispatchers.IO) {
             val url = sourceUrl(repoUrl, source.url)
             val request = Request.Builder().url(url).build()
-            val body = client.newCall(request).execute().use { it.body?.bytes() ?: ByteArray(0) }
+            val body = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw CsPluginException("Download failed for ${source.name} (HTTP ${response.code})")
+                }
+                response.body?.bytes() ?: throw CsPluginException("Empty download for ${source.name}")
+            }
+            validatePlugin(source, body)
             val iconUrl = source.iconUrl?.let {
                 if (it.startsWith("http")) it else sourceUrl(repoUrl, it)
             }
@@ -124,8 +132,14 @@ object CsRepos {
                 iconUrl = iconUrl
             )
 
-            installedFile(context, installed).setWritable(true)
-            installedFile(context, installed).writeBytes(body)
+            val target = installedFile(context, installed)
+            target.setWritable(true)
+            val temp = File(target.parentFile, "${target.name}.tmp")
+            temp.writeBytes(body)
+            if (!temp.renameTo(target)) {
+                target.writeBytes(body)
+                temp.delete()
+            }
             val current = PrefManager.getVal<List<String>>(PrefName.CloudStreamInstalledSources)
                 .filterNot {
                     runCatching { json.decodeFromString<CsInstalledSource>(it).id }.getOrNull() == source.id
@@ -136,6 +150,40 @@ object CsRepos {
             )
             installed
         }
+
+    private fun validatePlugin(source: CsSource, bytes: ByteArray) {
+        if (bytes.isEmpty()) throw CsPluginException("Downloaded ${source.name} is empty")
+        source.fileSize?.let { expected ->
+            if (expected > 0 && bytes.size.toLong() != expected) {
+                throw CsPluginException("Downloaded ${source.name} is incomplete (${bytes.size}/$expected bytes)")
+            }
+        }
+        source.fileHash
+            ?.removePrefix("sha256-")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { expected ->
+                val actual = MessageDigest.getInstance("SHA-256").digest(bytes)
+                    .joinToString("") { "%02x".format(it) }
+                if (!actual.equals(expected, ignoreCase = true)) {
+                    throw CsPluginException("Downloaded ${source.name} failed hash check")
+                }
+            }
+        val temp = File.createTempFile("cs_validate", ".cs3")
+        try {
+            temp.writeBytes(bytes)
+            ZipFile(temp).use { zip ->
+                if (zip.getEntry("manifest.json") == null) {
+                    throw CsPluginException("Downloaded ${source.name} has no manifest.json")
+                }
+            }
+        } catch (e: CsPluginException) {
+            throw e
+        } catch (e: Exception) {
+            throw CsPluginException("Downloaded ${source.name} is not a valid .cs3 (${e.message})")
+        } finally {
+            temp.delete()
+        }
+    }
 
     fun uninstall(context: Context, source: CsInstalledSource) {
         installedFile(context, source).delete()

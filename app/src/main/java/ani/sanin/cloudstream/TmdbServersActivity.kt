@@ -377,9 +377,11 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         chipByIndex.clear()
         arrivalCounter.set(0)
         pluginSourceId?.let { pluginSourceId ->
-            val source = CsRepos.installed(this).firstOrNull { it.id == pluginSourceId }
+            val baseId = CsRuntime.pluginIdOf(pluginSourceId)
+            val source = CsRepos.installed(this).firstOrNull { it.id == baseId }
             if (source != null) {
-                groups.add(Group(source.id, source.name, source.iconUrl, source, pluginLoad = pluginLoad))
+                val label = CsRuntime.cachedApiName(pluginSourceId) ?: source.name
+                groups.add(Group(source.id, label, source.iconUrl, source, pluginLoad = pluginLoad))
                 Logger.log("TMDB_SERVERS: groups total=1 (plugin mode)")
                 return
             }
@@ -1029,13 +1031,16 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     // --- plugin loading (mirrors watch fragment) ---
 
     private suspend fun loadPlugin(url: String): TmdbDetail? {
-        val source = CsRepos.installed(this).firstOrNull { it.id == pluginSourceId } ?: run {
+        val sourceId = pluginSourceId
+        val baseId = CsRuntime.pluginIdOf(sourceId ?: "")
+        val source = CsRepos.installed(this).firstOrNull { it.id == baseId } ?: run {
             snackString("Plugin not installed anymore")
             finish()
             return null
         }
         val api = withContext(Dispatchers.IO) {
-            CsRuntime.apisFor(this@TmdbServersActivity, source).firstOrNull()
+            if (sourceId != null) CsRuntime.apiFor(this@TmdbServersActivity, source, sourceId)
+            else CsRuntime.apisFor(this@TmdbServersActivity, source).firstOrNull()
         } ?: run {
             snackString("Could not load ${source.name}")
             finish()

@@ -85,6 +85,12 @@
 -keep class com.google.android.material.dialog.** { *; }
 -dontwarn com.google.android.material.**
 
+# CloudStream plugins are loaded from external dex files, so R8 cannot see
+# their Compose references. Keep the Compose stack intact or plugin settings
+# screens fail with NoClassDefFoundError (e.g. XDMovies).
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
+
 -keep class androidx.preference.** { *; }
 
 -keep class androidx.work.impl.WorkDatabase_Impl { *; }

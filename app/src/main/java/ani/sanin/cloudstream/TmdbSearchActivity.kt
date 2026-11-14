@@ -194,12 +194,18 @@ class TmdbSearchActivity : AppCompatActivity() {
         val ids = selectedSourceIds.filter { it != SOURCE_TMDB }
         if (ids.isEmpty()) return emptyList()
         val installed = CsRepos.installed(this)
-        return ids.mapNotNull { id ->
-            val source = installed.firstOrNull { it.id == id } ?: return@mapNotNull null
-            val api = with(Dispatchers.IO) {
-                CsRuntime.apisFor(this@TmdbSearchActivity, source).firstOrNull()
-            } ?: return@mapNotNull null
-            api to source.name
+        return ids.flatMap { id ->
+            val source = installed.firstOrNull { it.id == CsRuntime.pluginIdOf(id) }
+                ?: return@flatMap emptyList()
+            val apis = with(Dispatchers.IO) {
+                CsRuntime.apisFor(this@TmdbSearchActivity, source)
+            }
+            val index = CsRuntime.apiIndexOf(id)
+            if (index != null) {
+                listOfNotNull(apis.getOrNull(index)?.let { it to it.name })
+            } else {
+                apis.map { it to source.name }
+            }
         }
     }
 
@@ -420,7 +426,8 @@ class TmdbSearchActivity : AppCompatActivity() {
                 id == SOURCE_TMDB -> "TMDB"
                 id.startsWith(StremioAddonManager.SOURCE_PREFIX) ->
                     StremioAddonManager.addonForSourceId(id)?.manifest?.name ?: "Stremio addon"
-                else -> installed[id]?.name ?: id
+                else -> CsRuntime.cachedApiName(id)
+                    ?: installed[CsRuntime.pluginIdOf(id)]?.name ?: id
             }
             chips.add(SearchFilterChipsAdapter.ChipSpec("src:$id", label))
         }
@@ -534,8 +541,9 @@ class TmdbSearchActivity : AppCompatActivity() {
         var matchedSourceId: String? = null
         for (source in installed) {
             val apis = with(Dispatchers.IO) { CsRuntime.apisFor(this@TmdbSearchActivity, source) }
-            if (apis.any { it.name == apiName }) {
-                matchedSourceId = source.id
+            val index = apis.indexOfFirst { it.name == apiName }
+            if (index >= 0) {
+                matchedSourceId = CsRuntime.sourceKey(source.id, index)
                 break
             }
         }

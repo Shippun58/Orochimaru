@@ -696,6 +696,7 @@ object Tmdb {
     }
 
     suspend fun detail(mediaType: String, id: Int): TmdbDetail? {
+        if (id <= 0) return null
         val body = get(
             "/$mediaType/$id",
             "language" to "en-US",
@@ -705,6 +706,7 @@ object Tmdb {
     }
 
     suspend fun videos(mediaType: String, id: Int): List<TmdbVideo> {
+        if (id <= 0) return emptyList()
         val body = get("/$mediaType/$id/videos", "language" to "en-US") ?: return emptyList()
         return runCatching { json.decodeFromString<TmdbVideoPage>(body).results }.getOrDefault(emptyList())
     }
@@ -715,6 +717,7 @@ object Tmdb {
     }
 
     suspend fun episodes(mediaType: String, id: Int, season: Int): List<TmdbEpisode> {
+        if (id <= 0) return emptyList()
         val body = get("/$mediaType/$id/season/$season", "language" to "en-US") ?: return emptyList()
         return runCatching {
             json.decodeFromString<TmdbSeasonDetail>(body).episodes
@@ -726,6 +729,7 @@ object Tmdb {
         .orEmpty()
 
     private suspend fun collectionDetail(id: Int): TmdbCollection? {
+        if (id <= 0) return null
         val body = get("/collection/$id") ?: return null
         return runCatching { json.decodeFromString<TmdbCollection>(body) }.getOrNull()
     }
