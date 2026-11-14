@@ -571,6 +571,23 @@ class PlayerSettingsActivity :
                         PrefManager.setVal(PrefName.AutoHideTimeStamps, it)
                     },
                 ),
+                SubscreenBuilder.Entry(
+                    title = getString(R.string.preview_seekbar),
+                    desc = getString(R.string.preview_seekbar_desc),
+                    switch = PrefManager.getVal<Boolean>(PrefName.SeekPreview) to { checked ->
+                        PrefManager.setVal(PrefName.SeekPreview, checked)
+                        if (!checked) PrefManager.setVal(PrefName.SeekPreviewPreload, false)
+                        binding.tabLayout.getTabAt(2)?.select()
+                    },
+                ),
+                SubscreenBuilder.Entry(
+                    title = getString(R.string.preview_seekbar_preload),
+                    desc = getString(R.string.preview_seekbar_preload_desc),
+                    isEnabled = PrefManager.getVal<Boolean>(PrefName.SeekPreview),
+                    switch = PrefManager.getVal<Boolean>(PrefName.SeekPreviewPreload) to {
+                        PrefManager.setVal(PrefName.SeekPreviewPreload, it)
+                    },
+                ),
             )),
 
             SubscreenBuilder.Section("Automations", R.drawable.ic_set_misc, entries = listOf(

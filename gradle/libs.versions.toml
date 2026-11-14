@@ -101,6 +101,8 @@ media3-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = 
 media3-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "exo" }
 media3-session = { module = "androidx.media3:media3-session", version.ref = "exo" }
 media3-cast = { module = "androidx.media3:media3-cast", version.ref = "exo" }
+media3-inspector-frame = { module = "androidx.media3:media3-inspector-frame", version.ref = "exo" }
+media3-effect = { module = "androidx.media3:media3-effect", version.ref = "exo" }
 
 previewseekbar-media3 = { module = "com.github.rubensousa:previewseekbar-media3", version.ref = "previewseekbarVer" }
 ass-media = { module = "io.github.peerless2012:ass-media", version.ref = "ass" }
@@ -223,9 +225,9 @@ media3 = [
     "media3-dash",
     "media3-okhttp",
     "media3-session",
-    "media3-cast"
-    
-    
+    "media3-cast",
+    "media3-inspector-frame",
+    "media3-effect"
 ]
 
 subtitles = ["ass-media", "ass-kt"]

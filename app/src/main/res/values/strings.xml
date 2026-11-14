@@ -2623,7 +2623,11 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
 
 <string name="preview_seekbar">Seekbar preview</string>
 
-<string name="preview_seekbar_desc">Enable preview thumbnail on seekbar</string>
+<string name="preview_seekbar_desc">Show a thumbnail while scrubbing or seeking with the D-pad</string>
+
+<string name="preview_seekbar_preload">Load previews in background on player start</string>
+
+<string name="preview_seekbar_preload_desc">Preloads thumbnails in memory after playback starts. Direct videos only; may briefly stutter on slower devices.</string>
 
 <string name="no_subtitles_loaded">No subtitles loaded yet</string>
 

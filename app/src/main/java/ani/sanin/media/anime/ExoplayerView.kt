@@ -1,4 +1,5 @@
 package ani.sanin.media.anime
+import ani.sanin.isTvDevice
 import ani.sanin.settings.AnimUtils
 import ani.sanin.ui.components.TomoeView
 
@@ -97,6 +98,7 @@ import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistTracker
 import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
@@ -121,6 +123,7 @@ import androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
 import androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
 import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.PlayerControlView
+import androidx.media3.ui.TimeBar
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import ani.sanin.GesturesListener
@@ -324,6 +327,21 @@ class ExoplayerView :
     private var assHandler: AssHandler? = null
     private var assSubtitleView: io.github.peerless2012.ass.media.widget.AssSubtitleView? = null
     private lateinit var assMediaSourceFactory: DefaultMediaSourceFactory
+
+    private lateinit var seekPreviewCard: View
+    private lateinit var seekPreviewImage: ImageView
+    private lateinit var seekPreviewTime: TextView
+    private var seekPreviewController: SeekPreviewController? = null
+    private var seekPreviewEnabled = false
+    private var seekPreviewPreload = false
+    private var seekPreviewIsTv = false
+    private var seekPreviewMode = false
+    private var seekPreviewPositionMs = 0L
+    private var seekPreviewResumePlayback = false
+    private var seekPreviewTicker: Runnable? = null
+    private var seekPreviewSavedTimeoutMs = 0
+    private var previewMediaItem: MediaItem? = null
+    private var previewSourceFactory: MediaSource.Factory? = null
 
     private var orientationListener: OrientationEventListener? = null
 
@@ -630,6 +648,13 @@ class ExoplayerView :
         }
         layoutInflater.inflate(playerLayout, playerViewContainer, true)
         playerView = findViewById(R.id.player_view)
+
+        seekPreviewCard = playerView.findViewById(R.id.exo_seek_preview_card)
+        seekPreviewImage = playerView.findViewById(R.id.exo_seek_preview_image)
+        seekPreviewTime = playerView.findViewById(R.id.exo_seek_preview_time)
+        seekPreviewIsTv = isTvDevice(this)
+        seekPreviewController = SeekPreviewController(this)
+        setupSeekPreview()
 
         exoPlay = playerView.findViewById(androidx.media3.ui.R.id.exo_play)
         exoSource = playerView.findViewById(R.id.exo_source)
@@ -1131,6 +1156,9 @@ class ExoplayerView :
         playerView.findViewById<View>(R.id.exo_ep_sel_btn).nextFocusLeftId = R.id.exo_screen
         playerView.findViewById<View>(R.id.exo_ep_sel_btn).nextFocusUpId = R.id.exo_skip
         progressBar.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus && seekPreviewMode) {
+                endSeekPreview(apply = false, fromTouch = false)
+            }
             if (PrefManager.getVal<Boolean>(PrefName.AnimationsEnabled) && PrefManager.getVal<Boolean>(PrefName.SeekBarAnimations)) {
                 progressBar.animate().scaleY(if (hasFocus) 2.5f else 1f).setDuration(150).start()
             } else {
@@ -2588,6 +2616,12 @@ class ExoplayerView :
         }
 
         mediaItem = mediaItemBuilder.build()
+        previewMediaItem =
+            MediaItem
+                .Builder()
+                .setUri(video!!.file.url)
+                .setMimeType(mimeType)
+                .build()
 
         Logger.log(
             "Player: building media source url=${video!!.file.url.take(200)} " +
@@ -2640,8 +2674,10 @@ class ExoplayerView :
                 .setMatroskaExtractorFlags(androidx.media3.extractor.mkv.MatroskaExtractor.FLAG_DISABLE_SEEK_FOR_CUES)
                 .withAssMkvSupport(AssSubtitleParserFactory(assHandler!!), assHandler!!)
             DefaultMediaSourceFactory(localDataSourceFactory, localExtractorsFactory)
+                .also { previewSourceFactory = it }
                 .createMediaSource(mediaItem)
         } else {
+            previewSourceFactory = assMediaSourceFactory
             assMediaSourceFactory
                 .createMediaSource(mediaItem)
         }
@@ -3029,6 +3065,8 @@ class ExoplayerView :
     }
 
     private fun releasePlayer() {
+        cancelSeekPreviewUi()
+        seekPreviewController?.clear()
         val wasLive = liveSupportRegistered || liveDetectedFromPlayer || isDeclaredLiveStream()
         if (wasLive) {
             Logger.log(
@@ -4400,6 +4438,7 @@ class ExoplayerView :
     }
 
     private fun schedulePauseOverlayTimer() {
+        if (seekPreviewMode) return
         pauseMetadataTimer?.let { handler.removeCallbacks(it) }
         if (!isPlayerPlaying) {
             val timer = Runnable {
@@ -5499,6 +5538,7 @@ class ExoplayerView :
             }
 
             maybeLoadTimeStamps("ready")
+            setupSeekPreviewForSource()
             updateLiveBadge()
             if (isLiveStream()) updateTimelineUi()
         }
@@ -5704,6 +5744,8 @@ class ExoplayerView :
             functionstarted = false
             releasePlayer()
         }
+        seekPreviewController?.close()
+        seekPreviewController = null
         cancelAutoSyncWatcher()
         speechRecorder.release()
 
@@ -5809,6 +5851,11 @@ class ExoplayerView :
 
     private fun handleBackPress(): Boolean {
         val now = java.lang.System.currentTimeMillis()
+        if (seekPreviewMode) {
+            endSeekPreview(apply = false, fromTouch = false)
+            backPressTime = now
+            return true
+        }
         if (episodeCommentPanel.visibility == View.VISIBLE) {
             closeEpisodeCommentPanel(returnToRail = true)
             backPressTime = now
@@ -6064,6 +6111,39 @@ class ExoplayerView :
         if (event.action == KeyEvent.ACTION_DOWN) markInteracted()
         if (!isInitialized) return super.dispatchKeyEvent(event)
 
+        if (seekPreviewMode) {
+            when (event.keyCode) {
+                KEYCODE_DPAD_LEFT, KEYCODE_DPAD_RIGHT -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        ensureControllerVisible()
+                        playerView.controllerShowTimeoutMs = 0
+                        val step =
+                            PrefManager.getVal<Int>(PrefName.SeekTime).coerceAtLeast(1) * 1000L
+                        val delta = if (event.keyCode == KEYCODE_DPAD_RIGHT) step else -step
+                        updateSeekPreview(seekPreviewPositionMs + delta, fromTouch = false)
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    if (event.action == KeyEvent.ACTION_UP) {
+                        endSeekPreview(apply = true, fromTouch = false)
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        endSeekPreview(apply = false, fromTouch = false)
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        endSeekPreview(apply = false, fromTouch = false)
+                    }
+                }
+            }
+        }
+
         if (this::subtitleDrawerContent.isInitialized && binding.root.isDrawerOpen(subtitleDrawerContent)) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -6221,11 +6301,23 @@ class ExoplayerView :
                         ensureControllerVisible()
                         val forward = event.keyCode == KEYCODE_DPAD_RIGHT
                         val seekTime = PrefManager.getVal<Int>(PrefName.SeekTime)
-                        val currentPos = exoPlayer.currentPosition
-                        if (forward) {
-                            seekToMs(currentPos + seekTime * 1000)
+                        if (isSeekPreviewAvailable()) {
+                            playerView.controllerShowTimeoutMs = 0
+                            if (!seekPreviewMode) {
+                                beginSeekPreview(exoPlayer.currentPosition, fromTouch = false)
+                            }
+                            val delta = seekTime.coerceAtLeast(1) * 1000L
+                            updateSeekPreview(
+                                seekPreviewPositionMs + if (forward) delta else -delta,
+                                fromTouch = false,
+                            )
                         } else {
-                            seekToMs(currentPos - seekTime * 1000)
+                            val currentPos = exoPlayer.currentPosition
+                            if (forward) {
+                                seekToMs(currentPos + seekTime * 1000)
+                            } else {
+                                seekToMs(currentPos - seekTime * 1000)
+                            }
                         }
                     }
                     return true
@@ -6449,6 +6541,243 @@ class ExoplayerView :
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
         playerView.player = exoPlayer
+    }
+
+    private fun setupSeekPreview() {
+        seekPreviewEnabled = PrefManager.getVal<Boolean>(PrefName.SeekPreview)
+        seekPreviewPreload = PrefManager.getVal<Boolean>(PrefName.SeekPreviewPreload)
+        seekPreviewCard.visibility = View.GONE
+        if (!seekPreviewEnabled) return
+
+        val progressBar =
+            playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+                ?: return
+        progressBar.addListener(
+            object : TimeBar.OnScrubListener {
+                override fun onScrubStart(timeBar: TimeBar, position: Long) {
+                    if (seekPreviewMode) return
+                    beginSeekPreview(position, fromTouch = true)
+                }
+
+                override fun onScrubMove(timeBar: TimeBar, position: Long) {
+                    if (!seekPreviewMode) return
+                    updateSeekPreview(position, fromTouch = true)
+                }
+
+                override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
+                    if (!seekPreviewMode) return
+                    endSeekPreview(apply = !canceled, fromTouch = true)
+                }
+            },
+        )
+    }
+
+    private fun isSeekPreviewAvailable(): Boolean =
+        seekPreviewEnabled && !isLiveStream() && video?.drm == null
+
+    private fun beginSeekPreview(position: Long, fromTouch: Boolean) {
+        if (!isSeekPreviewAvailable() || !isInitialized || playerReleased) return
+        if (seekPreviewMode) return
+
+        seekPreviewMode = true
+        seekPreviewPositionMs = clampSeekPreviewPosition(position)
+        seekPreviewResumePlayback = exoPlayer.playWhenReady
+        if (seekPreviewResumePlayback) exoPlayer.pause()
+
+        pauseMetadataTimer?.let { handler.removeCallbacks(it) }
+        pauseMetadataTimer = null
+        if (this::pauseOverlay.isInitialized) pauseOverlay.visibility = View.GONE
+
+        seekPreviewSavedTimeoutMs =
+            PrefManager.getVal<Int>(PrefName.AutoHideTimeout) * 1000
+        playerView.controllerShowTimeoutMs = 0
+        updateSeekPreview(seekPreviewPositionMs, fromTouch)
+        if (!fromTouch) startSeekPreviewTicker()
+    }
+
+    private fun updateSeekPreview(position: Long, fromTouch: Boolean) {
+        if (!seekPreviewMode) return
+
+        seekPreviewPositionMs = clampSeekPreviewPosition(position)
+        seekPreviewTime.text = formatSeekPreviewTime(seekPreviewPositionMs)
+        val wasHidden = seekPreviewCard.visibility != View.VISIBLE
+        seekPreviewCard.visibility = View.VISIBLE
+        positionSeekPreviewCard(seekPreviewPositionMs)
+        if (wasHidden) {
+            seekPreviewCard.post {
+                if (seekPreviewMode) positionSeekPreviewCard(seekPreviewPositionMs)
+            }
+        }
+
+        if (!fromTouch && this::exoPlayer.isInitialized && !exoPlayer.isReleased) {
+            playerView
+                .findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+                ?.setPosition(seekPreviewPositionMs)
+        }
+
+        seekPreviewController?.request(seekPreviewPositionMs) { _, bitmap ->
+            if (!seekPreviewMode) return@request
+            seekPreviewImage.setImageBitmap(bitmap)
+        }
+    }
+
+    private fun endSeekPreview(apply: Boolean, fromTouch: Boolean) {
+        if (!seekPreviewMode) return
+
+        val target = seekPreviewPositionMs
+        val resume = seekPreviewResumePlayback
+        seekPreviewMode = false
+        seekPreviewResumePlayback = false
+        stopSeekPreviewTicker()
+        seekPreviewCard.visibility = View.GONE
+        playerView.controllerShowTimeoutMs = seekPreviewSavedTimeoutMs
+
+        if (!this::exoPlayer.isInitialized || exoPlayer.isReleased) return
+
+        if (apply) {
+            exoPlayer.seekTo(clampSeekPreviewPosition(target))
+        } else {
+            playerView
+                .findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+                ?.setPosition(exoPlayer.currentPosition)
+        }
+        if (resume) {
+            exoPlayer.play()
+        } else {
+            schedulePauseOverlayTimer()
+        }
+    }
+
+    private fun cancelSeekPreviewUi() {
+        seekPreviewMode = false
+        seekPreviewResumePlayback = false
+        stopSeekPreviewTicker()
+        if (this::seekPreviewCard.isInitialized) seekPreviewCard.visibility = View.GONE
+        if (this::playerView.isInitialized) {
+            playerView.controllerShowTimeoutMs =
+                PrefManager.getVal<Int>(PrefName.AutoHideTimeout) * 1000
+        }
+    }
+
+    private fun startSeekPreviewTicker() {
+        if (seekPreviewTicker != null) return
+        val progressBar =
+            playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+                ?: return
+        val ticker =
+            object : Runnable {
+                override fun run() {
+                    if (!seekPreviewMode) return
+                    progressBar.setPosition(seekPreviewPositionMs)
+                    progressBar.postOnAnimation(this)
+                }
+            }
+        seekPreviewTicker = ticker
+        progressBar.postOnAnimation(ticker)
+    }
+
+    private fun stopSeekPreviewTicker() {
+        val ticker = seekPreviewTicker ?: return
+        seekPreviewTicker = null
+        playerView
+            .findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+            ?.removeCallbacks(ticker)
+    }
+
+    private fun positionSeekPreviewCard(position: Long) {
+        if (seekPreviewIsTv) {
+            seekPreviewCard.translationX = 0f
+            return
+        }
+
+        val progressBar =
+            playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+                ?: return
+        val parent = seekPreviewCard.parent as? View ?: return
+        if (progressBar.width <= 0 || parent.width <= 0) {
+            seekPreviewCard.post {
+                if (seekPreviewMode) positionSeekPreviewCard(seekPreviewPositionMs)
+            }
+            return
+        }
+
+        val duration =
+            if (this::exoPlayer.isInitialized && exoPlayer.duration > 0L) exoPlayer.duration else 0L
+        if (duration <= 0L) return
+
+        val ratio = (position.toFloat() / duration).coerceIn(0f, 1f)
+        val barLocation = IntArray(2)
+        progressBar.getLocationOnScreen(barLocation)
+        val parentLocation = IntArray(2)
+        parent.getLocationOnScreen(parentLocation)
+
+        val density = resources.displayMetrics.density
+        val cardWidth =
+            if (seekPreviewCard.width > 0) {
+                seekPreviewCard.width
+            } else {
+                (160 * density).toInt()
+            }
+        val margin = 8 * density
+        val thumbX = (barLocation[0] - parentLocation[0]) + progressBar.width * ratio
+        val maxLeft = (parent.width - cardWidth - margin).coerceAtLeast(margin)
+        val desiredLeft = (thumbX - cardWidth / 2f).coerceIn(margin, maxLeft)
+        val baseLeft =
+            if (seekPreviewCard.left > 0) {
+                seekPreviewCard.left.toFloat()
+            } else {
+                (parent.width - cardWidth) / 2f
+            }
+        seekPreviewCard.translationX = desiredLeft - baseLeft
+    }
+
+    private fun clampSeekPreviewPosition(position: Long): Long {
+        if (!this::exoPlayer.isInitialized || exoPlayer.isReleased) return position.coerceAtLeast(0L)
+        val duration = exoPlayer.duration
+        return if (duration > 0L) position.coerceIn(0L, duration) else position.coerceAtLeast(0L)
+    }
+
+    private fun formatSeekPreviewTime(positionMs: Long): String {
+        val totalSeconds = (positionMs / 1000).coerceAtLeast(0L)
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%d:%02d", minutes, seconds)
+        }
+    }
+
+    private fun setupSeekPreviewForSource() {
+        if (!seekPreviewEnabled || !this::exoPlayer.isInitialized) return
+
+        val item = previewMediaItem
+        val sourceFactory = previewSourceFactory
+        if (item == null || sourceFactory == null || video?.drm != null ||
+            isLiveStream() || isDeclaredLiveStream()
+        ) {
+            seekPreviewController?.configure(
+                enabled = false,
+                preload = false,
+                mediaItem = null,
+                mediaSourceFactory = null,
+                durationMs = 0L,
+                allowPreload = false,
+            )
+            return
+        }
+
+        val format = video?.format
+        val allowPreload = format != VideoType.M3U8 && format != VideoType.DASH
+        seekPreviewController?.configure(
+            enabled = true,
+            preload = seekPreviewPreload,
+            mediaItem = item,
+            mediaSourceFactory = sourceFactory,
+            durationMs = exoPlayer.duration,
+            allowPreload = allowPreload,
+        )
     }
 
     private fun seekToMs(positionMs: Long) {
