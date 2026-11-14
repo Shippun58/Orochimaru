@@ -308,7 +308,8 @@ enum class PrefName(val data: Pref) {
     GroupServersByHostAndLanguageTags(Pref(Location.Player, Boolean::class, true)),
 
     AutoHideTimeout(Pref(Location.Player, Int::class, 5)),
-    BufferSize(Pref(Location.Player, Int::class, 64)),
+    BufferDurationSeconds(Pref(Location.Player, Int::class, 60)),
+    BufferTargetMb(Pref(Location.Player, Int::class, 128)),
     DecodingMode(Pref(Location.Player, Int::class, 0)),
     VideoOutput(Pref(Location.Player, Int::class, 0)),
     SubtitleRenderMode(Pref(Location.Player, Int::class, 0)),

@@ -137,15 +137,30 @@ class PlayerSettingsActivity :
                     },
                 ),
                 SubscreenBuilder.Entry(
-                    title = getString(R.string.video_buffer_size_settings),
-                    desc = "Video buffer in megabytes",
+                    title = "Buffer duration",
+                    desc = "Maximum forward buffer time.",
                     choice = SubscreenBuilder.Choice(
-                        title = getString(R.string.video_buffer_size_settings),
-                        options = arrayOf("16 MB", "32 MB", "64 MB", "128 MB"),
-                        currentIndex = when (PrefManager.getVal<Int>(PrefName.BufferSize)) {
-                            16 -> 0; 32 -> 1; 64 -> 2; 128 -> 3; else -> 1
+                        title = "Buffer duration",
+                        options = arrayOf("15 s", "30 s", "60 s", "90 s", "120 s"),
+                        currentIndex = when (PrefManager.getVal<Int>(PrefName.BufferDurationSeconds)) {
+                            15 -> 0; 30 -> 1; 60 -> 2; 90 -> 3; 120 -> 4; else -> 2
                         },
-                    ) { idx -> PrefManager.setVal(PrefName.BufferSize, intArrayOf(16, 32, 64, 128)[idx]) },
+                    ) { idx ->
+                        PrefManager.setVal(PrefName.BufferDurationSeconds, intArrayOf(15, 30, 60, 90, 120)[idx])
+                    },
+                ),
+                SubscreenBuilder.Entry(
+                    title = "Buffer memory limit",
+                    desc = "Caps RAM used by playback buffers.",
+                    choice = SubscreenBuilder.Choice(
+                        title = "Buffer memory limit",
+                        options = arrayOf("64 MB", "128 MB", "192 MB", "256 MB"),
+                        currentIndex = when (PrefManager.getVal<Int>(PrefName.BufferTargetMb)) {
+                            64 -> 0; 128 -> 1; 192 -> 2; 256 -> 3; else -> 1
+                        },
+                    ) { idx ->
+                        PrefManager.setVal(PrefName.BufferTargetMb, intArrayOf(64, 128, 192, 256)[idx])
+                    },
                 ),
                 SubscreenBuilder.Entry(
                     title = "Pause Overlay",

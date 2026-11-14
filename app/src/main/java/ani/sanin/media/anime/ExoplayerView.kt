@@ -345,11 +345,9 @@ class ExoplayerView :
 
         var offlinePlayback = false
 
-        private const val DEFAULT_MIN_BUFFER_MS = 30000
-        private const val DEFAULT_MAX_BUFFER_MS = 60000
-        private const val BUFFER_FOR_PLAYBACK_MS = 8000
-        private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5000
-        private const val BACK_BUFFER_DURATION_MS = 1000 * 60 * 2
+        private const val BUFFER_FOR_PLAYBACK_MS = 2000
+        private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 4000
+        private const val BACK_BUFFER_DURATION_MS = 20_000
         private const val MAX_PLAYER_ERROR_RETRIES = 1
         private const val MAX_LIVE_RECONNECTS = 3
         private const val AUTO_SYNC_INTERVAL_MS = 15_000L
@@ -2746,21 +2744,23 @@ class ExoplayerView :
         liveReconnectCount = 0
         liveRecoveryFailed = false
 
-        val bufferSize = PrefManager.getVal<Int>(PrefName.BufferSize)
-        val minBufferMs = bufferSize * 1000
-        val maxBufferMs = bufferSize * 2000
+        val bufferDurationMs = PrefManager.getVal<Int>(PrefName.BufferDurationSeconds)
+            .coerceIn(10, 180) * 1000
+        val bufferTargetBytes = PrefManager.getVal<Int>(PrefName.BufferTargetMb)
+            .coerceIn(32, 512) * 1024 * 1024
+        val backBufferMs = min(BACK_BUFFER_DURATION_MS, bufferDurationMs)
         val loadControl =
             DefaultLoadControl
                 .Builder()
-                .setBackBuffer(BACK_BUFFER_DURATION_MS, false)
+                .setBackBuffer(backBufferMs, false)
                 .setBufferDurationsMs(
-                    minBufferMs,
-                    maxBufferMs,
+                    bufferDurationMs,
+                    bufferDurationMs,
                     BUFFER_FOR_PLAYBACK_MS,
                     BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
                 )
-                .setTargetBufferBytes(androidx.media3.common.C.LENGTH_UNSET)
-                .setPrioritizeTimeOverSizeThresholds(true)
+                .setTargetBufferBytes(bufferTargetBytes)
+                .setPrioritizeTimeOverSizeThresholds(false)
                 .build()
 
         hideSystemBars()
