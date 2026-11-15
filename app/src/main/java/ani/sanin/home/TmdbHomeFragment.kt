@@ -603,7 +603,7 @@ class TmdbHomeFragment : Fragment() {
 
                 val pages = api.mainPage.filter { it.data.isNotBlank() }
                 for (page in pages) {
-                    val resp = fetchMainPage(api, index, page, mainPageCache)
+                    val resp = fetchMainPage(api, index, MainPageRequest(page.name, page.data, page.horizontalImages), mainPageCache)
                     resp?.items?.forEach { list ->
                         list.list.take(10).forEach { sr ->
                             bannerItems.add(BannerItem.Plugin(sr, key))
@@ -905,7 +905,7 @@ class TmdbHomeFragment : Fragment() {
             val pages = api.mainPage.filter { it.data.isNotBlank() }
             if (pages.isNotEmpty()) {
                 for (page in pages) {
-                    val resp = fetchMainPage(api, index, page, mainPageCache)
+                    val resp = fetchMainPage(api, index, MainPageRequest(page.name, page.data, page.horizontalImages), mainPageCache)
                     resp?.items?.forEach { list ->
                         if (list.list.isNotEmpty()) {
                             addPluginSection(list.name, list.list, apiKey, list.isHorizontalImages)
