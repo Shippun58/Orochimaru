@@ -15,6 +15,7 @@ import ani.sanin.connections.tmdb.Tmdb
 import ani.sanin.connections.mal.MAL
 import ani.sanin.currContext
 import ani.sanin.media.anime.Episode
+import ani.sanin.media.anime.getEpisode
 import ani.sanin.media.anime.AnimeServersActivity
 import ani.sanin.media.anime.SelectorDialogFragment
 import ani.sanin.cloudstream.TmdbStreamResolver
@@ -706,6 +707,26 @@ class MediaDetailsViewModel : ViewModel() {
         episodes.postValue(epsLoaded)
     }
 
+    suspend fun episodeForSource(
+        media: Media,
+        sourceIndex: Int,
+        key: String,
+        number: String? = null,
+    ): Episode? {
+        val cached = epsLoaded[sourceIndex]
+        val map = if (!cached.isNullOrEmpty()) {
+            cached
+        } else {
+            Logger.log("Watch: loading episodes source idx=$sourceIndex for next episode '$key'")
+            val loaded = watchSources?.loadEpisodesFromMedia(sourceIndex, media) ?: return null
+            if (loaded.isEmpty()) return null
+            epsLoaded[sourceIndex] = loaded
+            loaded
+        }
+        return map.getEpisode(key)
+            ?: number?.let { n -> map.values.firstOrNull { it.number == n } }
+    }
+
     suspend fun forceLoadEpisode(media: Media, i: Int) {
         Logger.log("Watch: ViewModel forceLoadEpisode source idx=$i media='${media.name}'")
         epsLoaded[i] = watchSources?.loadEpisodesFromMedia(i, media) ?: return
@@ -981,32 +1002,25 @@ class MediaDetailsViewModel : ViewModel() {
             ep.extractorsSource = null
             ep.allStreams = false
         }
-        if (ep.extractors?.filterNotNull()?.find { it.server.name == server || it.isPreferred } == null) {
+        val existing = ep.extractors?.filterNotNull()?.firstOrNull {
+            (it.server.name == server || it.isPreferred) && it.videos.isNotEmpty()
+        }
+        if (existing != null) {
+            ep.selectedExtractor = existing.server.name
+        } else {
             Logger.log("Watch: loading single video server '$server' for episode '${ep.number}' source idx=${selected.sourceIndex}")
-            if(ep.extractors == null){
-                ep.extractors = mutableListOf(watchSources?.get(selected.sourceIndex)?.let {
-                    selected.sourceIndex = selected.sourceIndex
-                    if (!post && !it.allowsPreloading) null
-                    else ep.sEpisode?.let { it1 ->
-                        it.loadSingleVideoServer(
-                            server, link, ep.extra,
-                            it1, post
-                        )
-                    }
-                } ?: return false)
+            val source = watchSources?.get(selected.sourceIndex) ?: return false
+            if (!post && !source.allowsPreloading) return false
+            val loaded = ep.sEpisode?.let {
+                source.loadSingleVideoServer(server, link, ep.extra, it, post)
+            } ?: return false
+            if (loaded.videos.isEmpty()) return false
+            if (ep.extractors == null) {
+                ep.extractors = mutableListOf(loaded)
+            } else {
+                ep.extractors!!.add(loaded)
             }
-            else{
-                ep.extractors!!.add(watchSources?.get(selected.sourceIndex)?.let {
-                    selected.sourceIndex = selected.sourceIndex
-                    if (!post && !it.allowsPreloading) null
-                    else ep.sEpisode?.let { it1 ->
-                        it.loadSingleVideoServer(
-                            server, link, ep.extra,
-                            it1, post
-                        )
-                    }
-                } ?: return false)
-            }
+            ep.selectedExtractor = loaded.server.name
             ep.allStreams = false
             ep.extractorsSource = selected.sourceIndex
         }

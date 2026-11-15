@@ -119,6 +119,7 @@ private object RailRepo {
     private val tmdbCache = HashMap<String, TmdbEntry>()
     private val tmdbWaiters = HashMap<String, MutableList<(TmdbEntry) -> Unit>>()
     private val tmdbJobs = HashMap<String, Job>()
+    private val tmdbJobTokens = HashMap<String, Any>()
 
     fun animeKey(mediaId: Int, epKey: String?, sourceIndex: Int) =
         "A:$mediaId|$epKey|$sourceIndex"
@@ -157,6 +158,7 @@ private object RailRepo {
             tmdbCache.keys.removeAll { it.startsWith(prefix) }
             tmdbJobs.keys.filter { it.startsWith(prefix) }.forEach {
                 tmdbJobs.remove(it)?.cancel()
+                tmdbJobTokens.remove(it)
                 tmdbWaiters.remove(it)
             }
         }
@@ -221,7 +223,7 @@ private object RailRepo {
             animeJobTokens[key] = token
             animeJobs[key] = scope.launch {
                 val entry = resolveAnime(
-                    key, media, epKey, sourceIndex, currentSourceIndex, parser, sources,
+                    key, token, media, epKey, sourceIndex, currentSourceIndex, parser, sources,
                 )
                 synchronized(lock) {
                     if (animeJobTokens[key] !== token) return@synchronized
@@ -237,6 +239,7 @@ private object RailRepo {
 
     private suspend fun resolveAnime(
         key: String,
+        token: Any,
         media: Media,
         epKey: String?,
         sourceIndex: Int,
@@ -245,7 +248,10 @@ private object RailRepo {
         sources: WatchSources,
     ): AnimeEntry {
         fun notify(entry: AnimeEntry) {
-            val waiters = synchronized(lock) { animeWaiters[key]?.toList() ?: emptyList() }
+            val waiters = synchronized(lock) {
+                if (animeJobTokens[key] !== token) null
+                else animeWaiters[key]?.toList() ?: emptyList()
+            } ?: return
             waiters.forEach { it(entry) }
         }
         var target: Episode? = null
@@ -325,9 +331,13 @@ private object RailRepo {
             }
             tmdbWaiters.getOrPut(key) { mutableListOf() }.add(onUpdate)
             if (tmdbJobs.containsKey(key)) return
+            val token = Any()
+            tmdbJobTokens[key] = token
             tmdbJobs[key] = scope.launch {
                 val entry = resolveTmdb(context, session, season, ep, source, addon)
                 synchronized(lock) {
+                    if (tmdbJobTokens[key] !== token) return@synchronized
+                    tmdbJobTokens.remove(key)
                     tmdbJobs.remove(key)
                     tmdbCache[key] = entry
                     val waiters = tmdbWaiters.remove(key) ?: emptyList()
@@ -463,7 +473,7 @@ class ServerRailController(
         val parser: AnimeParser,
     ) {
         var state: AnimeGroupState = AnimeGroupState.Loading
-        var rank = 2
+        var rank = 1
         var arrivalSeq = Int.MAX_VALUE
         var episode: Episode? = null
         val extractors = mutableListOf<VideoExtractor>()
@@ -478,7 +488,7 @@ class ServerRailController(
         val addon: StremioAddon? = null,
     ) {
         var state: TmdbGroupState = TmdbGroupState.Loading
-        var rank = 2
+        var rank = 1
         var arrivalSeq = Int.MAX_VALUE
     }
 
@@ -501,6 +511,9 @@ class ServerRailController(
     private var tmdbSelectedIndex = 0
     private var currentTab: Tab = Tab.SOURCES
     private var targetEpisodeKey: String? = null
+    private var targetServer: String? = null
+    private var targetAutoPlay = false
+    private var targetNotified = false
     private val adapter = RailAdapter()
     private var arrivalCounter = 0
     private val sources: WatchSources =
@@ -782,11 +795,21 @@ class ServerRailController(
 
     fun open() {
         targetEpisodeKey = null
+        targetServer = null
+        targetAutoPlay = false
+        targetNotified = false
         show(Tab.SOURCES)
     }
 
-    fun openForEpisode(epKey: String) {
+    fun openForEpisode(
+        epKey: String,
+        preferredServer: String? = null,
+        autoPlay: Boolean = false,
+    ) {
         targetEpisodeKey = epKey
+        targetServer = preferredServer
+        targetAutoPlay = autoPlay && preferredServer != null
+        targetNotified = false
         show(Tab.SOURCES)
     }
 
@@ -796,6 +819,9 @@ class ServerRailController(
             .withEndAction {
                 content.visibility = View.GONE
                 targetEpisodeKey = null
+                targetServer = null
+                targetAutoPlay = false
+                targetNotified = false
                 onClosed()
             }
             .start()
@@ -840,7 +866,7 @@ class ServerRailController(
             RailRepo.refreshTmdb(m.id, season, epNum)
             tmdbGroups.forEach { g ->
                 g.state = TmdbGroupState.Loading
-                g.rank = 2
+                g.rank = 1
                 g.arrivalSeq = Int.MAX_VALUE
             }
             buildChips()
@@ -853,7 +879,7 @@ class ServerRailController(
             val currentSourceIndex = m.selected?.sourceIndex ?: -1
             groups.forEach { g ->
                 g.state = AnimeGroupState.Loading
-                g.rank = 2
+                g.rank = 1
                 g.arrivalSeq = Int.MAX_VALUE
                 g.extractors.clear()
                 g.extractionDone = false
@@ -938,8 +964,18 @@ class ServerRailController(
                 group.state = AnimeGroupState.Loading
             }
         }
+        val selectedKey = groups.getOrNull(selectedIndex)?.index
+        groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.index }))
+        selectedIndex = groups.indexOfFirst { it.index == selectedKey }
+            .takeIf { it >= 0 } ?: selectedIndex
         buildChips()
         refreshRows()
+        if (targetAutoPlay) {
+            content.post {
+                val group = groups.getOrNull(selectedIndex) ?: return@post
+                if (!playTargetIfAvailable(group)) notifyTargetMissing(group)
+            }
+        }
     }
 
     private fun hydrateGroup(group: Group, entry: AnimeEntry) {
@@ -951,33 +987,65 @@ class ServerRailController(
             entry.failedReason != null -> AnimeGroupState.Failed(entry.failedReason)
             else -> AnimeGroupState.Ready(entry.servers)
         }
+        group.rank = when {
+            entry.failedReason != null -> 2
+            entry.servers.isNotEmpty() -> 0
+            entry.extractionDone -> 2
+            else -> 1
+        }
+        if (group.rank == 0 && group.arrivalSeq == Int.MAX_VALUE) {
+            group.arrivalSeq = arrivalCounter++
+        }
     }
 
     private fun onAnimeUpdate(group: Group, entry: AnimeEntry) {
         hydrateGroup(group, entry)
-        if (entry.extractionDone) {
-            val ready = entry.failedReason == null && entry.servers.isNotEmpty()
-            group.rank = when {
-                ready -> 0
-                entry.failedReason != null -> 1
-                else -> 2
-            }
-            if (group.rank == 0) group.arrivalSeq = arrivalCounter++
-            val selectedKey = groups.getOrNull(selectedIndex)?.index
-            groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
-            selectedIndex = groups.indexOfFirst { it.index == selectedKey }
-                .takeIf { it >= 0 } ?: selectedIndex
-            buildChips()
-        } else {
-            renderChipStates()
-        }
+        val previousOrder = groups.map { it.index }
+        val selectedKey = groups.getOrNull(selectedIndex)?.index
+        groups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.index }))
+        selectedIndex = groups.indexOfFirst { it.index == selectedKey }
+            .takeIf { it >= 0 } ?: selectedIndex
+        if (playTargetIfAvailable(group)) return
+        if (groups.map { it.index } != previousOrder) buildChips() else renderChipStates()
+        if (entry.extractionDone) notifyTargetMissing(group)
         refreshRows()
+    }
+
+    private fun playTargetIfAvailable(group: Group): Boolean {
+        if (!targetAutoPlay) return false
+        val server = targetServer ?: return false
+        if (groups.getOrNull(selectedIndex) !== group) return false
+        val extractor = group.extractors.firstOrNull {
+            it.server.name == server && it.videos.isNotEmpty()
+        } ?: return false
+        val videoIdx = (media.selected?.video ?: 0)
+            .coerceIn(0, (extractor.videos.size - 1).coerceAtLeast(0))
+        Logger.log("SERVER_RAIL: auto-play '$server' for episode '${activeEpisodeKey()}'")
+        targetAutoPlay = false
+        targetServer = null
+        targetNotified = false
+        switchServer(group, extractor, videoIdx)
+        return true
+    }
+
+    private fun notifyTargetMissing(group: Group) {
+        if (!targetAutoPlay || targetNotified || !group.extractionDone) return
+        val server = targetServer ?: return
+        if (groups.getOrNull(selectedIndex) !== group) return
+        targetNotified = true
+        ani.sanin.snackString(
+            "Preferred server '$server' not found — pick another source",
+            activity,
+        )
     }
 
     private fun selectGroup(index: Int) {
         if (index !in groups.indices) return
         val changed = selectedIndex != index
         selectedIndex = index
+        targetAutoPlay = false
+        targetServer = null
+        targetNotified = false
         val m = media
         if (PrefManager.getVal<Boolean>(PrefName.MakeDefault)) {
             m.selected?.sourceIndex = groups[index].index
@@ -1011,8 +1079,17 @@ class ServerRailController(
         val group = groups.getOrNull(selectedIndex)
         if (group == null) return
         when (val state = group.state) {
+            is AnimeGroupState.Loading -> {
+                rows.add(Row.Header("Loading ${group.name}…", null))
+            }
+            is AnimeGroupState.Failed -> {
+                rows.add(Row.Header("${group.name} failed", null))
+            }
             is AnimeGroupState.Ready -> {
-                if (state.servers.isEmpty()) return
+                if (state.servers.isEmpty()) {
+                    rows.add(Row.Header("No servers in ${group.name}", null))
+                    return
+                }
                 if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
                     state.servers.forEach { server ->
                         val ex = group.extractors.firstOrNull { it.server.name == server.name }
@@ -1063,6 +1140,15 @@ class ServerRailController(
                 }
             }
             else -> {}
+        }
+        if (rows.isEmpty()) {
+            rows.add(
+                Row.Header(
+                    if (group.extractionDone) "No playable servers in ${group.name}"
+                    else "Loading ${group.name}…",
+                    null,
+                )
+            )
         }
     }
 
@@ -1118,12 +1204,24 @@ class ServerRailController(
             val cached = RailRepo.getTmdb(key)
             if (cached != null) {
                 group.state = cached.state
+                group.rank = when (cached.state) {
+                    is TmdbGroupState.Ready -> 0
+                    is TmdbGroupState.Failed -> 2
+                    else -> 1
+                }
+                if (group.rank == 0 && group.arrivalSeq == Int.MAX_VALUE) {
+                    group.arrivalSeq = arrivalCounter++
+                }
             } else if (mode == 0 || i == tmdbSelectedIndex) {
                 startTmdbGroup(i)
             } else {
                 group.state = TmdbGroupState.Loading
             }
         }
+        val selectedKey = tmdbGroups.getOrNull(tmdbSelectedIndex)?.key
+        tmdbGroups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.key }))
+        tmdbSelectedIndex = tmdbGroups.indexOfFirst { it.key == selectedKey }
+            .takeIf { it >= 0 } ?: tmdbSelectedIndex
         buildChips()
         refreshRows()
     }
@@ -1148,14 +1246,16 @@ class ServerRailController(
         ) {
             return
         }
-        if (entry.state is TmdbGroupState.Ready) {
-            group.rank = 0
+        group.rank = when (entry.state) {
+            is TmdbGroupState.Ready -> 0
+            is TmdbGroupState.Failed -> 2
+            else -> 1
+        }
+        if (group.rank == 0 && group.arrivalSeq == Int.MAX_VALUE) {
             group.arrivalSeq = arrivalCounter++
-        } else if (entry.state is TmdbGroupState.Failed) {
-            group.rank = 1
         }
         val selectedKey = tmdbGroups.getOrNull(tmdbSelectedIndex)?.key
-        tmdbGroups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }))
+        tmdbGroups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.key }))
         tmdbSelectedIndex = tmdbGroups.indexOfFirst { it.key == selectedKey }
             .takeIf { it >= 0 } ?: tmdbSelectedIndex
         buildChips()
@@ -1188,6 +1288,12 @@ class ServerRailController(
     private fun refreshTmdbRows() {
         val group = tmdbGroups.getOrNull(tmdbSelectedIndex) ?: return
         when (val state = group.state) {
+            is TmdbGroupState.Loading -> {
+                rows.add(Row.Header("Loading ${group.name}…", null))
+            }
+            is TmdbGroupState.Failed -> {
+                rows.add(Row.Header("${group.name} failed", null))
+            }
             is TmdbGroupState.Ready -> {
                 val playable = state.links.filter { it.url.isNotBlank() }
                 state.recommendations.forEach { rows.add(Row.Extra(it, group.addon)) }

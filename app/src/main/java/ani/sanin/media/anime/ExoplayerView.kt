@@ -1799,7 +1799,9 @@ class ExoplayerView :
                                 "Player: next-episode server '$requiredServer' missing for " +
                                     "'${nextEp.number}' — opening source rail",
                             )
-                            model.setEpisode(nextEp, "change")
+                            autoContinuePending = false
+                            autoContinueServer = null
+                            serverRailController?.openForEpisode(nextKey)
                         } else {
                             nextEp.selectedExtractor = chosen.server.name
                             nextEp.selectedVideo = prevVideo.coerceIn(
@@ -1813,26 +1815,33 @@ class ExoplayerView :
                     }
                 }
             } else {
-                nextEp.extractors = nextEp.extractors?.filterNotNull()?.toMutableList()
-                val hasRequired = nextEp.extractors?.any {
-                    it.server.name == requiredServer && it.videos.isNotEmpty()
-                } == true
-                if (!hasRequired) {
-                    nextEp.extractors = null
-                    nextEp.extractorsSource = null
-                    nextEp.allStreams = false
-                }
-                nextEp.selectedExtractor = requiredServer
-                nextEp.selectedVideo = selected.video
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val loaded = model.loadEpisodeSingleVideo(
-                        nextEp,
-                        selected,
-                        true,
-                        selectedServerName = requiredServer,
+                val preloaded = nextEp.extractorsSource == selected.sourceIndex &&
+                    nextEp.extractors?.any {
+                        it.server.name == requiredServer && it.videos.isNotEmpty()
+                    } == true
+                autoContinuePending = false
+                autoContinueServer = null
+                if (preloaded) {
+                    nextEp.selectedExtractor = requiredServer
+                    nextEp.selectedVideo = selected.video
+                    Logger.log(
+                        "Player: preloaded server '$requiredServer' on ep '${nextEp.number}' — playing",
                     )
-                    if (!loaded) withContext(Dispatchers.Main) {
-                        model.setEpisode(nextEp, "change")
+                    model.setEpisode(nextEp, "change")
+                } else {
+                    Logger.log(
+                        "Player: server '$requiredServer' not preloaded for ep " +
+                            "'${nextEp.number}' — opening source rail",
+                    )
+                    val controller = serverRailController
+                    if (controller != null) {
+                        controller.openForEpisode(
+                            nextKey,
+                            preferredServer = requiredServer,
+                            autoPlay = true,
+                        )
+                    } else {
+                        toast(getString(R.string.source_error))
                     }
                 }
             }
@@ -4632,18 +4641,40 @@ class ExoplayerView :
             ) {
                 preloading = true
                 nextEpisode(false) { i ->
-                    val ep = episodes[episodeArr[currentEpisodeIndex + i]] ?: return@nextEpisode
+                    val nextKey = episodeArr[currentEpisodeIndex + i] ?: return@nextEpisode
+                    val ep = episodes[nextKey] ?: return@nextEpisode
                     val selected = media.selected ?: return@nextEpisode
                     lifecycleScope.launch(Dispatchers.IO) {
                         if (TmdbStreamResolver.sessionFor(media.id) != null) {
-
                             ani.sanin.cloudstream.TmdbStreamResolver.populateSyntheticEpisode(
                                 this@ExoplayerView, media, ep
                             )
-                        } else if (media.selected!!.server != null) {
-                            model.loadEpisodeSingleVideo(ep, selected, false)
                         } else {
-                            model.loadEpisodeVideos(ep, selected.sourceIndex, false)
+                            val sourceEp = model.episodeForSource(
+                                media,
+                                selected.sourceIndex,
+                                nextKey,
+                                ep.number,
+                            )
+                            if (sourceEp == null) {
+                                Logger.log(
+                                    "Player: no episode '$nextKey' on source " +
+                                        "${selected.sourceIndex} — skipping preload",
+                                )
+                                return@launch
+                            }
+                            withContext(Dispatchers.Main) {
+                                if (isFinishing || isDestroyed) return@withContext
+                                if (sourceEp !== ep) {
+                                    sourceEp.selectedSubtitle = ep.selectedSubtitle
+                                    episodes[nextKey] = sourceEp
+                                }
+                            }
+                            if (selected.server != null) {
+                                model.loadEpisodeSingleVideo(sourceEp, selected, false)
+                            } else {
+                                model.loadEpisodeVideos(sourceEp, selected.sourceIndex, false)
+                            }
                         }
                     }
                 }
