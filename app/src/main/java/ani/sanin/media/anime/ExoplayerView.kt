@@ -935,6 +935,10 @@ class ExoplayerView :
                     View.VISIBLE
                 }
             (exoSkipOpEd.parent as? ViewGroup)?.requestLayout()
+            playerView.findViewById<View>(R.id.exo_autoplay)?.nextFocusRightId =
+                if (exoSkipOpEd.isVisible) R.id.exo_skip_op_ed else R.id.exo_settings
+            exoSettings.nextFocusLeftId =
+                if (exoSkipOpEd.isVisible) R.id.exo_skip_op_ed else R.id.exo_autoplay
         }
 
         exoSkipOpEd.alpha = if (PrefManager.getVal(PrefName.AutoSkipOPED)) 1f else 0.3f
@@ -1106,14 +1110,51 @@ class ExoplayerView :
 
         val tracksButton = playerView.findViewById<View>(R.id.exo_tracks)
         val autoplayButton = playerView.findViewById<View>(R.id.exo_autoplay)
+        val sourceButton = playerView.findViewById<View>(R.id.exo_source)
+        val subButton = playerView.findViewById<View>(R.id.exo_sub)
+        val rotateButton = playerView.findViewById<View>(R.id.exo_rotate)
+        val screenButton = playerView.findViewById<View>(R.id.exo_screen)
+        val episodeButton = playerView.findViewById<View>(R.id.exo_ep_sel_btn)
+
         autoplayButton.nextFocusLeftId = R.id.exo_back
         autoplayButton.nextFocusRightId = R.id.exo_skip_op_ed
-        exoSpeed.nextFocusLeftId = R.id.exo_skip_op_ed
-        exoSpeed.nextFocusRightId = R.id.exo_settings
-        exoSettings.nextFocusLeftId = androidx.media3.ui.R.id.exo_playback_speed
-        exoSettings.nextFocusRightId = R.id.exo_tracks
-        tracksButton.nextFocusLeftId = R.id.exo_settings
-        tracksButton.nextFocusRightId = R.id.exo_back
+        autoplayButton.nextFocusDownId = R.id.exo_play
+
+        exoSpeed.nextFocusLeftId = R.id.exo_settings
+        exoSpeed.nextFocusRightId = R.id.exo_back
+        exoSpeed.nextFocusDownId = R.id.exo_play
+
+        exoSettings.nextFocusLeftId = R.id.exo_skip_op_ed
+        exoSettings.nextFocusRightId = R.id.exo_playback_speed
+        exoSettings.nextFocusDownId = R.id.exo_play
+
+        tracksButton.nextFocusLeftId = R.id.exo_source
+        tracksButton.nextFocusRightId = R.id.exo_rotate
+        tracksButton.nextFocusUpId = R.id.exo_progress
+
+        sourceButton.nextFocusLeftId =
+            if (exoSubtitle.isVisible) R.id.exo_sub else R.id.exo_ep_sel_btn
+        sourceButton.nextFocusRightId =
+            if (tracksButton.isVisible) R.id.exo_tracks else R.id.exo_rotate
+        sourceButton.nextFocusUpId = R.id.exo_progress
+
+        subButton.nextFocusLeftId = R.id.exo_ep_sel_btn
+        subButton.nextFocusRightId = R.id.exo_source
+        subButton.nextFocusUpId = R.id.exo_progress
+
+        rotateButton.nextFocusLeftId = if (tracksButton.isVisible) R.id.exo_tracks else R.id.exo_source
+        rotateButton.nextFocusRightId = R.id.exo_screen
+        rotateButton.nextFocusUpId = R.id.exo_skip
+
+        screenButton.nextFocusLeftId = R.id.exo_rotate
+        screenButton.nextFocusRightId = R.id.exo_ep_sel_btn
+        screenButton.nextFocusUpId = R.id.exo_skip
+
+        episodeButton.nextFocusLeftId = R.id.exo_screen
+        episodeButton.nextFocusRightId =
+            if (exoSubtitle.isVisible) R.id.exo_sub else R.id.exo_source
+        episodeButton.nextFocusUpId = R.id.exo_skip
+
         exoBack.nextFocusRightId = R.id.exo_ep_sel_text
         exoBack.nextFocusLeftId = R.id.exo_autoplay
         playerView.findViewById<View>(R.id.exo_prev_ep).nextFocusLeftId = R.id.exo_back
@@ -1122,8 +1163,6 @@ class ExoplayerView :
         exoPlay.nextFocusRightId = R.id.exo_next_ep
         playerView.findViewById<View>(R.id.exo_next_ep).nextFocusLeftId = androidx.media3.ui.R.id.exo_play
         exoPlay.nextFocusUpId = R.id.exo_autoplay
-        exoSpeed.nextFocusDownId = androidx.media3.ui.R.id.exo_play
-        autoplayButton.nextFocusDownId = androidx.media3.ui.R.id.exo_play
 
         val progressBar = playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
         progressBar.isFocusable = true
@@ -4834,6 +4873,8 @@ class ExoplayerView :
             timeStampText.text = ""
             exoSkipOpEd.visibility = View.GONE
             (exoSkipOpEd.parent as? ViewGroup)?.requestLayout()
+            playerView.findViewById<View>(R.id.exo_autoplay)?.nextFocusRightId = R.id.exo_settings
+            exoSettings.nextFocusLeftId = R.id.exo_autoplay
             hideSkipTimestampButton()
             updateTimelineUi()
             handler.postDelayed({
@@ -5056,17 +5097,16 @@ class ExoplayerView :
 
         (btn.parent as? ViewGroup)?.requestLayout()
 
-        val skipUpId = if (show) R.id.exo_tracks else R.id.exo_settings
-        playerView.findViewById<View>(R.id.exo_skip)?.nextFocusUpId = skipUpId
-        playerView.findViewById<View>(R.id.exo_skip_timestamp)?.nextFocusUpId = skipUpId
+        playerView.findViewById<View>(R.id.exo_skip)?.nextFocusUpId = R.id.exo_settings
+        playerView.findViewById<View>(R.id.exo_skip_timestamp)?.nextFocusUpId = R.id.exo_settings
+        val sourceBtn = playerView.findViewById<View>(R.id.exo_source)
+        val rotateBtn = playerView.findViewById<View>(R.id.exo_rotate)
         val epBtn = playerView.findViewById<View>(R.id.exo_ep_sel_btn)
-        if (show) {
-            epBtn.nextFocusRightId = R.id.exo_tracks
-        } else {
-            epBtn.nextFocusRightId = View.NO_ID
-            if (btn.hasFocus()) {
-                epBtn.requestFocus()
-            }
+        sourceBtn.nextFocusRightId = if (show) R.id.exo_tracks else R.id.exo_rotate
+        rotateBtn.nextFocusLeftId = if (show) R.id.exo_tracks else R.id.exo_source
+        epBtn.nextFocusRightId = if (exoSubtitle.isVisible) R.id.exo_sub else R.id.exo_source
+        if (!show && btn.hasFocus()) {
+            epBtn.requestFocus()
         }
     }
 
