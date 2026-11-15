@@ -1118,7 +1118,7 @@ class ExoplayerView :
 
         autoplayButton.nextFocusLeftId = R.id.exo_back
         autoplayButton.nextFocusRightId = R.id.exo_skip_op_ed
-        autoplayButton.nextFocusDownId = R.id.exo_play
+        autoplayButton.nextFocusDownId = androidx.media3.ui.R.id.exo_play
 
         exoSpeed.nextFocusLeftId = R.id.exo_screen
         exoSpeed.nextFocusRightId =
@@ -1127,26 +1127,26 @@ class ExoplayerView :
 
         exoSettings.nextFocusLeftId = R.id.exo_skip_op_ed
         exoSettings.nextFocusRightId = R.id.exo_ep_sel_btn
-        exoSettings.nextFocusDownId = R.id.exo_play
+        exoSettings.nextFocusDownId = androidx.media3.ui.R.id.exo_play
 
         episodeButton.nextFocusLeftId = R.id.exo_settings
         episodeButton.nextFocusRightId = R.id.exo_back
-        episodeButton.nextFocusDownId = R.id.exo_play
+        episodeButton.nextFocusDownId = androidx.media3.ui.R.id.exo_play
         episodeButton.nextFocusUpId = R.id.exo_skip
 
         tracksButton.nextFocusLeftId = R.id.exo_source
         tracksButton.nextFocusRightId = R.id.exo_rotate
-        tracksButton.nextFocusUpId = R.id.exo_progress
+        tracksButton.nextFocusUpId = androidx.media3.ui.R.id.exo_progress
 
         sourceButton.nextFocusLeftId =
             if (exoSubtitle.isVisible) R.id.exo_sub else androidx.media3.ui.R.id.exo_playback_speed
         sourceButton.nextFocusRightId =
             if (tracksButton.isVisible) R.id.exo_tracks else R.id.exo_rotate
-        sourceButton.nextFocusUpId = R.id.exo_progress
+        sourceButton.nextFocusUpId = androidx.media3.ui.R.id.exo_progress
 
         subButton.nextFocusLeftId = androidx.media3.ui.R.id.exo_playback_speed
         subButton.nextFocusRightId = R.id.exo_source
-        subButton.nextFocusUpId = R.id.exo_progress
+        subButton.nextFocusUpId = androidx.media3.ui.R.id.exo_progress
 
         rotateButton.nextFocusLeftId = if (tracksButton.isVisible) R.id.exo_tracks else R.id.exo_source
         rotateButton.nextFocusRightId = R.id.exo_screen
