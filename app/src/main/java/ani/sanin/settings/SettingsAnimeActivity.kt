@@ -151,6 +151,49 @@ class SettingsAnimeActivity : AppCompatActivity() {
                 ),
             )),
 
+            SubscreenBuilder.Section("Auto play", R.drawable.ic_set_video, entries = listOf(
+                SubscreenBuilder.Entry(
+                    title = "Source selection",
+                    desc = "Manual or automatic stream start",
+                    choice = SubscreenBuilder.Choice(
+                        title = "Source selection",
+                        options = arrayOf(
+                            "Manual — pick the source yourself on the source screen",
+                            "Automatic — play the first link from the selected source",
+                        ),
+                        currentIndex = if (PrefManager.getVal<Int>(PrefName.AutoPlayMode) == 1) 1 else 0,
+                    ) { idx -> PrefManager.setVal(PrefName.AutoPlayMode, if (idx == 1) 1 else 0) },
+                ),
+                SubscreenBuilder.Entry(
+                    title = "Auto play timeout",
+                    desc = "How long to search for a stream before showing the source screen",
+                    slider = SubscreenBuilder.SliderOption(
+                        value = PrefManager.getVal<Int>(PrefName.AutoPlayStreamTimeout)
+                            .coerceIn(15, 90).toFloat(),
+                        valueFrom = 15f,
+                        valueTo = 90f,
+                        step = 5f,
+                        suffix = "s",
+                    ) { v -> PrefManager.setVal(PrefName.AutoPlayStreamTimeout, v.toInt()) },
+                ),
+                SubscreenBuilder.Entry(
+                    title = "Preferred quality",
+                    desc = "Preferred stream quality when auto-playing",
+                    choice = SubscreenBuilder.Choice(
+                        title = "Preferred quality",
+                        options = arrayOf("None", "360p", "720p", "1080p"),
+                        currentIndex = when (PrefManager.getVal<String>(PrefName.AutoPlayPreferredQuality)) {
+                            "360p" -> 1; "720p" -> 2; "1080p" -> 3; else -> 0
+                        },
+                    ) { idx ->
+                        PrefManager.setVal(
+                            PrefName.AutoPlayPreferredQuality,
+                            arrayOf("None", "360p", "720p", "1080p")[idx],
+                        )
+                    },
+                ),
+            )),
+
             SubscreenBuilder.Section("Library Sync", R.drawable.ic_set_anime, entries = listOf(
                 SubscreenBuilder.Entry(
                     title = "Auto-Sync AniList",

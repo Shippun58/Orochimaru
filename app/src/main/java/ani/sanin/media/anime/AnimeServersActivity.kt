@@ -45,6 +45,9 @@ import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
 import com.google.android.material.chip.Chip
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -118,6 +121,43 @@ class AnimeServersActivity : AppCompatActivity() {
     private var launchingPlayer = false
     private var initialFocusApplied = false
 
+    private var autoPlayMode = false
+    private var autoPlayDone = false
+    private var autoPlayStatusJob: Job? = null
+    private var autoPlayTimeoutJob: Job? = null
+
+    private class AutoCandidate(
+        val group: Group,
+        val extractor: VideoExtractor,
+        val videoIdx: Int,
+        val quality: Int,
+    )
+
+    private val autoCandidates = mutableListOf<AutoCandidate>()
+
+    private val autoPlayStatuses = arrayOf(
+        "Locating best source...",
+        "Scanning available streams...",
+        "Hand-picking quality...",
+        "Searching available links...",
+        "Connecting to servers...",
+        "Finding playable source...",
+        "Loading episode streams...",
+        "Selecting best source...",
+        "Preparing playback...",
+        "Optimizing connection...",
+        "Checking server sources...",
+        "Retrieving stream options...",
+        "Matching quality preferences...",
+        "Evaluating video sources...",
+        "Finding compatible streams...",
+        "Preparing video sources...",
+        "Selecting video quality...",
+        "Retrieving best match...",
+        "Checking available sources...",
+        "Initializing playback...",
+    )
+
     override fun onResume() {
         super.onResume()
         if (launchingPlayer) {
@@ -185,7 +225,10 @@ class AnimeServersActivity : AppCompatActivity() {
         }
         buildChips()
         refreshRows()
-        pendingAutoPlay = !downloadMode && launchFlag && savedServerArg != null
+        autoPlayMode = !downloadMode && launchFlag &&
+            PrefManager.getVal<Int>(PrefName.AutoPlayMode) == 1
+        pendingAutoPlay = !autoPlayMode && !downloadMode && launchFlag && savedServerArg != null
+        if (autoPlayMode) startAutoPlay()
         wireServerFocusChain()
         lifecycleScope.launch { resolveAll() }
     }
@@ -749,6 +792,7 @@ class AnimeServersActivity : AppCompatActivity() {
                             runOnUiThread {
                                 if (isFinishing || isDestroyed) return@runOnUiThread
                                 maybeAutoPlay(group, extractor)
+                                maybeAutoSelect(group, extractor)
                                 if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
                             }
                         }, servers)
@@ -768,6 +812,7 @@ class AnimeServersActivity : AppCompatActivity() {
                     model.saveSelected(m.id, m.selected!!)
                     snackString("Saved server unavailable, pick another")
                 }
+                maybeAutoSelectFinalize()
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) {
@@ -821,6 +866,7 @@ class AnimeServersActivity : AppCompatActivity() {
             selectedIndex = groups.indexOfFirst { it.index == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
             syncChipsAfterSort(focusedSource)
             if (refreshRows && groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
+            maybeAutoSelectFinalize()
         }
     }
 
@@ -869,6 +915,162 @@ class AnimeServersActivity : AppCompatActivity() {
             if (target.isAttachedToWindow) target.requestFocus()
             else parent.post { target.requestFocus() }
         }
+    }
+
+    private fun startAutoPlay() {
+        serversBinding.autoPlayOverlay.alpha = 1f
+        serversBinding.autoPlayOverlay.isVisible = true
+        autoPlayDone = false
+        autoPlayStatusJob?.cancel()
+        autoPlayStatusJob = lifecycleScope.launch(Dispatchers.Main) {
+            var i = 0
+            while (isActive && !autoPlayDone) {
+                serversBinding.autoPlayStatus.text = autoPlayStatuses[i % autoPlayStatuses.size]
+                i++
+                delay(2000)
+            }
+        }
+        val seconds = PrefManager.getVal<Int>(PrefName.AutoPlayStreamTimeout).coerceIn(15, 90)
+        autoPlayTimeoutJob?.cancel()
+        autoPlayTimeoutJob = lifecycleScope.launch(Dispatchers.Main) {
+            delay(seconds * 1000L)
+            if (autoPlayDone) return@launch
+            Logger.log("ANIME_SERVERS: auto-play timed out after ${seconds}s")
+            endAutoPlay()
+            snackString("No stream found, pick a source")
+        }
+    }
+
+    private fun endAutoPlay() {
+        if (autoPlayDone && autoPlayStatusJob == null) return
+        autoPlayDone = true
+        autoPlayStatusJob?.cancel()
+        autoPlayStatusJob = null
+        autoPlayTimeoutJob?.cancel()
+        autoPlayTimeoutJob = null
+        serversBinding.autoPlayOverlay.animate().alpha(0f).setDuration(150).withEndAction {
+            serversBinding.autoPlayOverlay.isVisible = false
+            serversBinding.autoPlayOverlay.alpha = 1f
+        }.start()
+    }
+
+    private fun groupFinished(group: Group): Boolean =
+        group.extractionDone || group.state is GroupState.Failed
+
+    private fun qualityTarget(): Int = when (
+        PrefManager.getVal<String>(PrefName.AutoPlayPreferredQuality)
+    ) {
+        "360p" -> 360
+        "720p" -> 720
+        "1080p" -> 1080
+        else -> 0
+    }
+
+    private fun qualityDistance(a: Int, target: Int): Int {
+        if (a <= 0) return Int.MAX_VALUE / 2
+        return Math.abs(a - target)
+    }
+
+    private fun bestVideoIndex(extractor: VideoExtractor, target: Int): Int {
+        val videos = extractor.videos
+        if (videos.isEmpty()) return 0
+        if (target <= 0) {
+            val pref = videos.indexOfFirst { it.preferred }
+            return if (pref >= 0) pref else 0
+        }
+        var bestIdx = 0
+        var bestScore = Int.MAX_VALUE
+        videos.forEachIndexed { i, v ->
+            val q = v.quality ?: return@forEachIndexed
+            val dist = Math.abs(q - target)
+            val score = if (q <= target) dist else dist + 100_000
+            if (score < bestScore) {
+                bestScore = score
+                bestIdx = i
+            }
+        }
+        return bestIdx
+    }
+
+    private fun registerAutoCandidate(group: Group, extractor: VideoExtractor) {
+        if (!autoPlayMode || autoPlayDone) return
+        if (extractor.videos.isEmpty()) return
+        if (autoCandidates.any { it.extractor === extractor }) return
+        val target = qualityTarget()
+        val idx = bestVideoIndex(extractor, target)
+        val quality = extractor.videos.getOrNull(idx)?.quality ?: 0
+        autoCandidates.add(AutoCandidate(group, extractor, idx, quality))
+    }
+
+    private fun selectedGroup(): Group? {
+        val src = media?.selected?.sourceIndex ?: -1
+        if (src < 0) return null
+        return groups.firstOrNull { it.index == src }
+    }
+
+    private fun selectedSourceEmpty(): Boolean {
+        val g = selectedGroup() ?: return true
+        return groupFinished(g) && autoCandidates.none { it.group.index == g.index }
+    }
+
+    private fun maybeAutoSelect(group: Group, extractor: VideoExtractor) {
+        if (!autoPlayMode || autoPlayDone) return
+        registerAutoCandidate(group, extractor)
+        resolveAutoSelection()
+    }
+
+    private fun maybeAutoSelectFinalize() {
+        if (!autoPlayMode || autoPlayDone) return
+        if (autoCandidates.isEmpty()) {
+            if (groups.isNotEmpty() && groups.all { groupFinished(it) }) {
+                Logger.log("ANIME_SERVERS: auto-play found no streams")
+                endAutoPlay()
+            }
+            return
+        }
+        resolveAutoSelection()
+    }
+
+    private fun resolveAutoSelection() {
+        if (!autoPlayMode || autoPlayDone || autoCandidates.isEmpty()) return
+        val target = qualityTarget()
+        val empty = selectedSourceEmpty()
+        val eligible = if (empty) {
+            autoCandidates.toList()
+        } else {
+            val src = media?.selected?.sourceIndex ?: -1
+            autoCandidates.filter { it.group.index == src }
+        }
+        if (eligible.isEmpty()) return
+        val exact = if (target > 0) eligible.firstOrNull { it.quality == target } else null
+        val chosen = when {
+            target <= 0 -> eligible.first()
+            exact != null -> exact
+            selectedSourceEmpty() -> eligible.minByOrNull { qualityDistance(it.quality, target) }
+            (selectedGroup()?.let { groupFinished(it) } == true) ->
+                eligible.minByOrNull { qualityDistance(it.quality, target) }
+            else -> null
+        } ?: return
+        launchAutoSelected(chosen)
+    }
+
+    private fun launchAutoSelected(candidate: AutoCandidate) {
+        if (autoPlayDone || !autoPlayMode || launchingPlayer) return
+        val m = media ?: return
+        selectedIndex = groups.indexOfFirst { it.index == candidate.group.index }
+            .takeIf { it >= 0 } ?: selectedIndex
+        m.selected?.sourceIndex = candidate.group.index
+        Logger.log(
+            "ANIME_SERVERS: auto-play '${candidate.group.name}'/" +
+                "'${candidate.extractor.server.name}' quality=${candidate.quality} video=${candidate.videoIdx}"
+        )
+        endAutoPlay()
+        launchPlayback(
+            candidate.group,
+            candidate.extractor,
+            autoVideo = true,
+            forcedVideo = candidate.videoIdx,
+        )
     }
 
     private fun maybeAutoPlay(group: Group, extractor: VideoExtractor) {
