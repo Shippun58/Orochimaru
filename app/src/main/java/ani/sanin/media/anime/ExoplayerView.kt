@@ -1784,34 +1784,46 @@ class ExoplayerView :
 
             if (TmdbStreamResolver.sessionFor(media.id) != null) {
                 val prevVideo = episode?.selectedVideo ?: 0
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val ok = TmdbStreamResolver.populateSyntheticEpisode(this@ExoplayerView, media, nextEp)
-                    withContext(Dispatchers.Main) {
-                        if (isFinishing || isDestroyed) return@withContext
-                        val chosen = nextEp.extractors
-                            ?.filterNotNull()
-                            ?.firstOrNull {
-                                it.server.name == requiredServer && it.videos.isNotEmpty()
-                            }
-                        if (!ok || chosen == null) {
-                            Logger.log(
-                                Log.ERROR,
-                                "Player: next-episode server '$requiredServer' missing for " +
-                                    "'${nextEp.number}' — opening source rail",
-                            )
-                            autoContinuePending = false
-                            autoContinueServer = null
-                            serverRailController?.openForEpisode(nextKey)
-                        } else {
-                            nextEp.selectedExtractor = chosen.server.name
-                            nextEp.selectedVideo = prevVideo.coerceIn(
-                                0,
-                                (chosen.videos.size - 1).coerceAtLeast(0),
-                            )
-                            autoContinuePending = false
-                            autoContinueServer = null
-                            model.setEpisode(nextEp, "change")
+                val preloaded = nextEp.extractorsSource != null && nextEp.allStreams &&
+                    nextEp.extractors?.any {
+                        it.server.name == requiredServer && it.videos.isNotEmpty()
+                    } == true
+                autoContinuePending = false
+                autoContinueServer = null
+                val chosen = if (preloaded) {
+                    nextEp.extractors
+                        ?.filterNotNull()
+                        ?.firstOrNull {
+                            it.server.name == requiredServer && it.videos.isNotEmpty()
                         }
+                } else {
+                    null
+                }
+                if (chosen != null) {
+                    nextEp.selectedExtractor = chosen.server.name
+                    nextEp.selectedVideo = prevVideo.coerceIn(
+                        0,
+                        (chosen.videos.size - 1).coerceAtLeast(0),
+                    )
+                    Logger.log(
+                        "Player: preloaded tmdb server '$requiredServer' on ep " +
+                            "'${nextEp.number}' — playing",
+                    )
+                    model.setEpisode(nextEp, "change")
+                } else {
+                    Logger.log(
+                        "Player: tmdb server '$requiredServer' not preloaded for ep " +
+                            "'${nextEp.number}' — opening source rail",
+                    )
+                    val controller = serverRailController
+                    if (controller != null) {
+                        controller.openForEpisode(
+                            nextKey,
+                            preferredServer = requiredServer,
+                            autoPlay = true,
+                        )
+                    } else {
+                        toast(getString(R.string.source_error))
                     }
                 }
             } else {

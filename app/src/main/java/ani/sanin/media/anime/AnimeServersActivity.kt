@@ -120,7 +120,10 @@ class AnimeServersActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        launchingPlayer = false
+        if (launchingPlayer) {
+            launchingPlayer = false
+            finish()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

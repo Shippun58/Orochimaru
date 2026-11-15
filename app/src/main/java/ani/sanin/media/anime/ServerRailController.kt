@@ -7,14 +7,17 @@ import android.view.ViewGroup
 import android.graphics.Color
 import android.widget.ImageButton
 import android.widget.HorizontalScrollView
+import android.widget.TextView
 import androidx.annotation.OptIn
 import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
@@ -442,7 +445,7 @@ class ServerRailController(
 
     private sealed class Row {
         data class Header(val name: String, val tag: String?) : Row()
-        data class TrackHeader(val name: String) : Row()
+        data class TrackHeader(val name: String, val iconRes: Int? = null) : Row()
         data class Track(val entry: TrackEntry, val active: Boolean) : Row()
         data class Video(
             val group: Group,
@@ -516,6 +519,8 @@ class ServerRailController(
     private var targetNotified = false
     private val adapter = RailAdapter()
     private var arrivalCounter = 0
+    private var rowsRefreshPosted = false
+    private var lastTracksSignature: String? = null
     private val sources: WatchSources =
         if (ExoplayerView.media.isAdult) HAnimeSources else AnimeSources
     private val tmdbSession: TmdbStreamResolver.SyntheticSession? by lazy {
@@ -658,19 +663,35 @@ class ServerRailController(
     /** Rebuilds the list for the Tracks tab: bold white Video header, then video tracks,
      *  then Audio header + audio tracks — replacing the old tracks dialog sheet. */
     private fun rebuildTracks() {
-        val focusPosition = focusedAdapterPosition()
-        val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
-        rows.clear()
         val tracks = activity.playerCurrentTracks()
         val videos = trackEntries(tracks, C.TRACK_TYPE_VIDEO)
             .sortedByDescending { it.height }
+        val audios = trackEntries(tracks, C.TRACK_TYPE_AUDIO)
+        val signature = buildString {
+            videos.forEach {
+                append(it.type).append(':').append(it.index).append(':')
+                    .append(it.active).append(':').append(it.group.mediaTrackGroup.id)
+                    .append(':').append(it.label).append('|')
+            }
+            append("::")
+            audios.forEach {
+                append(it.type).append(':').append(it.index).append(':')
+                    .append(it.active).append(':').append(it.group.mediaTrackGroup.id)
+                    .append(':').append(it.label).append('|')
+            }
+        }
+        val showingTracks = rows.any { it is Row.Track || it is Row.TrackHeader }
+        if (signature == lastTracksSignature && showingTracks) return
+        lastTracksSignature = signature
+        val focusPosition = focusedAdapterPosition()
+        val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
+        rows.clear()
         if (videos.isNotEmpty()) {
-            rows.add(Row.TrackHeader("Video"))
+            rows.add(Row.TrackHeader("Video", R.drawable.ic_tracks_sheet_video))
             videos.forEach { rows.add(Row.Track(it, it.active)) }
         }
-        val audios = trackEntries(tracks, C.TRACK_TYPE_AUDIO)
         if (audios.isNotEmpty()) {
-            rows.add(Row.TrackHeader("Audio"))
+            rows.add(Row.TrackHeader("Audio", R.drawable.ic_tracks_sheet_audio))
             audios.forEach { rows.add(Row.Track(it, it.active)) }
         }
         if (rows.isEmpty()) rows.add(Row.TrackHeader("No selectable tracks"))
@@ -914,6 +935,7 @@ class ServerRailController(
         RailRepo.prune(m.id, epKey, season, epNum)
         rows.clear()
         arrivalCounter = 0
+        lastTracksSignature = null
         if (tmdbSession != null) {
             buildTmdbGroups()
         } else {
@@ -999,6 +1021,7 @@ class ServerRailController(
     }
 
     private fun onAnimeUpdate(group: Group, entry: AnimeEntry) {
+        val previousRank = group.rank
         hydrateGroup(group, entry)
         val previousOrder = groups.map { it.index }
         val selectedKey = groups.getOrNull(selectedIndex)?.index
@@ -1006,9 +1029,13 @@ class ServerRailController(
         selectedIndex = groups.indexOfFirst { it.index == selectedKey }
             .takeIf { it >= 0 } ?: selectedIndex
         if (playTargetIfAvailable(group)) return
-        if (groups.map { it.index } != previousOrder) buildChips() else renderChipStates()
+        if (groups.map { it.index } != previousOrder) {
+            buildChips()
+        } else if (group.rank != previousRank) {
+            renderChipStates()
+        }
         if (entry.extractionDone) notifyTargetMissing(group)
-        refreshRows()
+        if (groups.getOrNull(selectedIndex) === group) requestRowsRefresh()
     }
 
     private fun playTargetIfAvailable(group: Group): Boolean {
@@ -1224,6 +1251,12 @@ class ServerRailController(
             .takeIf { it >= 0 } ?: tmdbSelectedIndex
         buildChips()
         refreshRows()
+        if (targetAutoPlay) {
+            content.post {
+                val group = tmdbGroups.getOrNull(tmdbSelectedIndex) ?: return@post
+                if (!playTmdbTargetIfAvailable(group)) notifyTmdbTargetMissing(group)
+            }
+        }
     }
 
     private fun startTmdbGroup(index: Int) {
@@ -1240,6 +1273,7 @@ class ServerRailController(
     }
 
     private fun onTmdbUpdate(group: TmdbGroup, entry: TmdbEntry) {
+        val previousRank = group.rank
         group.state = entry.state
         if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 &&
             tmdbGroups.getOrNull(tmdbSelectedIndex) !== group
@@ -1254,18 +1288,62 @@ class ServerRailController(
         if (group.rank == 0 && group.arrivalSeq == Int.MAX_VALUE) {
             group.arrivalSeq = arrivalCounter++
         }
+        val previousOrder = tmdbGroups.map { it.key }
         val selectedKey = tmdbGroups.getOrNull(tmdbSelectedIndex)?.key
         tmdbGroups.sortWith(compareBy({ it.rank }, { it.arrivalSeq }, { it.key }))
         tmdbSelectedIndex = tmdbGroups.indexOfFirst { it.key == selectedKey }
             .takeIf { it >= 0 } ?: tmdbSelectedIndex
-        buildChips()
-        refreshRows()
+        if (playTmdbTargetIfAvailable(group)) return
+        if (tmdbGroups.map { it.key } != previousOrder) {
+            buildChips()
+        } else if (group.rank != previousRank) {
+            renderChipStates()
+        }
+        if (tmdbGroups.getOrNull(tmdbSelectedIndex) === group) requestRowsRefresh()
+        notifyTmdbTargetMissing(group)
+    }
+
+    private fun playTmdbTargetIfAvailable(group: TmdbGroup): Boolean {
+        if (!targetAutoPlay || launching) return false
+        val server = targetServer ?: return false
+        val session = tmdbSession ?: return false
+        if (group.source.id != session.source.id) return false
+        if (tmdbGroups.getOrNull(tmdbSelectedIndex) !== group) return false
+        val state = group.state as? TmdbGroupState.Ready ?: return false
+        val playable = state.links.filter { it.url.isNotBlank() }
+        if (playable.isEmpty()) return false
+        val names = tmdbExtractorNames(playable)
+        val match = playable.firstOrNull { names[it]?.first == server } ?: return false
+        Logger.log("SERVER_RAIL: tmdb auto-play '$server' for episode '${activeEpisodeKey()}'")
+        targetAutoPlay = false
+        targetServer = null
+        targetNotified = false
+        playTmdbStream(match, group)
+        return true
+    }
+
+    private fun notifyTmdbTargetMissing(group: TmdbGroup) {
+        if (!targetAutoPlay || targetNotified) return
+        val server = targetServer ?: return
+        val session = tmdbSession ?: return
+        if (group.source.id != session.source.id) return
+        if (tmdbGroups.getOrNull(tmdbSelectedIndex) !== group) return
+        val state = group.state
+        if (state !is TmdbGroupState.Ready && state !is TmdbGroupState.Failed) return
+        targetNotified = true
+        ani.sanin.snackString(
+            "Preferred server '$server' not found — pick another source",
+            activity,
+        )
     }
 
     private fun selectTmdbGroup(index: Int) {
         if (index !in tmdbGroups.indices) return
         val changed = tmdbSelectedIndex != index
         tmdbSelectedIndex = index
+        targetAutoPlay = false
+        targetServer = null
+        targetNotified = false
         val session = tmdbSession
         if (PrefManager.getVal<Boolean>(PrefName.MakeDefault) && session != null) {
             PrefManager.setCustomVal("tmdb_source_${session.mediaId}", tmdbGroups[index].key)
@@ -1374,16 +1452,16 @@ class ServerRailController(
 
     private fun buildChips() {
         val focusedIndex = chipByIndex.indexOfFirst { it.hasFocus() }
+        val reusable = chipByIndex.toList()
         chipsGroup.removeAllViews()
         chipByIndex.clear()
         chipsScroll.isVisible = currentTab == Tab.SOURCES
         val inflater = LayoutInflater.from(activity)
         val listCount = if (tmdbSession != null) tmdbGroups.size else groups.size
         for (index in 0 until listCount) {
-            val chip = inflater.inflate(
-                R.layout.item_tmdb_chip, chipsGroup, false,
-            ) as Chip
-            chip.id = View.generateViewId()
+            val chip = reusable.getOrNull(index) ?: (
+                inflater.inflate(R.layout.item_tmdb_chip, chipsGroup, false) as Chip
+                ).also { it.id = View.generateViewId() }
             chip.isCheckable = true
             chip.isClickable = true
             chip.isFocusable = true
@@ -1458,17 +1536,41 @@ class ServerRailController(
 
     // --- row refresh ---
 
+    private fun requestRowsRefresh() {
+        if (currentTab != Tab.SOURCES || rowsRefreshPosted || !isOpen()) return
+        rowsRefreshPosted = true
+        content.post {
+            rowsRefreshPosted = false
+            if (activity.isFinishing || activity.isDestroyed) return@post
+            if (currentTab != Tab.SOURCES) return@post
+            refreshRows()
+        }
+    }
+
     private fun refreshRows() {
         if (currentTab != Tab.SOURCES) return
+        lastTracksSignature = null
         val focusPosition = focusedAdapterPosition()
         val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
+        val oldRows = rows.toList()
         rows.clear()
         if (tmdbSession != null) {
             refreshTmdbRows()
         } else {
             refreshAnimeRows()
         }
-        adapter.notifyDataSetChanged()
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize(): Int = oldRows.size
+            override fun getNewListSize(): Int = rows.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean {
+                val old = oldRows[oldPos]
+                val new = rows[newPos]
+                return old.javaClass == new.javaClass && rowKey(old) == rowKey(new)
+            }
+            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
+                oldRows[oldPos] == rows[newPos]
+        }, false)
+        diff.dispatchUpdatesTo(adapter)
         restoreRowFocus(focusPosition, focusKey)
     }
 
@@ -1647,10 +1749,10 @@ class ServerRailController(
     }
 
     private fun rowKey(row: Row): String = when (row) {
-        is Row.Header -> "header|${row.name}"
+        is Row.Header -> "header|${row.name}|${row.tag}"
         is Row.TrackHeader -> "trackheader|${row.name}"
         is Row.Track -> "track|${row.entry.type}|${row.entry.index}|${row.entry.label}"
-        is Row.Video -> "video|${row.group.name}|${row.extractor.server.name}|${row.idx}"
+        is Row.Video -> "video|${row.group.index}|${row.extractor.server.name}|${row.idx}"
         is Row.Stream -> "stream|${row.group.key}|${row.link.label}|${row.link.url}"
         is Row.Info -> "info|${row.link.label}|${row.link.url}"
         is Row.Extra -> "extra|${row.item.id}"
@@ -1707,6 +1809,7 @@ class ServerRailController(
         override fun getItemCount(): Int = rows.size
 
         override fun onBindViewHolder(holder: RailViewHolder, position: Int) {
+            holder.clearStartIcon()
             when (val row = rows[position]) {
                 is Row.Header -> holder.bindHeader(row)
                 is Row.TrackHeader -> holder.bindTrackHeader(row)
@@ -1751,6 +1854,20 @@ class ServerRailController(
             itemView.layoutParams = lp
         }
 
+        fun clearStartIcon() {
+            rowB?.urlQuality?.setCompoundDrawablesRelative(null, null, null, null)
+            rowB?.urlQuality?.compoundDrawablePadding = 0
+        }
+
+        private fun setTrackHeaderIcon(tv: TextView, resId: Int) {
+            val d = tv.resources.displayMetrics.density
+            val size = (22 * d).toInt().coerceAtLeast(1)
+            val icon = ContextCompat.getDrawable(tv.context, resId)?.mutate()
+            icon?.setBounds(0, 0, size, size)
+            tv.setCompoundDrawablesRelative(icon, null, null, null)
+            tv.compoundDrawablePadding = (12 * d).toInt()
+        }
+
         private fun focusCorners() {
             val d = itemView.resources.displayMetrics.density
             FocusEffectUtil.applyFocusListener(
@@ -1793,6 +1910,7 @@ class ServerRailController(
             b.urlQuality.alpha = 1f
             b.urlQuality.setTypeface(null, android.graphics.Typeface.BOLD)
             b.urlQuality.setTextColor(Color.WHITE)
+            row.iconRes?.let { setTrackHeaderIcon(b.urlQuality, it) }
             b.urlNote.isVisible = false
             b.urlAudio.isVisible = false
             b.urlTag.isVisible = false
