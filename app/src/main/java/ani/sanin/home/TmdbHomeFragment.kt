@@ -56,6 +56,8 @@ import ani.sanin.sizeBannerCard
 import ani.sanin.px
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
+import com.lagradost.cloudstream3.HomePageResponse
+import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.LiveSearchResponse
 import com.lagradost.cloudstream3.SearchResponse
@@ -343,10 +345,11 @@ class TmdbHomeFragment : Fragment() {
                 return@launch
             }
 
-            loadBanner(plugin, apiIndex)
+            val mainPageCache = mutableMapOf<String, HomePageResponse?>()
+            loadBanner(plugin, apiIndex, mainPageCache)
 
             val hasPluginSections = if (plugin != null) {
-                loadPluginSections(plugin, apiIndex)
+                loadPluginSections(plugin, apiIndex, mainPageCache)
             } else false
 
             val loggedOut = plugin == null && isSimklLoggedOut()
@@ -577,7 +580,8 @@ class TmdbHomeFragment : Fragment() {
 
     private suspend fun loadBanner(
         plugin: CsInstalledSource? = null,
-        apiIndex: Int? = null
+        apiIndex: Int? = null,
+        mainPageCache: MutableMap<String, HomePageResponse?> = mutableMapOf()
     ) {
 
         if (plugin != null) {
@@ -599,11 +603,7 @@ class TmdbHomeFragment : Fragment() {
 
                 val pages = api.mainPage.filter { it.data.isNotBlank() }
                 for (page in pages) {
-                    val resp = runCatching {
-                        withContext(Dispatchers.IO) {
-                            api.getMainPage(1, MainPageRequest(page.name, page.data, page.horizontalImages))
-                        }
-                    }.getOrNull()
+                    val resp = fetchMainPage(api, index, page, mainPageCache)
                     resp?.items?.forEach { list ->
                         list.list.take(10).forEach { sr ->
                             bannerItems.add(BannerItem.Plugin(sr, key))
@@ -613,11 +613,7 @@ class TmdbHomeFragment : Fragment() {
                 }
 
                 if (bannerItems.isEmpty()) {
-                    val resp = runCatching {
-                        withContext(Dispatchers.IO) {
-                            api.getMainPage(1, MainPageRequest("Home", "", false))
-                        }
-                    }.getOrNull()
+                    val resp = fetchMainPage(api, index, MainPageRequest("Home", "", false), mainPageCache)
                     resp?.items?.forEach { list ->
                         list.list.take(10).forEach { sr ->
                             bannerItems.add(BannerItem.Plugin(sr, key))
@@ -870,9 +866,27 @@ class TmdbHomeFragment : Fragment() {
         }
     }
 
+    private suspend fun fetchMainPage(
+        api: MainAPI,
+        apiIndex: Int,
+        request: MainPageRequest,
+        cache: MutableMap<String, HomePageResponse?>
+    ): HomePageResponse? {
+        val key = "$apiIndex|${request.name}|${request.data}|${request.horizontalImages}"
+        if (cache.containsKey(key)) return cache[key]
+        val response = runCatching {
+            withContext(Dispatchers.IO) {
+                api.getMainPage(1, request)
+            }
+        }.getOrNull()
+        cache[key] = response
+        return response
+    }
+
     private suspend fun loadPluginSections(
         source: CsInstalledSource,
-        apiIndex: Int? = null
+        apiIndex: Int? = null,
+        mainPageCache: MutableMap<String, HomePageResponse?> = mutableMapOf()
     ): Boolean {
         val apis = withContext(Dispatchers.IO) {
             CsRuntime.apisFor(requireContext(), source)
@@ -891,11 +905,7 @@ class TmdbHomeFragment : Fragment() {
             val pages = api.mainPage.filter { it.data.isNotBlank() }
             if (pages.isNotEmpty()) {
                 for (page in pages) {
-                    val resp = runCatching {
-                        withContext(Dispatchers.IO) {
-                            api.getMainPage(1, MainPageRequest(page.name, page.data, page.horizontalImages))
-                        }
-                    }.getOrNull()
+                    val resp = fetchMainPage(api, index, page, mainPageCache)
                     resp?.items?.forEach { list ->
                         if (list.list.isNotEmpty()) {
                             addPluginSection(list.name, list.list, apiKey)
@@ -906,11 +916,7 @@ class TmdbHomeFragment : Fragment() {
                 }
             } else {
 
-                val resp = runCatching {
-                    withContext(Dispatchers.IO) {
-                        api.getMainPage(1, MainPageRequest("Home", "", false))
-                    }
-                }.getOrNull()
+                val resp = fetchMainPage(api, index, MainPageRequest("Home", "", false), mainPageCache)
                 resp?.items?.forEach { list ->
                     if (list.list.isNotEmpty()) {
                         addPluginSection(list.name, list.list, apiKey)
