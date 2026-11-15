@@ -39,7 +39,6 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.isMovieType
 import com.lagradost.cloudstream3.LiveStreamLoadResponse
-import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.utils.DrmExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.CLEARKEY_DRM_UUID
@@ -414,16 +413,6 @@ object TmdbStreamResolver {
         Log.i("TmdbDetails", "${api.name}: search '${d.displayTitle}' -> ${results.size} results")
         var match = bestSearchMatch(results, d.displayTitle, wantMovie)
         Log.i("TmdbDetails", "${api.name}: best match = ${match?.url ?: "NONE"}")
-        if (match == null && results.isEmpty()) {
-
-            val homeItems = homePageItems(api)
-            Logger.log("TMDB_PLAY: ${api.name} home fallback -> ${homeItems.size} catalog items")
-            Log.i("TmdbDetails", "${api.name}: home fallback -> ${homeItems.size} catalog items")
-            match = bestSearchMatch(homeItems, d.displayTitle, wantMovie)
-            if (match != null) {
-                Logger.log("TMDB_PLAY: ${api.name} matched '${d.displayTitle}' from home page: '${match.name}'")
-            }
-        }
         if (match == null) {
             return ApiResolve(emptyList(), "${api.name}: no search result matched '${d.displayTitle}' (${results.size} results)")
         }
@@ -543,33 +532,6 @@ object TmdbStreamResolver {
         val y = norm(b)
         if (x.isEmpty() || y.isEmpty()) return false
     return x.contains(y) || y.contains(x)
-    }
-
-    private suspend fun homePageItems(api: MainAPI): List<SearchResponse> {
-        val items = mutableListOf<SearchResponse>()
-        val pages = api.mainPage.filter { it.data.isNotBlank() }
-        if (pages.isEmpty()) {
-
-            val resp = runCatching {
-                api.getMainPage(1, MainPageRequest("Home", "", false))
-            }.getOrElse { t ->
-                if (t is kotlinx.coroutines.CancellationException) throw t
-                null
-            }
-            resp?.items?.forEach { items.addAll(it.list) }
-        } else {
-            for (page in pages) {
-                val resp = runCatching {
-                    api.getMainPage(1, MainPageRequest(page.name, page.data, page.horizontalImages))
-                }.getOrElse { t ->
-                    if (t is kotlinx.coroutines.CancellationException) throw t
-                    null
-                }
-                resp?.items?.forEach { items.addAll(it.list) }
-                if (items.isNotEmpty()) break
-            }
-        }
-        return items
     }
 
     private fun drmForLink(link: ExtractorLink): DrmInfo? {
