@@ -1613,7 +1613,7 @@ class TmdbHomeFragment : Fragment() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
             val b = holder.binding
-            val landscape = horizontal || item is LiveSearchResponse
+            val landscape = horizontal || TmdbCards.isLandscapeOrientation() || item is LiveSearchResponse
             val size = TmdbCards.cardSize()
             val isLive = item is LiveSearchResponse
             val (w, h) = if (landscape) {
