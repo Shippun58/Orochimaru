@@ -507,6 +507,7 @@ class ServerRailController(
     )
 
     private val rows = mutableListOf<Row>()
+    private val adapterRows = mutableListOf<Row>()
     private val groups = mutableListOf<Group>()
     private val tmdbGroups = mutableListOf<TmdbGroup>()
     private val chipByIndex = mutableListOf<Chip>()
@@ -695,6 +696,8 @@ class ServerRailController(
             audios.forEach { rows.add(Row.Track(it, it.active)) }
         }
         if (rows.isEmpty()) rows.add(Row.TrackHeader("No selectable tracks"))
+        adapterRows.clear()
+        adapterRows.addAll(rows)
         adapter.notifyDataSetChanged()
         restoreRowFocus(focusPosition, focusKey)
     }
@@ -878,7 +881,6 @@ class ServerRailController(
     private fun refreshAll() {
         val m = media
         val epKey = activeEpisodeKey()
-        rows.clear()
         arrivalCounter = 0
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
         if (tmdbSession != null) {
@@ -933,7 +935,6 @@ class ServerRailController(
         val season = ep?.extra?.get("season")?.toIntOrNull()
         val epNum = ep?.extra?.get("episode")?.toIntOrNull()
         RailRepo.prune(m.id, epKey, season, epNum)
-        rows.clear()
         arrivalCounter = 0
         lastTracksSignature = null
         if (tmdbSession != null) {
@@ -941,7 +942,6 @@ class ServerRailController(
         } else {
             buildAnimeGroups()
         }
-        adapter.notifyDataSetChanged()
         restoreRowFocus(focusPosition, focusKey)
     }
 
@@ -1552,13 +1552,15 @@ class ServerRailController(
         lastTracksSignature = null
         val focusPosition = focusedAdapterPosition()
         val focusKey = rows.getOrNull(focusPosition)?.let { rowKey(it) }
-        val oldRows = rows.toList()
+        val oldRows = adapterRows.toList()
         rows.clear()
         if (tmdbSession != null) {
             refreshTmdbRows()
         } else {
             refreshAnimeRows()
         }
+        adapterRows.clear()
+        adapterRows.addAll(rows)
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize(): Int = oldRows.size
             override fun getNewListSize(): Int = rows.size
@@ -1792,7 +1794,7 @@ class ServerRailController(
     private inner class RailAdapter : RecyclerView.Adapter<RailViewHolder>() {
 
         override fun getItemViewType(position: Int): Int =
-            if (rows[position] is Row.Extra) 2 else 1
+            if (adapterRows[position] is Row.Extra) 2 else 1
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RailViewHolder {
             val inf = LayoutInflater.from(parent.context)
@@ -1806,11 +1808,11 @@ class ServerRailController(
             }
         }
 
-        override fun getItemCount(): Int = rows.size
+        override fun getItemCount(): Int = adapterRows.size
 
         override fun onBindViewHolder(holder: RailViewHolder, position: Int) {
             holder.clearStartIcon()
-            when (val row = rows[position]) {
+            when (val row = adapterRows[position]) {
                 is Row.Header -> holder.bindHeader(row)
                 is Row.TrackHeader -> holder.bindTrackHeader(row)
                 is Row.Track -> holder.bindTrack(row, position)
