@@ -59,7 +59,6 @@ import ani.sanin.util.Logger
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
-import com.lagradost.cloudstream3.LiveSearchResponse
 import com.lagradost.cloudstream3.SearchResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -1613,9 +1612,8 @@ class TmdbHomeFragment : Fragment() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
             val b = holder.binding
-            val landscape = horizontal || TmdbCards.isLandscapeOrientation() || item is LiveSearchResponse
+            val landscape = horizontal || TmdbCards.isLandscapeOrientation()
             val size = TmdbCards.cardSize()
-            val isLive = item is LiveSearchResponse
             val (w, h) = if (landscape) {
                 val width = 260f * size
                 width.toInt() to (width * 114f / 180f).toInt()
@@ -1627,7 +1625,7 @@ class TmdbHomeFragment : Fragment() {
                 height = h
             }
             b.tmdbCard.radius = TmdbCards.roundness()
-            b.tmdbCardPoster.loadImage(item.posterUrl, if (landscape || isLive) 780 else 300)
+            b.tmdbCardPoster.loadImage(item.posterUrl, if (landscape) 780 else 300)
 
             b.tmdbCardLogo.isVisible = false
             b.tmdbCardOverlayTitle.isVisible = false
