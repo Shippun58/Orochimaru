@@ -38,6 +38,9 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.google.android.material.chip.Chip
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.view.View
@@ -105,6 +108,43 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var launchingPlayer = false
     private var initialFocusApplied = false
 
+    private var autoPlayMode = false
+    private var autoPlayDone = false
+    private var autoPlaySourceKey: String? = null
+    private var autoPlayStatusJob: Job? = null
+    private var autoPlayTimeoutJob: Job? = null
+
+    private class AutoCandidate(
+        val link: TmdbStreamResolver.StreamResult.PlayableLink,
+        val group: Group,
+        val quality: Int,
+    )
+
+    private val autoCandidates = mutableListOf<AutoCandidate>()
+
+    private val autoPlayStatuses = arrayOf(
+        "Locating best source...",
+        "Scanning available streams...",
+        "Hand-picking quality...",
+        "Searching available links...",
+        "Connecting to servers...",
+        "Finding playable source...",
+        "Loading episode streams...",
+        "Selecting best source...",
+        "Preparing playback...",
+        "Optimizing connection...",
+        "Checking server sources...",
+        "Retrieving stream options...",
+        "Matching quality preferences...",
+        "Evaluating video sources...",
+        "Finding compatible streams...",
+        "Preparing video sources...",
+        "Selecting video quality...",
+        "Retrieving best match...",
+        "Checking available sources...",
+        "Initializing playback...",
+    )
+
     private lateinit var serversBinding: ActivityTmdbServersBinding
     private var detail: TmdbDetail? = null
 
@@ -145,6 +185,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
         serversBinding = ActivityTmdbServersBinding.inflate(layoutInflater)
         setContentView(serversBinding.root)
+        autoPlayMode = PrefManager.getVal<Int>(PrefName.AutoPlayMode) == 1
+        if (autoPlayMode) startAutoPlay()
         val topBarBasePadding = (6 * resources.displayMetrics.density).toInt()
         ViewCompat.setOnApplyWindowInsetsListener(serversBinding.tmdbServersTopBar) { v, insets ->
             val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
@@ -193,8 +235,10 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             bindHeader(detail!!)
             buildGroups()
             selectedIndex = applyDefaultSelection()
+            autoPlaySourceKey = groups.getOrNull(selectedIndex)?.key
             buildChips()
             refreshRows()
+            if (autoPlayMode) startAutoPlayTimeout()
             resolveAll()
         }
         wireServerFocusChain()
@@ -934,6 +978,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             selectedIndex = groups.indexOfFirst { it.key == selectedKey }.takeIf { it >= 0 } ?: selectedIndex
             syncChipsAfterSort(focusedKey)
             if (groups.getOrNull(selectedIndex) === group) refreshRows(scrollToTop = false)
+            registerAutoCandidate(group)
+            maybeAutoSelectFinalize()
         }
     }
 
@@ -981,6 +1027,191 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         if (target != null) {
             if (target.isAttachedToWindow) target.requestFocus()
             else parent.post { target.requestFocus() }
+        }
+    }
+
+    private fun startAutoPlay() {
+        serversBinding.autoPlayOverlay.alpha = 1f
+        serversBinding.autoPlayOverlay.isVisible = true
+        autoPlayDone = false
+        autoPlayStatusJob?.cancel()
+        autoPlayStatusJob = lifecycleScope.launch(Dispatchers.Main) {
+            var i = 0
+            while (isActive && !autoPlayDone) {
+                serversBinding.autoPlayStatus.text = autoPlayStatuses[i % autoPlayStatuses.size]
+                i++
+                delay(2000)
+            }
+        }
+    }
+
+    private fun startAutoPlayTimeout() {
+        if (!autoPlayMode) return
+        val seconds = PrefManager.getVal<Int>(PrefName.AutoPlayStreamTimeout).coerceIn(15, 90)
+        autoPlayTimeoutJob?.cancel()
+        autoPlayTimeoutJob = lifecycleScope.launch(Dispatchers.Main) {
+            delay(seconds * 1000L)
+            if (autoPlayDone) return@launch
+            Logger.log("TMDB_SERVERS: auto-play timed out after ${seconds}s")
+            fallbackToRail()
+        }
+    }
+
+    private fun endAutoPlay() {
+        if (autoPlayDone && autoPlayStatusJob == null) return
+        autoPlayDone = true
+        autoPlayStatusJob?.cancel()
+        autoPlayStatusJob = null
+        autoPlayTimeoutJob?.cancel()
+        autoPlayTimeoutJob = null
+        serversBinding.autoPlayOverlay.animate().alpha(0f).setDuration(150).withEndAction {
+            serversBinding.autoPlayOverlay.isVisible = false
+            serversBinding.autoPlayOverlay.alpha = 1f
+        }.start()
+    }
+
+    private fun groupFinished(group: Group): Boolean =
+        group.state !is GroupState.Loading
+
+    private fun qualityTarget(): Int = when (
+        PrefManager.getVal<String>(PrefName.AutoPlayPreferredQuality)
+    ) {
+        "360p" -> 360
+        "720p" -> 720
+        "1080p" -> 1080
+        else -> 0
+    }
+
+    private fun parseQuality(label: String): Int =
+        Regex("\\d{3,4}").find(label)?.value?.toIntOrNull() ?: 0
+
+    private fun qualityDistance(q: Int, target: Int): Int =
+        if (q <= 0) Int.MAX_VALUE / 2 else Math.abs(q - target)
+
+    private fun bestLink(
+        links: List<TmdbStreamResolver.StreamResult.PlayableLink>,
+        target: Int,
+    ): TmdbStreamResolver.StreamResult.PlayableLink? {
+        if (links.isEmpty()) return null
+        if (target <= 0) return links.first()
+        var best = links.first()
+        var bestScore = Int.MAX_VALUE
+        links.forEach { link ->
+            val q = parseQuality(link.label)
+            if (q <= 0) return@forEach
+            val dist = Math.abs(q - target)
+            val score = if (q <= target) dist else dist + 100_000
+            if (score < bestScore) {
+                bestScore = score
+                best = link
+            }
+        }
+        return best
+    }
+
+    private fun registerAutoCandidate(group: Group) {
+        if (!autoPlayMode || autoPlayDone) return
+        if (autoCandidates.any { it.group.key == group.key }) return
+        val state = group.state as? GroupState.Ready ?: return
+        val playable = state.links.filter { it.url.isNotBlank() }
+        if (playable.isEmpty()) return
+        val link = bestLink(playable, qualityTarget()) ?: return
+        autoCandidates.add(AutoCandidate(link, group, parseQuality(link.label)))
+    }
+
+    private fun maybeAutoSelectFinalize() {
+        if (!autoPlayMode || autoPlayDone) return
+        if (autoCandidates.isEmpty()) {
+            if (groups.isNotEmpty() && groups.all { groupFinished(it) }) {
+                Logger.log("TMDB_SERVERS: auto-play found no streams -> player rail")
+                fallbackToRail()
+            }
+            return
+        }
+        resolveAutoSelection()
+    }
+
+    private fun resolveAutoSelection() {
+        if (!autoPlayMode || autoPlayDone || autoCandidates.isEmpty()) return
+        val target = qualityTarget()
+        val sourceKey = autoPlaySourceKey
+        val selectedGroup = groups.firstOrNull { it.key == sourceKey }
+        val selectedFinished = selectedGroup == null || groupFinished(selectedGroup)
+        val selectedCandidates = autoCandidates.filter { it.group.key == sourceKey }
+        val selectedEmpty = selectedFinished && selectedCandidates.isEmpty()
+        val eligible = if (selectedEmpty) autoCandidates.toList() else selectedCandidates
+        if (eligible.isEmpty()) return
+        val chosen = when {
+            target <= 0 -> eligible.first()
+            else -> {
+                val exact = eligible.firstOrNull { it.quality == target }
+                when {
+                    exact != null -> exact
+                    selectedEmpty || selectedFinished ->
+                        eligible.minByOrNull { qualityDistance(it.quality, target) }
+                    else -> null
+                }
+            }
+        } ?: return
+        autoPlayChosen(chosen)
+    }
+
+    private fun autoPlayChosen(candidate: AutoCandidate) {
+        if (autoPlayDone || !autoPlayMode || launchingPlayer) return
+        val idx = groups.indexOfFirst { it.key == candidate.group.key }
+        if (idx >= 0) selectedIndex = idx
+        Logger.log(
+            "TMDB_SERVERS: auto-play '${candidate.group.name}' label='${candidate.link.label}' " +
+                "quality=${candidate.quality}"
+        )
+        endAutoPlay()
+        play(candidate.link, candidate.group)
+    }
+
+    private fun fallbackToRail() {
+        if (!autoPlayMode || autoPlayDone || launchingPlayer) return
+        val d = detail ?: run { snackString("Could not load details"); finish(); return }
+        val group = groups.firstOrNull { it.key == autoPlaySourceKey } ?: groups.firstOrNull()
+        if (group == null) {
+            snackString("No source available")
+            finish()
+            return
+        }
+        launchingPlayer = true
+        Logger.log("TMDB_SERVERS: auto-play fallback -> player rail via '${group.name}'")
+        val overrideEpisodes = if (group.pluginLoad != null) {
+            if (mediaType == "tv") {
+                TmdbStreamResolver.pluginEpisodeShells(mediaId, pluginEpisodes)
+            } else {
+                TmdbStreamResolver.pluginMovieShell(mediaId, d)
+            }
+        } else null
+        endAutoPlay()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val launched = runCatching {
+                TmdbStreamResolver.launchPlayer(
+                    this@TmdbServersActivity,
+                    mediaId,
+                    mediaType,
+                    d,
+                    group.source,
+                    season,
+                    epNumber,
+                    emptyList(),
+                    "",
+                    episodesOverride = overrideEpisodes,
+                    load = group.pluginLoad,
+                    stremioAddon = group.addon,
+                    openRailOnStart = true,
+                )
+            }.getOrElse {
+                Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: rail launch failed: ${it.message}")
+                false
+            }
+            if (!launched) runOnUiThread {
+                launchingPlayer = false
+                snackString("Could not open player")
+            }
         }
     }
 

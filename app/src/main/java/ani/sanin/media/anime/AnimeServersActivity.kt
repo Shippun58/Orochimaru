@@ -936,9 +936,28 @@ class AnimeServersActivity : AppCompatActivity() {
             delay(seconds * 1000L)
             if (autoPlayDone) return@launch
             Logger.log("ANIME_SERVERS: auto-play timed out after ${seconds}s")
-            endAutoPlay()
-            snackString("No stream found, pick a source")
+            snackString("No stream found, opening source rail")
+            fallbackToRail()
         }
+    }
+
+    private fun fallbackToRail() {
+        if (!autoPlayMode || autoPlayDone || launchingPlayer) return
+        val m = media ?: return
+        launchingPlayer = true
+        Logger.log("ANIME_SERVERS: auto-play fallback -> player rail")
+        val ep = m.anime?.episodes?.getEpisode(epKey)
+        if (ep != null) {
+            ep.extractors = null
+            ep.extractorsSource = null
+            ep.allStreams = false
+            ep.selectedExtractor = null
+            ep.selectedVideo = 0
+        }
+        if (epKey.isNotBlank()) m.anime?.selectedEpisode = actualEpKey ?: epKey
+        endAutoPlay()
+        ExoplayerView.openServerRailOnStart = true
+        startExoplayer()
     }
 
     private fun endAutoPlay() {
@@ -1023,8 +1042,8 @@ class AnimeServersActivity : AppCompatActivity() {
         if (!autoPlayMode || autoPlayDone) return
         if (autoCandidates.isEmpty()) {
             if (groups.isNotEmpty() && groups.all { groupFinished(it) }) {
-                Logger.log("ANIME_SERVERS: auto-play found no streams")
-                endAutoPlay()
+                Logger.log("ANIME_SERVERS: auto-play found no streams -> player rail")
+                fallbackToRail()
             }
             return
         }
