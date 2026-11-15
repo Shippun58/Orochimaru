@@ -91,6 +91,11 @@
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
 
+# Plugins are compiled against the CloudStream/AndroidX/Material R classes and
+# resolve resource ids by name at runtime. Keep every generated R class.
+-keep class **.R { *; }
+-keep class **.R$* { *; }
+
 -keep class androidx.preference.** { *; }
 
 -keep class androidx.work.impl.WorkDatabase_Impl { *; }
