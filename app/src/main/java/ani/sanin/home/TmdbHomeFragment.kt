@@ -908,7 +908,7 @@ class TmdbHomeFragment : Fragment() {
                     val resp = fetchMainPage(api, index, page, mainPageCache)
                     resp?.items?.forEach { list ->
                         if (list.list.isNotEmpty()) {
-                            addPluginSection(list.name, list.list, apiKey)
+                            addPluginSection(list.name, list.list, apiKey, list.isHorizontalImages)
                             added = true
                             apiAdded = true
                         }
@@ -919,7 +919,7 @@ class TmdbHomeFragment : Fragment() {
                 val resp = fetchMainPage(api, index, MainPageRequest("Home", "", false), mainPageCache)
                 resp?.items?.forEach { list ->
                     if (list.list.isNotEmpty()) {
-                        addPluginSection(list.name, list.list, apiKey)
+                        addPluginSection(list.name, list.list, apiKey, list.isHorizontalImages)
                         added = true
                         apiAdded = true
                     }
@@ -931,7 +931,7 @@ class TmdbHomeFragment : Fragment() {
                     withContext(Dispatchers.IO) { api.quickSearch("") }
                 }.getOrNull()
                 if (!quick.isNullOrEmpty()) {
-                    addPluginSection("Popular", quick, apiKey)
+                    addPluginSection("Popular", quick, apiKey, false)
                     added = true
                 }
             }
@@ -1113,7 +1113,8 @@ class TmdbHomeFragment : Fragment() {
     private fun addPluginSection(
         title: String,
         items: List<SearchResponse>,
-        sourceKey: String
+        sourceKey: String,
+        horizontal: Boolean
     ) {
         if (items.isEmpty()) return
 
@@ -1129,7 +1130,7 @@ class TmdbHomeFragment : Fragment() {
         val list = RecyclerView(ctx).apply {
             setTag(R.id.section_row_tag, true)
             layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
-            adapter = PluginRowAdapter(items) { item ->
+            adapter = PluginRowAdapter(items, horizontal) { item ->
                 startActivity(
                     Intent(requireContext(), TmdbDetailsActivity::class.java)
                         .putExtra(TmdbDetailsActivity.ARG_PLUGIN_SOURCE, sourceKey)
@@ -1597,6 +1598,7 @@ class TmdbHomeFragment : Fragment() {
 
     class PluginRowAdapter(
         private val items: List<SearchResponse>,
+        private val horizontal: Boolean,
         private val onClick: (SearchResponse) -> Unit
     ) : RecyclerView.Adapter<PluginRowAdapter.VH>() {
 
@@ -1611,11 +1613,12 @@ class TmdbHomeFragment : Fragment() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
             val b = holder.binding
-            val landscape = TmdbCards.isLandscapeOrientation()
+            val landscape = horizontal || item is LiveSearchResponse
             val size = TmdbCards.cardSize()
             val isLive = item is LiveSearchResponse
-            val (w, h) = if (landscape || isLive) {
-                (260f * size).toInt() to (148f * size).toInt()
+            val (w, h) = if (landscape) {
+                val width = 260f * size
+                width.toInt() to (width * 114f / 180f).toInt()
             } else {
                 (102f * size).toInt() to (154f * size).toInt()
             }
