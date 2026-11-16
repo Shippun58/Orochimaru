@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
