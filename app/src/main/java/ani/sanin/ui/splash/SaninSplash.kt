@@ -4,6 +4,8 @@ import ani.sanin.R
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,16 +14,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.StrokeCap
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
@@ -83,18 +80,12 @@ private fun createArtwork(bitmap: Bitmap): SplashArtwork {
 
 @Composable
 fun SaninLandscapeSplash(onFinished: () -> Unit) {
-    SaninSplash(
-        emblemRes = R.drawable.sanin_emblem,
-        onFinished = onFinished
-    )
+    SaninSplash(emblemRes = R.drawable.sanin_emblem, onFinished = onFinished)
 }
 
 @Composable
 fun SaninPortraitSplash(onFinished: () -> Unit) {
-    SaninSplash(
-        emblemRes = R.drawable.sanin_emblem_portrait,
-        onFinished = onFinished
-    )
+    SaninSplash(emblemRes = R.drawable.sanin_emblem_portrait, onFinished = onFinished)
 }
 
 @Composable
@@ -107,9 +98,11 @@ internal fun SaninSplash(
         val bitmap = context.resources.getDrawable(emblemRes, context.theme).toBitmap()
         createArtwork(bitmap)
     }
+    val animation = remember { Animatable(0f) }
 
     LaunchedEffect(onFinished) {
-        delay(2_350)
+        animation.animateTo(1f, animationSpec = tween(durationMillis = 2_050))
+        delay(300)
         onFinished()
     }
 
@@ -128,10 +121,7 @@ internal fun SaninSplash(
             val dstOffset = IntOffset(left.roundToInt(), top.roundToInt())
             val dstSize = IntSize(imageWidth.roundToInt(), imageHeight.roundToInt())
 
-            // Outline is drawn in a slow, continuous sweep. The later glow layers
-            // brighten and contract into the exact existing white emblem.
-            val elapsed = (android.os.SystemClock.uptimeMillis() % 2_350L).toFloat()
-            val progress = (elapsed / 2_050f).coerceIn(0f, 1f)
+            val progress = animation.value
             val traceProgress = (progress / 0.68f).coerceIn(0f, 1f)
             val visibleCount = (artwork.outline.size * traceProgress).toInt()
             val visible = artwork.outline.take(visibleCount).map {
