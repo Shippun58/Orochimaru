@@ -15,9 +15,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
@@ -69,7 +71,7 @@ internal fun SaninSplash(
 
     LaunchedEffect(onFinished) {
         delay(120)
-        animation.animateTo(1f, animationSpec = tween(durationMillis = 2_150))
+        animation.animateTo(1f, animationSpec = tween(durationMillis = 3_650))
         delay(180)
         onFinished()
     }
@@ -94,60 +96,86 @@ internal fun SaninSplash(
             val dstSize = IntSize(imageWidth.roundToInt(), imageHeight.roundToInt())
             val p = animation.value
 
-            // Two separate light sources travel along the emblem on staggered timings.
-            fun travel(start: Offset, end: Offset, from: Float, to: Float): Offset {
-                val t = ((p - from) / (to - from)).coerceIn(0f, 1f)
-                val eased = t * t * (3f - 2f * t)
-                return Offset(
-                    left + (start.x + (end.x - start.x) * eased) * imageWidth,
-                    top + (start.y + (end.y - start.y) * eased) * imageHeight
-                )
+            // Soft, localized light blooms travel beneath the emblem. They are
+            // not drawn as strokes and never trace the logo's perimeter.
+            fun smooth(t: Float): Float {
+                val value = t.coerceIn(0f, 1f)
+                return value * value * (3f - 2f * value)
             }
 
-            val first = travel(Offset(0.30f, 0.30f), Offset(0.70f, 0.70f), 0.10f, 0.67f)
-            val second = travel(Offset(0.70f, 0.30f), Offset(0.30f, 0.70f), 0.24f, 0.79f)
-            val firstAlpha = (p / 0.17f).coerceIn(0f, 1f) * (1f - ((p - 0.79f) / 0.15f).coerceIn(0f, 1f))
-            val secondAlpha = ((p - 0.12f) / 0.16f).coerceIn(0f, 1f) * (1f - ((p - 0.82f) / 0.13f).coerceIn(0f, 1f))
-            val radius = min(imageWidth, imageHeight) * 0.17f
+            fun drawMovingBloom(
+                start: Offset,
+                end: Offset,
+                from: Float,
+                until: Float,
+                alpha: Float,
+                lengthFactor: Float,
+                widthFactor: Float
+            ) {
+                val progress = smooth((p - from) / (until - from))
+                val center = Offset(
+                    left + (start.x + (end.x - start.x) * progress) * imageWidth,
+                    top + (start.y + (end.y - start.y) * progress) * imageHeight
+                )
+                val length = min(imageWidth, imageHeight) * lengthFactor
+                val width = min(imageWidth, imageHeight) * widthFactor
+                val fadeIn = smooth((p - from) / 0.12f)
+                val fadeOut = 1f - smooth((p - (until - 0.13f)) / 0.13f)
+                val strength = alpha * fadeIn * fadeOut
+                if (strength <= 0f) return
 
-            if (firstAlpha > 0f) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.92f * firstAlpha),
-                            Color.White.copy(alpha = 0.38f * firstAlpha),
-                            Color.White.copy(alpha = 0f)
+                rotate(
+                    degrees = -26f,
+                    pivot = center
+                ) {
+                    drawOval(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.72f * strength),
+                                Color.White.copy(alpha = 0.30f * strength),
+                                Color.White.copy(alpha = 0.08f * strength),
+                                Color.Transparent
+                            ),
+                            center = center,
+                            radius = length * 0.72f
                         ),
-                        center = first,
-                        radius = radius
-                    ),
-                    radius = radius,
-                    center = first
-                )
-            }
-            if (secondAlpha > 0f) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.92f * secondAlpha),
-                            Color.White.copy(alpha = 0.38f * secondAlpha),
-                            Color.White.copy(alpha = 0f)
-                        ),
-                        center = second,
-                        radius = radius
-                    ),
-                    radius = radius,
-                    center = second
-                )
+                        topLeft = Offset(center.x - length / 2f, center.y - width / 2f),
+                        size = Size(length, width)
+                    )
+                }
             }
 
-            // The transparent black silhouette masks the glow, keeping the emblem itself dark.
-            if (p < 0.88f) {
+            // Two separate travelling blooms, staggered along the emblem's
+            // main diagonal. Their broad falloff creates a moving backlight,
+            // rather than a bright outline or a drawing/reveal effect.
+            drawMovingBloom(
+                start = Offset(0.24f, 0.39f),
+                end = Offset(0.76f, 0.61f),
+                from = 0.06f,
+                until = 0.76f,
+                alpha = 1f,
+                lengthFactor = 0.25f,
+                widthFactor = 0.13f
+            )
+            drawMovingBloom(
+                start = Offset(0.34f, 0.43f),
+                end = Offset(0.84f, 0.65f),
+                from = 0.24f,
+                until = 0.88f,
+                alpha = 0.82f,
+                lengthFactor = 0.21f,
+                widthFactor = 0.11f
+            )
+
+            // Keep the complete emblem solid black while the light passes
+            // behind it; only the soft bloom around its edges is visible.
+            if (p < 0.86f) {
                 drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
             }
 
-            // The accumulated light is absorbed into the exact original white artwork.
-            val reveal = ((p - 0.70f) / 0.25f).coerceIn(0f, 1f)
+            // The backlight is absorbed and the exact original white emblem
+            // resolves in one clean transition.
+            val reveal = smooth((p - 0.78f) / 0.20f)
             if (reveal > 0f) {
                 drawImage(
                     image = finalLogo,
