@@ -1430,12 +1430,14 @@ class TmdbWatchFragment : Fragment() {
     private fun onEpisodeClick(episode: TmdbEpisode) {
 
         if (extrasSheetActive) return
-        if (isResolving && autoSearchJob?.isActive != true) return
 
         if (!isAdded || childFragmentManager.isStateSaved) return
         autoSearchJob?.cancel()
         autoSearchJob = null
+        resolveJob?.cancel()
+        resolveJob = null
         isResolving = false
+        setSourceStatus(getString(R.string.tmdb_watch_sources))
         selectedStremio?.let { addon ->
             if (!StremioAddonClient.supports(addon, "stream", mediaType)) {
                 showStremioInfo(addon)
