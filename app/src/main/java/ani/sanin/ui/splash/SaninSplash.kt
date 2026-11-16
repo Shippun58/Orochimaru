@@ -16,7 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
@@ -108,7 +107,7 @@ internal fun SaninSplash(
             val fit = min(
                 size.width / artwork.first.width,
                 size.height / artwork.first.height
-            ) * 0.78f
+            ) * 0.68f
             val imageWidth = artwork.first.width * fit
             val imageHeight = artwork.first.height * fit
             val left = (size.width - imageWidth) / 2f
@@ -191,6 +190,50 @@ internal fun SaninSplash(
             }
 
 
+            fun drawSegmentFill(
+                path: Path,
+                progress: Float,
+                minY: Float,
+                maxY: Float,
+                fromBottom: Boolean
+            ) {
+                if (progress <= 0f) return
+                val boundary = if (fromBottom) {
+                    maxY - (maxY - minY) * progress.coerceIn(0f, 1f)
+                } else {
+                    minY + (maxY - minY) * progress.coerceIn(0f, 1f)
+                }
+                // Use the exact same origin and scale as the glow. Only the
+                // clip boundary moves; the emblem geometry never shifts.
+                withTransform({
+                    translate(left, top)
+                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
+                    translate(groupTranslateX, groupTranslateY)
+                    scale(groupScale, groupScale, pivot = Offset.Zero)
+                }) {
+                    if (fromBottom) {
+                        clipRect(
+                            left = -1000f,
+                            top = boundary,
+                            right = 1000f,
+                            bottom = maxY + 1000f
+                        ) {
+                            drawPath(path, Color.White)
+                        }
+                    } else {
+                        clipRect(
+                            left = -1000f,
+                            top = minY - 1000f,
+                            right = 1000f,
+                            bottom = boundary
+                        ) {
+                            drawPath(path, Color.White)
+                        }
+                    }
+                }
+            }
+
+
             val travel = smooth((p - 0.08f) / 0.83f)
             val fadeIn = smooth((p - 0.08f) / 0.10f)
             val fadeOut = 1f - smooth((p - 0.81f) / 0.10f)
@@ -242,23 +285,19 @@ internal fun SaninSplash(
             // dark icon while letting the moving glow show from behind its edges.
             drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
 
-            // As the streaks reach the ends of their paths, their energy is
-            // absorbed into the silhouette before the final white reveal.
-            val absorbedPower = smooth((p - 0.58f) / 0.34f) * 0.88f
-            if (absorbedPower > 0f) {
-                drawImage(
-                    image = blackMask,
-                    dstOffset = dstOffset,
-                    dstSize = dstSize,
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
-                        Color.White,
-                        BlendMode.SrcIn
-                    ),
-                    alpha = absorbedPower
-                )
+            // Each segment starts filling only after its travelling glow
+            // reaches the endpoint. The ribbon and upper triangle fill upward
+            // from their lower ends; the lower triangle fills downward.
+            val fillProgress = smooth((p - 0.91f) / 0.09f)
+            if (fillProgress > 0f) {
+                drawSegmentFill(ribbonPath, fillProgress, 59f, 479f, fromBottom = true)
+                drawSegmentFill(upperTrianglePath, fillProgress, 8f, 185f, fromBottom = true)
+                drawSegmentFill(lowerTrianglePath, fillProgress, 354f, 530f, fromBottom = false)
             }
 
-            val reveal = smooth((p - 0.84f) / 0.16f)
+            // The complete artwork appears only after the three segment fills
+            // have finished, avoiding an early full-logo reveal.
+            val reveal = smooth((p - 0.97f) / 0.03f)
             if (reveal > 0f) {
                 drawImage(
                     image = finalLogo,
