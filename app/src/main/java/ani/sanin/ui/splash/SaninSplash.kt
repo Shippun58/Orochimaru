@@ -5,109 +5,111 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.StrokeCap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
+import kotlin.math.atan2
+import kotlin.math.min
+import kotlin.math.roundToInt
 
-internal data class SaninSplashGeometry(
-    val wordmarkOffsetY: Dp,
-    val emblemOffsetY: Dp,
-    val emblemWidth: Dp,
-    val emblemHeight: Dp
+private data class SplashArtwork(
+    val bitmap: Bitmap,
+    val outline: List<Offset>
 )
 
-internal sealed interface SaninSplashConfig {
-    val backgroundRes: Int
-
-    val wordmarkRes: Int?
-    val emblemRes: Int
-    val particleCount: Int
+private fun Drawable.toBitmap(): Bitmap {
+    if (this is BitmapDrawable) bitmap?.let { return it }
+    val width = intrinsicWidth.coerceAtLeast(1)
+    val height = intrinsicHeight.coerceAtLeast(1)
+    return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+        val canvas = android.graphics.Canvas(it)
+        setBounds(0, 0, width, height)
+        draw(canvas)
+    }
 }
 
-internal data class FixedSaninSplashConfig(
-    override val backgroundRes: Int,
-    override val wordmarkRes: Int?,
-    override val emblemRes: Int,
-    val geometry: SaninSplashGeometry,
-    override val particleCount: Int = 220
-) : SaninSplashConfig
+private fun createArtwork(bitmap: Bitmap): SplashArtwork {
+    val points = ArrayList<Offset>()
+    var centerX = 0f
+    var centerY = 0f
 
-internal data class CanvasSaninSplashConfig(
-    override val backgroundRes: Int,
-    override val wordmarkRes: Int?,
-    override val emblemRes: Int,
-    val wordmarkCenterY: Float,
-    val emblemCenterY: Float,
-    override val particleCount: Int = 220
-) : SaninSplashConfig
+    fun isLogo(x: Int, y: Int): Boolean {
+        if (x !in 0 until bitmap.width || y !in 0 until bitmap.height) return false
+        val pixel = bitmap.getPixel(x, y)
+        return android.graphics.Color.red(pixel) > 150 &&
+            android.graphics.Color.green(pixel) > 150 &&
+            android.graphics.Color.blue(pixel) > 150
+    }
 
-private val LandscapeConfig = CanvasSaninSplashConfig(
-    backgroundRes = R.drawable.sanin_splash_background,
-    wordmarkRes = null,
-    emblemRes = R.drawable.sanin_emblem,
+    for (y in 1 until bitmap.height - 1) {
+        for (x in 1 until bitmap.width - 1) {
+            if (!isLogo(x, y)) continue
+            if (!isLogo(x - 1, y) || !isLogo(x + 1, y) ||
+                !isLogo(x, y - 1) || !isLogo(x, y + 1)
+            ) {
+                val px = (x + 0.5f) / bitmap.width
+                val py = (y + 0.5f) / bitmap.height
+                points.add(Offset(px, py))
+                centerX += px
+                centerY += py
+            }
+        }
+    }
 
-    wordmarkCenterY = 0.36f,
-    emblemCenterY = 0.5f
-)
-
-private val PortraitConfig = CanvasSaninSplashConfig(
-    backgroundRes = R.drawable.sanin_splash_background_portrait,
-    wordmarkRes = null,
-    emblemRes = R.drawable.sanin_emblem_portrait,
-    wordmarkCenterY = 0.42f,
-    emblemCenterY = 0.5f
-)
+    if (points.isNotEmpty()) {
+        centerX /= points.size
+        centerY /= points.size
+        points.sortBy { atan2(it.y - centerY, it.x - centerX) }
+    }
+    return SplashArtwork(bitmap, points)
+}
 
 @Composable
-fun SaninLandscapeSplash(
-    onFinished: () -> Unit
-) {
+fun SaninLandscapeSplash(onFinished: () -> Unit) {
     SaninSplash(
-        config = LandscapeConfig,
+        emblemRes = R.drawable.sanin_emblem,
         onFinished = onFinished
     )
 }
 
 @Composable
-fun SaninPortraitSplash(
-    onFinished: () -> Unit
-) {
+fun SaninPortraitSplash(onFinished: () -> Unit) {
     SaninSplash(
-        config = PortraitConfig,
+        emblemRes = R.drawable.sanin_emblem_portrait,
         onFinished = onFinished
     )
 }
 
 @Composable
 internal fun SaninSplash(
-    config: SaninSplashConfig,
+    emblemRes: Int,
     onFinished: () -> Unit
 ) {
-    val context = LocalContext.current
-    val density = LocalDensity.current
-
-    val emblemBitmap = remember {
-        context.resources.getDrawable(config.emblemRes, context.theme)?.toBitmap()
-            ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val artwork = remember(emblemRes) {
+        val bitmap = context.resources.getDrawable(emblemRes, context.theme).toBitmap()
+        createArtwork(bitmap)
     }
 
-    LaunchedEffect(Unit) {
-        delay(500)
+    LaunchedEffect(onFinished) {
+        delay(2_350)
         onFinished()
     }
 
@@ -116,50 +118,60 @@ internal fun SaninSplash(
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val bitmap = artwork.bitmap.asImageBitmap()
+            val fit = min(size.width / artwork.bitmap.width, size.height / artwork.bitmap.height)
+            val imageWidth = artwork.bitmap.width * fit
+            val imageHeight = artwork.bitmap.height * fit
+            val left = (size.width - imageWidth) / 2f
+            val top = (size.height - imageHeight) / 2f
+            val dstOffset = IntOffset(left.roundToInt(), top.roundToInt())
+            val dstSize = IntSize(imageWidth.roundToInt(), imageHeight.roundToInt())
 
-        val geometry = when (config) {
-            is FixedSaninSplashConfig -> config.geometry
-            is CanvasSaninSplashConfig -> with(density) {
-                SaninSplashGeometry(
-                    wordmarkOffsetY = maxHeight * (config.wordmarkCenterY - 0.5f),
-                    emblemOffsetY = maxHeight * (config.emblemCenterY - 0.5f),
-                    emblemWidth = Dp(emblemBitmap.width / density.density),
-                    emblemHeight = Dp(emblemBitmap.height / density.density)
+            // Outline is drawn in a slow, continuous sweep. The later glow layers
+            // brighten and contract into the exact existing white emblem.
+            val elapsed = (android.os.SystemClock.uptimeMillis() % 2_350L).toFloat()
+            val progress = (elapsed / 2_050f).coerceIn(0f, 1f)
+            val traceProgress = (progress / 0.68f).coerceIn(0f, 1f)
+            val visibleCount = (artwork.outline.size * traceProgress).toInt()
+            val visible = artwork.outline.take(visibleCount).map {
+                Offset(left + it.x * imageWidth, top + it.y * imageHeight)
+            }
+
+            if (visible.isNotEmpty() && progress < 0.94f) {
+                val swell = ((progress - 0.48f) / 0.36f).coerceIn(0f, 1f)
+                drawPoints(
+                    visible,
+                    PointMode.Points,
+                    Color.White.copy(alpha = 0.10f + 0.20f * swell),
+                    strokeWidth = 18f + 20f * swell,
+                    cap = StrokeCap.Round
+                )
+                drawPoints(
+                    visible,
+                    PointMode.Points,
+                    Color.White.copy(alpha = 0.45f + 0.45f * swell),
+                    strokeWidth = 7f + 8f * swell,
+                    cap = StrokeCap.Round
+                )
+                drawPoints(
+                    visible,
+                    PointMode.Points,
+                    Color.White,
+                    strokeWidth = 2.8f,
+                    cap = StrokeCap.Round
+                )
+            }
+
+            val fillAlpha = ((progress - 0.76f) / 0.20f).coerceIn(0f, 1f)
+            if (fillAlpha > 0f) {
+                drawImage(
+                    image = bitmap,
+                    dstOffset = dstOffset,
+                    dstSize = dstSize,
+                    alpha = fillAlpha
                 )
             }
         }
-
-        Image(
-            painter = painterResource(
-                config.backgroundRes
-            ),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.FillBounds
-        )
-
-        Image(
-            painter = painterResource(
-                config.emblemRes
-            ),
-            contentDescription = null,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset(y = geometry.emblemOffsetY),
-            contentScale = ContentScale.None
-        )
     }
-}
-
-private fun Drawable.toBitmap(): Bitmap {
-    val w = intrinsicWidth.takeIf { it > 0 } ?: 1
-    val h = intrinsicHeight.takeIf { it > 0 } ?: 1
-    if (this is BitmapDrawable) {
-        bitmap?.let { return it }
-    }
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-    val canvas = android.graphics.Canvas(bmp)
-    setBounds(0, 0, w, h)
-    draw(canvas)
-    return bmp
 }
