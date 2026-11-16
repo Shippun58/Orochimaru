@@ -363,8 +363,6 @@ class ExoplayerView :
 
         var offlinePlayback = false
 
-        var openServerRailOnStart = false
-
         private const val BUFFER_FOR_PLAYBACK_MS = 2000
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 4000
         private const val BACK_BUFFER_DURATION_MS = 20_000
@@ -422,7 +420,6 @@ class ExoplayerView :
     private var recreating = false
     private var autoContinuePending = false
     private var autoContinueServer: String? = null
-    private var pendingOpenRail = false
     private var playerReleased = false
     private var interacted = false
 
@@ -635,9 +632,6 @@ class ExoplayerView :
             startMainActivity(this)
             return
         }
-
-        pendingOpenRail = openServerRailOnStart
-        openServerRailOnStart = false
 
         ThemeManager(this).applyTheme()
         OledBackgroundManager.remove(this)
@@ -2178,13 +2172,6 @@ class ExoplayerView :
     private fun onEpisodeReady(ep: Episode) {
         hideSystemBars()
         episode = ep
-        if (pendingOpenRail) {
-            ep.extractors = null
-            ep.extractorsSource = null
-            ep.allStreams = false
-            ep.selectedExtractor = null
-            ep.selectedVideo = 0
-        }
         media.selected = model.loadSelected(media)
         model.setMedia(media)
         val epKey = episodes.getEpisodeKey(ep.number)
@@ -2271,11 +2258,10 @@ class ExoplayerView :
             )
             autoContinuePending = false
             autoContinueServer = null
-            if (!pendingOpenRail) toast(getString(R.string.source_error))
+            toast(getString(R.string.source_error))
             val failedKey = media.anime?.selectedEpisode
             if (failedKey != null) serverRailController?.openForEpisode(failedKey)
             else serverRailController?.open()
-            pendingOpenRail = false
             return
         }
         extractor = ext

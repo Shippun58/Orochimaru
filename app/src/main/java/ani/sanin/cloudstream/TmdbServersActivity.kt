@@ -1212,6 +1212,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 launchingPlayer = false
                 snackString("Could not open player")
             }
+            finish()
         }
     }
 

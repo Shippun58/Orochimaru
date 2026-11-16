@@ -956,8 +956,8 @@ class AnimeServersActivity : AppCompatActivity() {
         }
         if (epKey.isNotBlank()) m.anime?.selectedEpisode = actualEpKey ?: epKey
         endAutoPlay()
-        ExoplayerView.openServerRailOnStart = true
         startExoplayer()
+        finish()
     }
 
     private fun endAutoPlay() {

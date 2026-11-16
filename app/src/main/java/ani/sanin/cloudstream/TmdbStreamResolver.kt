@@ -890,7 +890,6 @@ object TmdbStreamResolver {
         episodesOverride: Map<String, Episode>? = null,
         load: LoadResponse? = null,
         stremioAddon: StremioAddon? = null,
-        openRailOnStart: Boolean = false,
     ): Boolean {
         val id = syntheticId(mediaId)
         sessions[id] = SyntheticSession(mediaId, mediaType, d, source, load, stremioAddon = stremioAddon)
@@ -902,43 +901,30 @@ object TmdbStreamResolver {
             episodeKey(season ?: 1, epNumber ?: 1)
         } else "1"
         val current = episodes[currentKey] ?: episodes.values.firstOrNull() ?: return false
-        val extractors = if (openRailOnStart) emptyList() else buildExtractors(links)
-        if (!openRailOnStart && extractors.isEmpty()) return false
+        val extractors = buildExtractors(links)
+        if (extractors.isEmpty()) return false
+        current.extractors = extractors.toMutableList()
+        current.extractorsSource = 0
+        current.allStreams = true
 
         val groupingEnabled = PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)
         val pickedHost = links.firstOrNull { it.label == pickedLabel }?.host
             ?.takeIf { it.isNotBlank() }
             ?: pickedLabel
-        val pickedExtractor = if (openRailOnStart) {
-            null
-        } else {
-            extractors.firstOrNull {
-                it.server.name == if (groupingEnabled) pickedHost else pickedLabel
-            } ?: extractors.first()
-        }
-        val pickedVideoIdx = if (openRailOnStart) {
-            0
-        } else if (groupingEnabled) {
+        val pickedExtractor = extractors.firstOrNull {
+            it.server.name == if (groupingEnabled) pickedHost else pickedLabel
+        } ?: extractors.first()
+        val pickedVideoIdx = if (groupingEnabled) {
             links.filter { (it.host.ifBlank { it.label }) == pickedHost }
                 .indexOfFirst { it.label == pickedLabel }
                 .coerceAtLeast(0)
         } else 0
-        if (pickedExtractor != null) {
-            current.extractors = extractors.toMutableList()
-            current.extractorsSource = 0
-            current.allStreams = true
-            current.selectedExtractor = pickedExtractor.server.name
-            current.selectedVideo = pickedVideoIdx.coerceIn(
-                0,
-                (pickedExtractor.videos.size - 1).coerceAtLeast(0),
-            )
-        } else {
-            current.extractors = null
-            current.extractorsSource = null
-            current.allStreams = false
-            current.selectedExtractor = null
-            current.selectedVideo = 0
-        }
+        current.selectedExtractor = pickedExtractor.server.name
+
+        current.selectedVideo = pickedVideoIdx.coerceIn(
+            0,
+            (pickedExtractor.videos.size - 1).coerceAtLeast(0),
+        )
         val title = d.displayTitle
         val media = Media(
             anime = Anime(
@@ -962,19 +948,13 @@ object TmdbStreamResolver {
             status = d.status?.uppercase()
         )
 
-        val selected = Selected(
-            sourceIndex = 0,
-            server = pickedExtractor?.server?.name,
-            video = pickedVideoIdx,
-        )
+        val selected = Selected(sourceIndex = 0, server = pickedExtractor.server.name, video = pickedVideoIdx)
         media.selected = selected
         PrefManager.setCustomVal("Selected-$id", selected)
         Logger.log(
             "TMDB_PLAY: launching ExoplayerView for ${mediaType} id=$id title='$title' " +
-                "eps=${episodes.size} current='$currentKey' picked='$pickedLabel' " +
-                "rail=$openRailOnStart"
+                "eps=${episodes.size} current='$currentKey' picked='$pickedLabel'"
         )
-        if (openRailOnStart) ExoplayerView.openServerRailOnStart = true
         withContext(Dispatchers.Main.immediate) {
             ExoplayerView.media = media
             ExoplayerView.initialized = true
