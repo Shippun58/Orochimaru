@@ -15,11 +15,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.IntOffset
@@ -96,7 +93,6 @@ internal fun SaninSplash(
             val top = (size.height - imageHeight) / 2f
             val dstOffset = IntOffset(left.roundToInt(), top.roundToInt())
             val dstSize = IntSize(imageWidth.roundToInt(), imageHeight.roundToInt())
-            val bounds = Rect(left, top, left + imageWidth, top + imageHeight)
             val p = animation.value
 
             fun smooth(t: Float): Float {
@@ -135,38 +131,42 @@ internal fun SaninSplash(
                     center.x + tangent.x * halfLength,
                     center.y + tangent.y * halfLength
                 )
-                val fade = listOf(
-                    Color.Transparent,
-                    Color.White.copy(alpha = 0.92f * strength),
-                    Color.White.copy(alpha = 0.58f * strength),
-                    Color.Transparent
-                )
-                val streakBrush = Brush.linearGradient(
+                val haloBrush = Brush.linearGradient(
                     colorStops = arrayOf(
-                        0f to fade[0],
-                        0.42f to fade[1],
-                        0.58f to fade[2],
-                        1f to fade[3]
+                        0f to Color.Transparent,
+                        0.40f to Color.White.copy(alpha = 0.24f * strength),
+                        0.60f to Color.White.copy(alpha = 0.18f * strength),
+                        1f to Color.Transparent
+                    ),
+                    start = from,
+                    end = to
+                )
+                val coreBrush = Brush.linearGradient(
+                    colorStops = arrayOf(
+                        0f to Color.Transparent,
+                        0.42f to Color.White.copy(alpha = 0.92f * strength),
+                        0.58f to Color.White.copy(alpha = 0.58f * strength),
+                        1f to Color.Transparent
                     ),
                     start = from,
                     end = to
                 )
                 val shortSide = min(imageWidth, imageHeight)
 
-                // A broad, soft streak and a narrow bright core. Both are clipped
-                // to the real emblem silhouette below, so no oval can spill out.
+                // Broad, low-intensity light sits behind the black silhouette;
+                // the tighter streak supplies the travelling highlight.
                 drawLine(
-                    brush = streakBrush,
+                    brush = haloBrush,
                     start = from,
                     end = to,
-                    strokeWidth = shortSide * widthFactor,
+                    strokeWidth = shortSide * widthFactor * 2.1f,
                     cap = StrokeCap.Round
                 )
                 drawLine(
-                    brush = streakBrush,
+                    brush = coreBrush,
                     start = from,
                     end = to,
-                    strokeWidth = shortSide * widthFactor * 0.34f,
+                    strokeWidth = shortSide * widthFactor * 0.72f,
                     cap = StrokeCap.Round
                 )
             }
@@ -176,11 +176,10 @@ internal fun SaninSplash(
             val fadeOut = 1f - smooth((p - 0.81f) / 0.10f)
             val streakStrength = fadeIn * fadeOut
 
-            // Keep the emblem black, then composite the moving light through its
-            // alpha mask. The streaks follow the actual diagonal segments.
-            drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
+            // Draw light first, then place the complete black emblem over it.
+            // This restores the Infinix-style backlight: the soft spill is visible
+            // around the silhouette while the icon itself stays completely black.
             if (streakStrength > 0f) {
-                drawContext.canvas.saveLayer(bounds, Paint())
                 // Main ribbon: two staggered passes along its long diagonal.
                 drawMovingStreak(
                     Offset(0.17f, 0.29f),
@@ -198,32 +197,30 @@ internal fun SaninSplash(
                     lengthFactor = 0.095f,
                     widthFactor = 0.060f
                 )
-                // Upper triangle: travel from its outer top-right tip down-left.
+                // Upper triangle: from the outer top-right tip down-left.
                 drawMovingStreak(
-                    Offset(0.91f, 0.24f),
-                    Offset(0.72f, 0.43f),
+                    Offset(0.80f, 0.26f),
+                    Offset(0.61f, 0.42f),
                     travel,
                     streakStrength * 0.95f,
                     lengthFactor = 0.075f,
-                    widthFactor = 0.065f
+                    widthFactor = 0.075f
                 )
-                // Lower triangle: travel from its bottom-left tip up-right.
+                // Lower triangle: corrected to stay on its actual lower-left arm,
+                // travelling from the bottom tip up-right toward the ribbon.
                 drawMovingStreak(
-                    Offset(0.23f, 0.81f),
-                    Offset(0.47f, 0.65f),
+                    Offset(0.20f, 0.74f),
+                    Offset(0.39f, 0.58f),
                     travel,
-                    streakStrength * 0.95f,
-                    lengthFactor = 0.075f,
-                    widthFactor = 0.065f
+                    streakStrength * 1.05f,
+                    lengthFactor = 0.080f,
+                    widthFactor = 0.085f
                 )
-                drawImage(
-                    image = blackMask,
-                    dstOffset = dstOffset,
-                    dstSize = dstSize,
-                    blendMode = BlendMode.DstIn
-                )
-                drawContext.canvas.restore()
             }
+
+            // The opaque black silhouette sits above the light, preserving the
+            // dark icon while letting the moving glow show from behind its edges.
+            drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
 
             // As the streaks reach the ends of their paths, their energy is
             // absorbed into the silhouette before the final white reveal.
