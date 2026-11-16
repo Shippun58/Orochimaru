@@ -87,7 +87,7 @@ internal fun SaninSplash(
             val fit = min(
                 size.width / artwork.first.width,
                 size.height / artwork.first.height
-            )
+            ) * if (emblemRes == R.drawable.sanin_emblem_portrait) 0.78f else 1f
             val imageWidth = artwork.first.width * fit
             val imageHeight = artwork.first.height * fit
             val left = (size.width - imageWidth) / 2f
