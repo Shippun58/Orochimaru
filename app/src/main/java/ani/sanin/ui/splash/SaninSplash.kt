@@ -15,13 +15,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.StrokeCap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
@@ -96,6 +96,7 @@ internal fun SaninSplash(
             val top = (size.height - imageHeight) / 2f
             val dstOffset = IntOffset(left.roundToInt(), top.roundToInt())
             val dstSize = IntSize(imageWidth.roundToInt(), imageHeight.roundToInt())
+            val bounds = Rect(left, top, left + imageWidth, top + imageHeight)
             val p = animation.value
 
             fun smooth(t: Float): Float {
@@ -103,105 +104,139 @@ internal fun SaninSplash(
                 return value * value * (3f - 2f * value)
             }
 
-            fun drawMovingBloom(
+            fun drawMovingStreak(
                 start: Offset,
                 end: Offset,
-                angle: Float,
-                alpha: Float,
+                progress: Float,
+                strength: Float,
                 lengthFactor: Float,
                 widthFactor: Float
             ) {
-                // All four light paths share one timing window and finish together.
-                val from = 0.08f
-                val until = 0.91f
-                val progress = smooth((p - from) / (until - from))
                 val center = Offset(
                     left + (start.x + (end.x - start.x) * progress) * imageWidth,
                     top + (start.y + (end.y - start.y) * progress) * imageHeight
                 )
+                val direction = Offset(end.x - start.x, end.y - start.y)
+                val magnitude = kotlin.math.sqrt(
+                    direction.x * direction.x + direction.y * direction.y
+                ).coerceAtLeast(0.0001f)
+                val tangent = Offset(direction.x / magnitude, direction.y / magnitude)
+                val halfLength = min(imageWidth, imageHeight) * lengthFactor
+                val from = Offset(
+                    center.x - tangent.x * halfLength,
+                    center.y - tangent.y * halfLength
+                )
+                val to = Offset(
+                    center.x + tangent.x * halfLength,
+                    center.y + tangent.y * halfLength
+                )
+                val fade = listOf(
+                    Color.Transparent,
+                    Color.White.copy(alpha = 0.92f * strength),
+                    Color.White.copy(alpha = 0.58f * strength),
+                    Color.Transparent
+                )
+                val streakBrush = Brush.linearGradient(
+                    colorStops = arrayOf(
+                        0f to fade[0],
+                        0.42f to fade[1],
+                        0.58f to fade[2],
+                        1f to fade[3]
+                    ),
+                    start = from,
+                    end = to
+                )
                 val shortSide = min(imageWidth, imageHeight)
-                val length = shortSide * lengthFactor
-                val width = shortSide * widthFactor
-                val fadeIn = smooth((p - from) / 0.10f)
-                val fadeOut = 1f - smooth((p - (until - 0.10f)) / 0.10f)
-                val strength = alpha * fadeIn * fadeOut
-                if (strength <= 0f) return
 
-                rotate(degrees = angle, pivot = center) {
-                    drawOval(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.78f * strength),
-                                Color.White.copy(alpha = 0.38f * strength),
-                                Color.White.copy(alpha = 0.10f * strength),
-                                Color.Transparent
-                            ),
-                            center = center,
-                            radius = length * 0.72f
-                        ),
-                        topLeft = Offset(center.x - length / 2f, center.y - width / 2f),
-                        size = Size(length, width)
-                    )
-                }
+                // A broad, soft streak and a narrow bright core. Both are clipped
+                // to the real emblem silhouette below, so no oval can spill out.
+                drawLine(
+                    brush = streakBrush,
+                    start = from,
+                    end = to,
+                    strokeWidth = shortSide * widthFactor,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    brush = streakBrush,
+                    start = from,
+                    end = to,
+                    strokeWidth = shortSide * widthFactor * 0.34f,
+                    cap = StrokeCap.Round
+                )
             }
 
-            // Ribbon: its two soft blooms travel along the diagonal.
-            drawMovingBloom(
-                start = Offset(0.24f, 0.39f),
-                end = Offset(0.76f, 0.61f),
-                angle = -26f,
-                alpha = 1f,
-                lengthFactor = 0.25f,
-                widthFactor = 0.13f
-            )
-            drawMovingBloom(
-                start = Offset(0.34f, 0.43f),
-                end = Offset(0.84f, 0.65f),
-                angle = -26f,
-                alpha = 0.82f,
-                lengthFactor = 0.21f,
-                widthFactor = 0.11f
-            )
+            val travel = smooth((p - 0.08f) / 0.83f)
+            val fadeIn = smooth((p - 0.08f) / 0.10f)
+            val fadeOut = 1f - smooth((p - 0.81f) / 0.10f)
+            val streakStrength = fadeIn * fadeOut
 
-            // Upper triangle: light descends from its tip toward the ribbon.
-            drawMovingBloom(
-                start = Offset(0.78f, 0.27f),
-                end = Offset(0.67f, 0.43f),
-                angle = 64f,
-                alpha = 0.92f,
-                lengthFactor = 0.19f,
-                widthFactor = 0.10f
-            )
-
-            // Lower triangle: light rises from its outer tip toward the ribbon.
-            drawMovingBloom(
-                start = Offset(0.22f, 0.74f),
-                end = Offset(0.36f, 0.59f),
-                angle = -48f,
-                alpha = 0.92f,
-                lengthFactor = 0.19f,
-                widthFactor = 0.10f
-            )
-
-            // The emblem stays black while the moving light passes underneath.
-            if (p < 0.91f) {
-                drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
+            // Keep the emblem black, then composite the moving light through its
+            // alpha mask. The streaks follow the actual diagonal segments.
+            drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
+            if (streakStrength > 0f) {
+                drawContext.canvas.saveLayer(bounds, Paint())
+                // Main ribbon: two staggered passes along its long diagonal.
+                drawMovingStreak(
+                    Offset(0.17f, 0.29f),
+                    Offset(0.83f, 0.56f),
+                    travel,
+                    streakStrength,
+                    lengthFactor = 0.115f,
+                    widthFactor = 0.075f
+                )
+                drawMovingStreak(
+                    Offset(0.25f, 0.37f),
+                    Offset(0.90f, 0.63f),
+                    (travel - 0.13f).coerceIn(0f, 1f),
+                    streakStrength * 0.82f,
+                    lengthFactor = 0.095f,
+                    widthFactor = 0.060f
+                )
+                // Upper triangle: travel from its outer top-right tip down-left.
+                drawMovingStreak(
+                    Offset(0.91f, 0.24f),
+                    Offset(0.72f, 0.43f),
+                    travel,
+                    streakStrength * 0.95f,
+                    lengthFactor = 0.075f,
+                    widthFactor = 0.065f
+                )
+                // Lower triangle: travel from its bottom-left tip up-right.
+                drawMovingStreak(
+                    Offset(0.23f, 0.81f),
+                    Offset(0.47f, 0.65f),
+                    travel,
+                    streakStrength * 0.95f,
+                    lengthFactor = 0.075f,
+                    widthFactor = 0.065f
+                )
+                drawImage(
+                    image = blackMask,
+                    dstOffset = dstOffset,
+                    dstSize = dstSize,
+                    blendMode = BlendMode.DstIn
+                )
+                drawContext.canvas.restore()
             }
 
-            // The passing energy is absorbed: the silhouette steadily gains
-            // white intensity before resolving into the final solid-white mark.
-            val absorbedPower = smooth((p - 0.54f) / 0.39f) * 0.88f
+            // As the streaks reach the ends of their paths, their energy is
+            // absorbed into the silhouette before the final white reveal.
+            val absorbedPower = smooth((p - 0.58f) / 0.34f) * 0.88f
             if (absorbedPower > 0f) {
                 drawImage(
                     image = blackMask,
                     dstOffset = dstOffset,
                     dstSize = dstSize,
-                    colorFilter = ColorFilter.tint(Color.White, BlendMode.SrcIn),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                        Color.White,
+                        BlendMode.SrcIn
+                    ),
                     alpha = absorbedPower
                 )
             }
 
-            val reveal = smooth((p - 0.82f) / 0.18f)
+            val reveal = smooth((p - 0.84f) / 0.16f)
             if (reveal > 0f) {
                 drawImage(
                     image = finalLogo,
