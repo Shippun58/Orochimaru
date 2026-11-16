@@ -284,8 +284,8 @@
 
         <ani.sanin.ui.components.TomoeView
             android:id="@+id/autoPlayProgress"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
             app:lottie_rawRes="@raw/tomoe"
             app:lottie_autoPlay="true"
             app:lottie_loop="true"
@@ -298,6 +298,8 @@
             android:layout_marginTop="20dp"
             android:gravity="center"
             android:maxLines="2"
-            android:textSize="16sp" />
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="16sp"
+            android:textStyle="italic" />
     </LinearLayout>
 </FrameLayout>

@@ -158,14 +158,12 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var pluginLoad: LoadResponse? = null
     private val groupJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
     private val arrivalCounter = java.util.concurrent.atomic.AtomicInteger(0)
-    private var awaitingPlayerReturn = false
 
     override fun onResume() {
         super.onResume()
-        launchingPlayer = false
-        if (awaitingPlayerReturn) {
-            awaitingPlayerReturn = false
-            hideAutoPlayOverlay(animate = false)
+        if (launchingPlayer) {
+            launchingPlayer = false
+            finish()
         }
     }
 
@@ -1227,9 +1225,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 false
             }
             runOnUiThread {
-                if (launched) {
-                    if (autoPlayMode) awaitingPlayerReturn = true
-                } else {
+                if (!launched) {
                     launchingPlayer = false
                     if (autoPlayMode) endAutoPlay()
                 }

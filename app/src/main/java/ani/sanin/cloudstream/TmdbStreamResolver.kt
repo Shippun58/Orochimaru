@@ -962,6 +962,10 @@ object TmdbStreamResolver {
                 Intent(context, ExoplayerView::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
+            (context as? android.app.Activity)?.overridePendingTransition(
+                android.R.anim.fade_in,
+                android.R.anim.fade_out,
+            )
         }
         return true
     }

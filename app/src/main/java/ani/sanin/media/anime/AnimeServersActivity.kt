@@ -1226,6 +1226,7 @@ class AnimeServersActivity : AppCompatActivity() {
         ExoplayerView.media = m
         ExoplayerView.initialized = true
         startActivity(Intent(this, ExoplayerView::class.java))
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
     // --- rows RecyclerView ---
