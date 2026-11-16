@@ -159,9 +159,9 @@ internal fun SaninSplash(
                 // the centred emblem.
                 withTransform({
                     translate(left, top)
-                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight)
+                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
                     translate(groupTranslateX, groupTranslateY)
-                    scale(groupScale, groupScale)
+                    scale(groupScale, groupScale, pivot = Offset.Zero)
                 }) {
                     val glow = Brush.linearGradient(
                         colorStops = arrayOf(
