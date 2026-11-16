@@ -15,21 +15,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
-import kotlin.math.atan2
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-private data class SplashArtwork(
-    val bitmap: Bitmap,
-    val outline: List<Offset>
-)
 
 private fun Drawable.toBitmap(): Bitmap {
     if (this is BitmapDrawable) bitmap?.let { return it }
@@ -42,67 +35,42 @@ private fun Drawable.toBitmap(): Bitmap {
     }
 }
 
-private fun createArtwork(bitmap: Bitmap): SplashArtwork {
-    val points = ArrayList<Offset>()
-    var centerX = 0f
-    var centerY = 0f
-
-    fun isLogo(x: Int, y: Int): Boolean {
-        if (x !in 0 until bitmap.width || y !in 0 until bitmap.height) return false
-        val pixel = bitmap.getPixel(x, y)
-        return android.graphics.Color.red(pixel) > 150 &&
-            android.graphics.Color.green(pixel) > 150 &&
-            android.graphics.Color.blue(pixel) > 150
-    }
-
-    for (y in 1 until bitmap.height - 1) {
-        for (x in 1 until bitmap.width - 1) {
-            if (!isLogo(x, y)) continue
-            if (!isLogo(x - 1, y) || !isLogo(x + 1, y) ||
-                !isLogo(x, y - 1) || !isLogo(x, y + 1)
-            ) {
-                val px = (x + 0.5f) / bitmap.width
-                val py = (y + 0.5f) / bitmap.height
-                points.add(Offset(px, py))
-                centerX += px
-                centerY += py
-            }
-        }
-    }
-
-    if (points.isNotEmpty()) {
-        centerX /= points.size
-        centerY /= points.size
-        points.sortBy { atan2(it.y - centerY, it.x - centerX) }
-    }
-    return SplashArtwork(bitmap, points)
-}
-
 @Composable
 fun SaninLandscapeSplash(onFinished: () -> Unit) {
-    SaninSplash(emblemRes = R.drawable.sanin_emblem, onFinished = onFinished)
+    SaninSplash(
+        emblemRes = R.drawable.sanin_emblem,
+        maskRes = R.drawable.sanin_emblem_black,
+        onFinished = onFinished
+    )
 }
 
 @Composable
 fun SaninPortraitSplash(onFinished: () -> Unit) {
-    SaninSplash(emblemRes = R.drawable.sanin_emblem_portrait, onFinished = onFinished)
+    SaninSplash(
+        emblemRes = R.drawable.sanin_emblem_portrait,
+        maskRes = R.drawable.sanin_emblem_portrait_black,
+        onFinished = onFinished
+    )
 }
 
 @Composable
 internal fun SaninSplash(
     emblemRes: Int,
+    maskRes: Int,
     onFinished: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val artwork = remember(emblemRes) {
-        val bitmap = context.resources.getDrawable(emblemRes, context.theme).toBitmap()
-        createArtwork(bitmap)
+    val artwork = remember(emblemRes, maskRes) {
+        val finalLogo = context.resources.getDrawable(emblemRes, context.theme).toBitmap()
+        val blackMask = context.resources.getDrawable(maskRes, context.theme).toBitmap()
+        finalLogo to blackMask
     }
     val animation = remember { Animatable(0f) }
 
     LaunchedEffect(onFinished) {
-        animation.animateTo(1f, animationSpec = tween(durationMillis = 2_050))
-        delay(300)
+        delay(120)
+        animation.animateTo(1f, animationSpec = tween(durationMillis = 2_150))
+        delay(180)
         onFinished()
     }
 
@@ -112,54 +80,80 @@ internal fun SaninSplash(
             .background(Color.Black)
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val bitmap = artwork.bitmap.asImageBitmap()
-            val fit = min(1f, min(size.width / artwork.bitmap.width, size.height / artwork.bitmap.height))
-            val imageWidth = artwork.bitmap.width * fit
-            val imageHeight = artwork.bitmap.height * fit
+            val finalLogo = artwork.first.asImageBitmap()
+            val blackMask = artwork.second.asImageBitmap()
+            val fit = min(
+                size.width / artwork.first.width,
+                size.height / artwork.first.height
+            )
+            val imageWidth = artwork.first.width * fit
+            val imageHeight = artwork.first.height * fit
             val left = (size.width - imageWidth) / 2f
             val top = (size.height - imageHeight) / 2f
             val dstOffset = IntOffset(left.roundToInt(), top.roundToInt())
             val dstSize = IntSize(imageWidth.roundToInt(), imageHeight.roundToInt())
+            val p = animation.value
 
-            val progress = animation.value
-            val traceProgress = (progress / 0.68f).coerceIn(0f, 1f)
-            val visibleCount = (artwork.outline.size * traceProgress).toInt()
-            val visible = artwork.outline.take(visibleCount).map {
-                Offset(left + it.x * imageWidth, top + it.y * imageHeight)
-            }
-
-            if (visible.isNotEmpty() && progress < 0.94f) {
-                val swell = ((progress - 0.48f) / 0.36f).coerceIn(0f, 1f)
-                drawPoints(
-                    visible,
-                    PointMode.Points,
-                    Color.White.copy(alpha = 0.10f + 0.20f * swell),
-                    strokeWidth = 18f + 20f * swell,
-                    cap = StrokeCap.Round
-                )
-                drawPoints(
-                    visible,
-                    PointMode.Points,
-                    Color.White.copy(alpha = 0.45f + 0.45f * swell),
-                    strokeWidth = 7f + 8f * swell,
-                    cap = StrokeCap.Round
-                )
-                drawPoints(
-                    visible,
-                    PointMode.Points,
-                    Color.White,
-                    strokeWidth = 2.8f,
-                    cap = StrokeCap.Round
+            // Two separate light sources travel along the emblem on staggered timings.
+            fun travel(start: Offset, end: Offset, from: Float, to: Float): Offset {
+                val t = ((p - from) / (to - from)).coerceIn(0f, 1f)
+                val eased = t * t * (3f - 2f * t)
+                return Offset(
+                    left + (start.x + (end.x - start.x) * eased) * imageWidth,
+                    top + (start.y + (end.y - start.y) * eased) * imageHeight
                 )
             }
 
-            val fillAlpha = ((progress - 0.76f) / 0.20f).coerceIn(0f, 1f)
-            if (fillAlpha > 0f) {
+            val first = travel(Offset(0.30f, 0.30f), Offset(0.70f, 0.70f), 0.10f, 0.67f)
+            val second = travel(Offset(0.70f, 0.30f), Offset(0.30f, 0.70f), 0.24f, 0.79f)
+            val firstAlpha = (p / 0.17f).coerceIn(0f, 1f) * (1f - ((p - 0.79f) / 0.15f).coerceIn(0f, 1f))
+            val secondAlpha = ((p - 0.12f) / 0.16f).coerceIn(0f, 1f) * (1f - ((p - 0.82f) / 0.13f).coerceIn(0f, 1f))
+            val radius = min(imageWidth, imageHeight) * 0.17f
+
+            if (firstAlpha > 0f) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.92f * firstAlpha),
+                            Color.White.copy(alpha = 0.38f * firstAlpha),
+                            Color.White.copy(alpha = 0f)
+                        ),
+                        center = first,
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = first
+                )
+            }
+            if (secondAlpha > 0f) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.92f * secondAlpha),
+                            Color.White.copy(alpha = 0.38f * secondAlpha),
+                            Color.White.copy(alpha = 0f)
+                        ),
+                        center = second,
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = second
+                )
+            }
+
+            // The transparent black silhouette masks the glow, keeping the emblem itself dark.
+            if (p < 0.88f) {
+                drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
+            }
+
+            // The accumulated light is absorbed into the exact original white artwork.
+            val reveal = ((p - 0.70f) / 0.25f).coerceIn(0f, 1f)
+            if (reveal > 0f) {
                 drawImage(
-                    image = bitmap,
+                    image = finalLogo,
                     dstOffset = dstOffset,
                     dstSize = dstSize,
-                    alpha = fillAlpha
+                    alpha = reveal
                 )
             }
         }
