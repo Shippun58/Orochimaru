@@ -16,8 +16,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.IntOffset
@@ -71,7 +73,7 @@ internal fun SaninSplash(
 
     LaunchedEffect(onFinished) {
         delay(120)
-        animation.animateTo(1f, animationSpec = tween(durationMillis = 3_650))
+        animation.animateTo(1f, animationSpec = tween(durationMillis = 3_900))
         delay(180)
         onFinished()
     }
@@ -96,8 +98,6 @@ internal fun SaninSplash(
             val dstSize = IntSize(imageWidth.roundToInt(), imageHeight.roundToInt())
             val p = animation.value
 
-            // Soft, localized light blooms travel beneath the emblem. They are
-            // not drawn as strokes and never trace the logo's perimeter.
             fun smooth(t: Float): Float {
                 val value = t.coerceIn(0f, 1f)
                 return value * value * (3f - 2f * value)
@@ -106,34 +106,34 @@ internal fun SaninSplash(
             fun drawMovingBloom(
                 start: Offset,
                 end: Offset,
-                from: Float,
-                until: Float,
+                angle: Float,
                 alpha: Float,
                 lengthFactor: Float,
                 widthFactor: Float
             ) {
+                // All four light paths share one timing window and finish together.
+                val from = 0.08f
+                val until = 0.91f
                 val progress = smooth((p - from) / (until - from))
                 val center = Offset(
                     left + (start.x + (end.x - start.x) * progress) * imageWidth,
                     top + (start.y + (end.y - start.y) * progress) * imageHeight
                 )
-                val length = min(imageWidth, imageHeight) * lengthFactor
-                val width = min(imageWidth, imageHeight) * widthFactor
-                val fadeIn = smooth((p - from) / 0.12f)
-                val fadeOut = 1f - smooth((p - (until - 0.13f)) / 0.13f)
+                val shortSide = min(imageWidth, imageHeight)
+                val length = shortSide * lengthFactor
+                val width = shortSide * widthFactor
+                val fadeIn = smooth((p - from) / 0.10f)
+                val fadeOut = 1f - smooth((p - (until - 0.10f)) / 0.10f)
                 val strength = alpha * fadeIn * fadeOut
                 if (strength <= 0f) return
 
-                rotate(
-                    degrees = -26f,
-                    pivot = center
-                ) {
+                rotate(degrees = angle, pivot = center) {
                     drawOval(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.72f * strength),
-                                Color.White.copy(alpha = 0.30f * strength),
-                                Color.White.copy(alpha = 0.08f * strength),
+                                Color.White.copy(alpha = 0.78f * strength),
+                                Color.White.copy(alpha = 0.38f * strength),
+                                Color.White.copy(alpha = 0.10f * strength),
                                 Color.Transparent
                             ),
                             center = center,
@@ -145,14 +145,11 @@ internal fun SaninSplash(
                 }
             }
 
-            // Two separate travelling blooms, staggered along the emblem's
-            // main diagonal. Their broad falloff creates a moving backlight,
-            // rather than a bright outline or a drawing/reveal effect.
+            // Ribbon: its two soft blooms travel along the diagonal.
             drawMovingBloom(
                 start = Offset(0.24f, 0.39f),
                 end = Offset(0.76f, 0.61f),
-                from = 0.06f,
-                until = 0.76f,
+                angle = -26f,
                 alpha = 1f,
                 lengthFactor = 0.25f,
                 widthFactor = 0.13f
@@ -160,22 +157,51 @@ internal fun SaninSplash(
             drawMovingBloom(
                 start = Offset(0.34f, 0.43f),
                 end = Offset(0.84f, 0.65f),
-                from = 0.24f,
-                until = 0.88f,
+                angle = -26f,
                 alpha = 0.82f,
                 lengthFactor = 0.21f,
                 widthFactor = 0.11f
             )
 
-            // Keep the complete emblem solid black while the light passes
-            // behind it; only the soft bloom around its edges is visible.
-            if (p < 0.86f) {
+            // Upper triangle: light descends from its tip toward the ribbon.
+            drawMovingBloom(
+                start = Offset(0.78f, 0.27f),
+                end = Offset(0.67f, 0.43f),
+                angle = 64f,
+                alpha = 0.92f,
+                lengthFactor = 0.19f,
+                widthFactor = 0.10f
+            )
+
+            // Lower triangle: light rises from its outer tip toward the ribbon.
+            drawMovingBloom(
+                start = Offset(0.22f, 0.74f),
+                end = Offset(0.36f, 0.59f),
+                angle = -48f,
+                alpha = 0.92f,
+                lengthFactor = 0.19f,
+                widthFactor = 0.10f
+            )
+
+            // The emblem stays black while the moving light passes underneath.
+            if (p < 0.91f) {
                 drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
             }
 
-            // The backlight is absorbed and the exact original white emblem
-            // resolves in one clean transition.
-            val reveal = smooth((p - 0.78f) / 0.20f)
+            // The passing energy is absorbed: the silhouette steadily gains
+            // white intensity before resolving into the final solid-white mark.
+            val absorbedPower = smooth((p - 0.54f) / 0.39f) * 0.88f
+            if (absorbedPower > 0f) {
+                drawImage(
+                    image = blackMask,
+                    dstOffset = dstOffset,
+                    dstSize = dstSize,
+                    colorFilter = ColorFilter.tint(Color.White, BlendMode.SrcIn),
+                    alpha = absorbedPower
+                )
+            }
+
+            val reveal = smooth((p - 0.82f) / 0.18f)
             if (reveal > 0f) {
                 drawImage(
                     image = finalLogo,
