@@ -113,7 +113,7 @@ internal fun SaninSplash(
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val bitmap = artwork.bitmap.asImageBitmap()
-            val fit = min(size.width / artwork.bitmap.width, size.height / artwork.bitmap.height)
+            val fit = min(1f, min(size.width / artwork.bitmap.width, size.height / artwork.bitmap.height))
             val imageWidth = artwork.bitmap.width * fit
             val imageHeight = artwork.bitmap.height * fit
             val left = (size.width - imageWidth) / 2f
