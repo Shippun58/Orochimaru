@@ -955,21 +955,27 @@ class AnimeServersActivity : AppCompatActivity() {
             ep.selectedVideo = 0
         }
         if (epKey.isNotBlank()) m.anime?.selectedEpisode = actualEpKey ?: epKey
-        endAutoPlay()
+        endAutoPlay(keepOverlay = true)
         startExoplayer()
         finish()
     }
 
-    private fun endAutoPlay() {
-        if (autoPlayDone && autoPlayStatusJob == null) return
+    private fun endAutoPlay(keepOverlay: Boolean = false) {
         autoPlayDone = true
         autoPlayStatusJob?.cancel()
         autoPlayStatusJob = null
         autoPlayTimeoutJob?.cancel()
         autoPlayTimeoutJob = null
-        serversBinding.autoPlayOverlay.animate().alpha(0f).setDuration(150).withEndAction {
-            serversBinding.autoPlayOverlay.isVisible = false
-            serversBinding.autoPlayOverlay.alpha = 1f
+        if (keepOverlay) return
+        hideAutoPlayOverlay()
+    }
+
+    private fun hideAutoPlayOverlay() {
+        val overlay = serversBinding.autoPlayOverlay
+        if (!overlay.isVisible) return
+        overlay.animate().alpha(0f).setDuration(150).withEndAction {
+            overlay.isVisible = false
+            overlay.alpha = 1f
         }.start()
     }
 
@@ -1083,7 +1089,7 @@ class AnimeServersActivity : AppCompatActivity() {
             "ANIME_SERVERS: auto-play '${candidate.group.name}'/" +
                 "'${candidate.extractor.server.name}' quality=${candidate.quality} video=${candidate.videoIdx}"
         )
-        endAutoPlay()
+        endAutoPlay(keepOverlay = true)
         launchPlayback(
             candidate.group,
             candidate.extractor,

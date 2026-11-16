@@ -282,11 +282,14 @@
         android:padding="32dp"
         android:visibility="gone">
 
-        <ProgressBar
+        <ani.sanin.ui.components.TomoeView
             android:id="@+id/autoPlayProgress"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:indeterminate="true" />
+            app:lottie_rawRes="@raw/tomoe"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_speed="1.75" />
 
         <TextView
             android:id="@+id/autoPlayStatus"

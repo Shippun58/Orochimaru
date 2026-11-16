@@ -158,10 +158,15 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
     private var pluginLoad: LoadResponse? = null
     private val groupJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
     private val arrivalCounter = java.util.concurrent.atomic.AtomicInteger(0)
+    private var awaitingPlayerReturn = false
 
     override fun onResume() {
         super.onResume()
         launchingPlayer = false
+        if (awaitingPlayerReturn) {
+            awaitingPlayerReturn = false
+            hideAutoPlayOverlay(animate = false)
+        }
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -1057,16 +1062,27 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
-    private fun endAutoPlay() {
-        if (autoPlayDone && autoPlayStatusJob == null) return
+    private fun endAutoPlay(keepOverlay: Boolean = false) {
         autoPlayDone = true
         autoPlayStatusJob?.cancel()
         autoPlayStatusJob = null
         autoPlayTimeoutJob?.cancel()
         autoPlayTimeoutJob = null
-        serversBinding.autoPlayOverlay.animate().alpha(0f).setDuration(150).withEndAction {
-            serversBinding.autoPlayOverlay.isVisible = false
-            serversBinding.autoPlayOverlay.alpha = 1f
+        if (keepOverlay) return
+        hideAutoPlayOverlay(animate = true)
+    }
+
+    private fun hideAutoPlayOverlay(animate: Boolean) {
+        val overlay = serversBinding.autoPlayOverlay
+        if (!overlay.isVisible) return
+        if (!animate) {
+            overlay.isVisible = false
+            overlay.alpha = 1f
+            return
+        }
+        overlay.animate().alpha(0f).setDuration(150).withEndAction {
+            overlay.isVisible = false
+            overlay.alpha = 1f
         }.start()
     }
 
@@ -1123,7 +1139,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         if (!autoPlayMode || autoPlayDone) return
         if (autoCandidates.isEmpty()) {
             if (groups.isNotEmpty() && groups.all { groupFinished(it) }) {
-                Logger.log("TMDB_SERVERS: auto-play found no streams -> player rail")
+                Logger.log("TMDB_SERVERS: auto-play found no streams -> server screen")
                 fallbackToRail()
             }
             return
@@ -1164,55 +1180,14 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             "TMDB_SERVERS: auto-play '${candidate.group.name}' label='${candidate.link.label}' " +
                 "quality=${candidate.quality}"
         )
-        endAutoPlay()
+        endAutoPlay(keepOverlay = true)
         play(candidate.link, candidate.group)
     }
 
     private fun fallbackToRail() {
         if (!autoPlayMode || autoPlayDone || launchingPlayer) return
-        val d = detail ?: run { snackString("Could not load details"); finish(); return }
-        val group = groups.firstOrNull { it.key == autoPlaySourceKey } ?: groups.firstOrNull()
-        if (group == null) {
-            snackString("No source available")
-            finish()
-            return
-        }
-        launchingPlayer = true
-        Logger.log("TMDB_SERVERS: auto-play fallback -> player rail via '${group.name}'")
-        val overrideEpisodes = if (group.pluginLoad != null) {
-            if (mediaType == "tv") {
-                TmdbStreamResolver.pluginEpisodeShells(mediaId, pluginEpisodes)
-            } else {
-                TmdbStreamResolver.pluginMovieShell(mediaId, d)
-            }
-        } else null
+        Logger.log("TMDB_SERVERS: auto-play found no source -> showing server screen")
         endAutoPlay()
-        lifecycleScope.launch(Dispatchers.IO) {
-            val launched = runCatching {
-                TmdbStreamResolver.launchPlayer(
-                    this@TmdbServersActivity,
-                    mediaId,
-                    mediaType,
-                    d,
-                    group.source,
-                    season,
-                    epNumber,
-                    emptyList(),
-                    "",
-                    episodesOverride = overrideEpisodes,
-                    load = group.pluginLoad,
-                    stremioAddon = group.addon,
-                )
-            }.getOrElse {
-                Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: rail launch failed: ${it.message}")
-                false
-            }
-            if (!launched) runOnUiThread {
-                launchingPlayer = false
-                snackString("Could not open player")
-            }
-            finish()
-        }
     }
 
     private fun play(link: TmdbStreamResolver.StreamResult.PlayableLink, group: Group) {
@@ -1251,7 +1226,14 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                 Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: launch failed: ${it.message}")
                 false
             }
-            if (!launched) runOnUiThread { launchingPlayer = false }
+            runOnUiThread {
+                if (launched) {
+                    if (autoPlayMode) awaitingPlayerReturn = true
+                } else {
+                    launchingPlayer = false
+                    if (autoPlayMode) endAutoPlay()
+                }
+            }
         }
     }
 
