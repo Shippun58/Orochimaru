@@ -116,7 +116,12 @@ internal fun SaninSplash(
                     left + (start.x + (end.x - start.x) * progress) * imageWidth,
                     top + (start.y + (end.y - start.y) * progress) * imageHeight
                 )
-                val direction = Offset(end.x - start.x, end.y - start.y)
+                // Compute the tangent in rendered pixels so portrait and
+                // landscape layouts keep the streak aligned with the same path.
+                val direction = Offset(
+                    (end.x - start.x) * imageWidth,
+                    (end.y - start.y) * imageHeight
+                )
                 val magnitude = kotlin.math.sqrt(
                     direction.x * direction.x + direction.y * direction.y
                 ).coerceAtLeast(0.0001f)
