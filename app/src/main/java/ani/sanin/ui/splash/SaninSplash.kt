@@ -153,38 +153,38 @@ internal fun SaninSplash(
                 } else {
                     Offset(crossAxis, center + patchHalfLength)
                 }
-                val glow = Brush.linearGradient(
-                    colorStops = arrayOf(
-                        0f to Color.Transparent,
-                        0.32f to Color.White.copy(alpha = 0.22f * strength),
-                        0.50f to Color.White.copy(alpha = 0.78f * strength),
-                        0.68f to Color.White.copy(alpha = 0.22f * strength),
-                        1f to Color.Transparent
-                    ),
-                    start = from,
-                    end = to
-                )
-                val core = Brush.linearGradient(
-                    colorStops = arrayOf(
-                        0f to Color.Transparent,
-                        0.38f to Color.White.copy(alpha = 0.88f * strength),
-                        0.50f to Color.White.copy(alpha = strength),
-                        0.62f to Color.White.copy(alpha = 0.88f * strength),
-                        1f to Color.Transparent
-                    ),
-                    start = from,
-                    end = to
-                )
-
-                // Transform the original vector path into the exact rendered
-                // logo position. The glow is stroked along that path itself,
-                // never approximated with a free-standing diagonal line.
+                // Build the shaders inside the same transformed canvas as the
+                // vector path. Creating them before withTransform leaves their
+                // coordinates in screen space, which detached the glow below
+                // the centred emblem.
                 withTransform({
                     translate(left, top)
                     scale(imageWidth / viewportWidth, imageHeight / viewportHeight)
                     translate(groupTranslateX, groupTranslateY)
                     scale(groupScale, groupScale)
                 }) {
+                    val glow = Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            0.32f to Color.White.copy(alpha = 0.22f * strength),
+                            0.50f to Color.White.copy(alpha = 0.78f * strength),
+                            0.68f to Color.White.copy(alpha = 0.22f * strength),
+                            1f to Color.Transparent
+                        ),
+                        start = from,
+                        end = to
+                    )
+                    val core = Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            0.38f to Color.White.copy(alpha = 0.88f * strength),
+                            0.50f to Color.White.copy(alpha = strength),
+                            0.62f to Color.White.copy(alpha = 0.88f * strength),
+                            1f to Color.Transparent
+                        ),
+                        start = from,
+                        end = to
+                    )
                     drawPath(path, glow, style = Stroke(width = haloWidth))
                     drawPath(path, core, style = Stroke(width = coreWidth))
                 }
