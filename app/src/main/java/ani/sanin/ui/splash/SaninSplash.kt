@@ -103,7 +103,6 @@ internal fun SaninSplash(
             .background(Color.Black)
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val finalLogo = artwork.first.asImageBitmap()
             val blackMask = artwork.second.asImageBitmap()
             val fit = min(
                 size.width / artwork.first.width,
@@ -235,6 +234,31 @@ internal fun SaninSplash(
             }
 
 
+            fun drawEmblemBurst(path: Path, intensity: Float) {
+                if (intensity <= 0f) return
+                // A brief bloom follows the emblem's real silhouette. The two
+                // soft strokes create an outward light spill without drawing
+                // a separate halo shape or changing the logo's dimensions.
+                withTransform({
+                    translate(left, top)
+                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
+                    translate(groupTranslateX, groupTranslateY)
+                    scale(groupScale, groupScale, pivot = Offset.Zero)
+                }) {
+                    drawPath(
+                        path,
+                        Color.White.copy(alpha = 0.16f * intensity),
+                        style = Stroke(width = 58f, cap = StrokeCap.Round)
+                    )
+                    drawPath(
+                        path,
+                        Color.White.copy(alpha = 0.30f * intensity),
+                        style = Stroke(width = 28f, cap = StrokeCap.Round)
+                    )
+                }
+            }
+
+
             val travel = smooth((p - 0.08f) / 0.83f)
             val fadeIn = smooth((p - 0.08f) / 0.10f)
             val fadeOut = 1f - smooth((p - 0.81f) / 0.10f)
@@ -292,11 +316,24 @@ internal fun SaninSplash(
             // Give the fill a longer, steady run instead of compressing it
             // into the final few frames. A linear boundary avoids the apparent
             // mid-fill stall caused by easing twice near the animation endpoint.
-            val fillProgress = ((p - 0.84f) / 0.16f).coerceIn(0f, 1f)
+            // Finish the fill before the burst, leaving a distinct beat for
+            // the emblem to flare and then settle to clean solid white.
+            val fillProgress = ((p - 0.82f) / 0.09f).coerceIn(0f, 1f)
             if (fillProgress > 0f) {
                 drawSegmentFill(ribbonPath, fillProgress, 59f, 479f, fromBottom = true)
                 drawSegmentFill(upperTrianglePath, fillProgress, 8f, 185f, fromBottom = true)
                 drawSegmentFill(lowerTrianglePath, fillProgress, 354f, 530f, fromBottom = false)
+            }
+
+            // A short brightness burst peaks just after all three sections
+            // have filled, then fades away before the splash completes.
+            val burstIn = smooth((p - 0.91f) / 0.035f)
+            val burstOut = 1f - smooth((p - 0.945f) / 0.045f)
+            val burst = burstIn * burstOut
+            if (burst > 0f) {
+                drawEmblemBurst(ribbonPath, burst)
+                drawEmblemBurst(upperTrianglePath, burst)
+                drawEmblemBurst(lowerTrianglePath, burst)
             }
         }
     }
