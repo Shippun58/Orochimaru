@@ -108,7 +108,7 @@ internal fun SaninSplash(
             val fit = min(
                 size.width / artwork.first.width,
                 size.height / artwork.first.height
-            ) * 0.68f
+            ) * 0.56f
             val imageWidth = artwork.first.width * fit
             val imageHeight = artwork.first.height * fit
             val left = (size.width - imageWidth) / 2f
@@ -289,23 +289,14 @@ internal fun SaninSplash(
             // Each segment starts filling only after its travelling glow
             // reaches the endpoint. The ribbon and upper triangle fill upward
             // from their lower ends; the lower triangle fills downward.
-            val fillProgress = smooth((p - 0.91f) / 0.09f)
+            // Give the fill a longer, steady run instead of compressing it
+            // into the final few frames. A linear boundary avoids the apparent
+            // mid-fill stall caused by easing twice near the animation endpoint.
+            val fillProgress = ((p - 0.84f) / 0.16f).coerceIn(0f, 1f)
             if (fillProgress > 0f) {
                 drawSegmentFill(ribbonPath, fillProgress, 59f, 479f, fromBottom = true)
                 drawSegmentFill(upperTrianglePath, fillProgress, 8f, 185f, fromBottom = true)
                 drawSegmentFill(lowerTrianglePath, fillProgress, 354f, 530f, fromBottom = false)
-            }
-
-            // The complete artwork appears only after the three segment fills
-            // have finished, avoiding an early full-logo reveal.
-            val reveal = smooth((p - 0.97f) / 0.03f)
-            if (reveal > 0f) {
-                drawImage(
-                    image = finalLogo,
-                    dstOffset = dstOffset,
-                    dstSize = dstSize,
-                    alpha = reveal
-                )
             }
         }
     }
