@@ -20,6 +20,10 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
@@ -101,75 +105,88 @@ internal fun SaninSplash(
                 return value * value * (3f - 2f * value)
             }
 
-            fun drawMovingStreak(
-                start: Offset,
-                end: Offset,
+            val portrait = emblemRes == R.drawable.sanin_emblem_portrait
+            val viewportWidth = if (portrait) 149f else 230f
+            val viewportHeight = if (portrait) 226f else 310f
+            val groupScale = if (portrait) 0.171264f else 0.290805f
+            val groupTranslateX = if (portrait) 32.0264f else 42.8805f
+            val groupTranslateY = if (portrait) 66.9299f else 76.7736f
+
+            fun drawShapeGlow(
+                path: Path,
                 progress: Float,
                 strength: Float,
-                lengthFactor: Float,
-                widthFactor: Float
+                horizontal: Boolean,
+                axisStart: Float,
+                axisEnd: Float,
+                crossAxis: Float,
+                patchHalfLength: Float,
+                haloWidth: Float,
+                coreWidth: Float
             ) {
-                val center = Offset(
-                    left + (start.x + (end.x - start.x) * progress) * imageWidth,
-                    top + (start.y + (end.y - start.y) * progress) * imageHeight
-                )
-                // Compute the tangent in rendered pixels so portrait and
-                // landscape layouts keep the streak aligned with the same path.
-                val direction = Offset(
-                    (end.x - start.x) * imageWidth,
-                    (end.y - start.y) * imageHeight
-                )
-                val magnitude = kotlin.math.sqrt(
-                    direction.x * direction.x + direction.y * direction.y
-                ).coerceAtLeast(0.0001f)
-                val tangent = Offset(direction.x / magnitude, direction.y / magnitude)
-                val halfLength = min(imageWidth, imageHeight) * lengthFactor
-                val from = Offset(
-                    center.x - tangent.x * halfLength,
-                    center.y - tangent.y * halfLength
-                )
-                val to = Offset(
-                    center.x + tangent.x * halfLength,
-                    center.y + tangent.y * halfLength
-                )
-                val haloBrush = Brush.linearGradient(
+                if (strength <= 0f) return
+                val center = axisStart + (axisEnd - axisStart) * progress.coerceIn(0f, 1f)
+                val from = if (horizontal) {
+                    Offset(center - patchHalfLength, crossAxis)
+                } else {
+                    Offset(crossAxis, center - patchHalfLength)
+                }
+                val to = if (horizontal) {
+                    Offset(center + patchHalfLength, crossAxis)
+                } else {
+                    Offset(crossAxis, center + patchHalfLength)
+                }
+                val glow = Brush.linearGradient(
                     colorStops = arrayOf(
                         0f to Color.Transparent,
-                        0.40f to Color.White.copy(alpha = 0.24f * strength),
-                        0.60f to Color.White.copy(alpha = 0.18f * strength),
+                        0.32f to Color.White.copy(alpha = 0.22f * strength),
+                        0.50f to Color.White.copy(alpha = 0.78f * strength),
+                        0.68f to Color.White.copy(alpha = 0.22f * strength),
                         1f to Color.Transparent
                     ),
                     start = from,
                     end = to
                 )
-                val coreBrush = Brush.linearGradient(
+                val core = Brush.linearGradient(
                     colorStops = arrayOf(
                         0f to Color.Transparent,
-                        0.42f to Color.White.copy(alpha = 0.92f * strength),
-                        0.58f to Color.White.copy(alpha = 0.58f * strength),
+                        0.38f to Color.White.copy(alpha = 0.88f * strength),
+                        0.50f to Color.White.copy(alpha = strength),
+                        0.62f to Color.White.copy(alpha = 0.88f * strength),
                         1f to Color.Transparent
                     ),
                     start = from,
                     end = to
                 )
-                val shortSide = min(imageWidth, imageHeight)
 
-                // Broad, low-intensity light sits behind the black silhouette;
-                // the tighter streak supplies the travelling highlight.
-                drawLine(
-                    brush = haloBrush,
-                    start = from,
-                    end = to,
-                    strokeWidth = shortSide * widthFactor * 2.1f,
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    brush = coreBrush,
-                    start = from,
-                    end = to,
-                    strokeWidth = shortSide * widthFactor * 0.72f,
-                    cap = StrokeCap.Round
-                )
+                // Transform the original vector path into the exact rendered
+                // logo position. The glow is stroked along that path itself,
+                // never approximated with a free-standing diagonal line.
+                withTransform({
+                    translate(left, top)
+                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight)
+                    translate(groupTranslateX, groupTranslateY)
+                    scale(groupScale, groupScale)
+                }) {
+                    drawPath(path, glow, style = Stroke(width = haloWidth))
+                    drawPath(path, core, style = Stroke(width = coreWidth))
+                }
+            }
+
+            val ribbonPath = remember(emblemRes) {
+                PathParser().parsePathString(
+                    "M 30,59 L 12,108 L 9,158 L 14,181 L 27,209 L 52,240 L 96,273 L 130,291 L 404,412 L 440,441 L 466,479 L 484,430 L 487,381 L 482,358 L 471,333 L 440,295 L 412,273 L 365,247 L 97,129 L 55,96 Z"
+                ).toPath()
+            }
+            val lowerTrianglePath = remember(emblemRes) {
+                PathParser().parsePathString(
+                    "M 8,354 L 8,530 L 11,530 L 25,521 L 29,520 L 34,516 L 41,513 L 48,508 L 50,508 L 74,493 L 78,492 L 83,488 L 90,485 L 97,480 L 99,480 L 102,477 L 111,473 L 114,470 L 116,470 L 128,462 L 130,462 L 140,455 L 144,454 L 149,450 L 151,450 L 164,442 L 102,406 L 100,406 L 81,394 L 79,394 L 72,389 L 65,386 L 60,382 L 56,381 L 51,378 L 50,376 L 44,374 L 41,371 L 39,371 L 27,363 L 25,363 L 15,356 Z"
+                ).toPath()
+            }
+            val upperTrianglePath = remember(emblemRes) {
+                PathParser().parsePathString(
+                    "M 332,96 L 352,107 L 357,111 L 366,115 L 371,119 L 373,119 L 385,127 L 387,127 L 402,137 L 406,138 L 423,149 L 432,153 L 437,157 L 439,157 L 446,162 L 453,165 L 458,169 L 462,170 L 468,175 L 476,178 L 487,185 L 488,184 L 488,8 L 485,8 L 461,23 L 459,23 L 452,28 L 441,33 L 426,43 L 415,48 L 412,51 L 401,56 L 391,63 L 389,63 Z"
+                ).toPath()
             }
 
             val travel = smooth((p - 0.08f) / 0.83f)
@@ -177,45 +194,45 @@ internal fun SaninSplash(
             val fadeOut = 1f - smooth((p - 0.81f) / 0.10f)
             val streakStrength = fadeIn * fadeOut
 
-            // Draw light first, then place the complete black emblem over it.
-            // This restores the Infinix-style backlight: the soft spill is visible
-            // around the silhouette while the icon itself stays completely black.
+            // Each highlight follows one of the three exact vector paths.
+            // The ribbon travels left-to-right; the upper triangle travels
+            // top-to-bottom; the lower triangle travels bottom-to-top.
             if (streakStrength > 0f) {
-                // Main ribbon: two staggered passes along its long diagonal.
-                drawMovingStreak(
-                    Offset(0.17f, 0.29f),
-                    Offset(0.83f, 0.56f),
-                    travel,
-                    streakStrength,
-                    lengthFactor = 0.115f,
-                    widthFactor = 0.075f
+                drawShapeGlow(
+                    path = ribbonPath,
+                    progress = travel,
+                    strength = streakStrength,
+                    horizontal = true,
+                    axisStart = 8f,
+                    axisEnd = 488f,
+                    crossAxis = 245f,
+                    patchHalfLength = 104f,
+                    haloWidth = 46f,
+                    coreWidth = 23f
                 )
-                drawMovingStreak(
-                    Offset(0.25f, 0.37f),
-                    Offset(0.90f, 0.63f),
-                    (travel - 0.13f).coerceIn(0f, 1f),
-                    streakStrength * 0.82f,
-                    lengthFactor = 0.095f,
-                    widthFactor = 0.060f
+                drawShapeGlow(
+                    path = upperTrianglePath,
+                    progress = travel,
+                    strength = streakStrength * 0.96f,
+                    horizontal = false,
+                    axisStart = 8f,
+                    axisEnd = 185f,
+                    crossAxis = 410f,
+                    patchHalfLength = 43f,
+                    haloWidth = 38f,
+                    coreWidth = 19f
                 )
-                // Upper triangle: from the outer top-right tip down-left.
-                drawMovingStreak(
-                    Offset(0.80f, 0.26f),
-                    Offset(0.61f, 0.42f),
-                    travel,
-                    streakStrength * 0.95f,
-                    lengthFactor = 0.075f,
-                    widthFactor = 0.075f
-                )
-                // Lower triangle: corrected to stay on its actual lower-left arm,
-                // travelling from the bottom tip up-right toward the ribbon.
-                drawMovingStreak(
-                    Offset(0.20f, 0.74f),
-                    Offset(0.39f, 0.58f),
-                    travel,
-                    streakStrength * 1.05f,
-                    lengthFactor = 0.080f,
-                    widthFactor = 0.085f
+                drawShapeGlow(
+                    path = lowerTrianglePath,
+                    progress = 1f - travel,
+                    strength = streakStrength * 1.02f,
+                    horizontal = false,
+                    axisStart = 354f,
+                    axisEnd = 530f,
+                    crossAxis = 86f,
+                    patchHalfLength = 43f,
+                    haloWidth = 38f,
+                    coreWidth = 19f
                 )
             }
 
