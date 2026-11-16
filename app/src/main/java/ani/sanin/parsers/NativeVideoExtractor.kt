@@ -265,7 +265,10 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
                     "srt" -> SubtitleType.SRT
                     else -> SubtitleType.VTT
                 }
-                Subtitle(language = lang, file = FileUrl(subUrl), type = type)
+                val headers = (obj["headers"] as? JsonObject)?.entries?.mapNotNull { (key, value) ->
+                    (value as? JsonPrimitive)?.contentOrNull?.let { key to it }
+                }?.toMap().orEmpty()
+                Subtitle(language = lang, file = FileUrl(subUrl, headers), type = type)
             }
         } catch (_: Exception) {
             emptyList()

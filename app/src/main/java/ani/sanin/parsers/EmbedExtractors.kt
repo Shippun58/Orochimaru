@@ -809,11 +809,11 @@ object MegaPlayExtractor {
 }
 
 object VidplayExtractor {
-    fun matches(url: String): Boolean = Regex("play\\.(?:echovideo\\.ru|vhscdn\\.to)/embed-[01]/", RegexOption.IGNORE_CASE).containsMatchIn(url)
+    fun matches(url: String): Boolean = Regex("play2?\\.(?:echovideo\\.ru|vhscdn\\.to)/embed-(?!20/)\\d+/", RegexOption.IGNORE_CASE).containsMatchIn(url)
 
     suspend fun extract(embedUrl: String, referer: String?): EmbedResult = withContext(Dispatchers.IO) {
         val url = java.net.URL(embedUrl)
-        val match = Regex("/(embed-[01])/([^/]+)", RegexOption.IGNORE_CASE).find(url.path)
+        val match = Regex("/(embed-\\d+)/([^/]+)", RegexOption.IGNORE_CASE).find(url.path)
             ?: throw IllegalStateException("vidplay id not found")
         val type = match.groupValues[1]
         val id = match.groupValues[2]
