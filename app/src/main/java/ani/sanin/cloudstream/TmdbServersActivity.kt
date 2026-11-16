@@ -1202,7 +1202,6 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                     episodesOverride = overrideEpisodes,
                     load = group.pluginLoad,
                     stremioAddon = group.addon,
-                    openRailOnStart = true,
                 )
             }.getOrElse {
                 Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: rail launch failed: ${it.message}")
