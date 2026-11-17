@@ -49,6 +49,28 @@ private data class CachedGlowPair(
     val core: CachedGlowStroke
 )
 
+private data class CachedBurstPaints(
+    val outer: AndroidPaint,
+    val inner: AndroidPaint
+)
+
+private fun createBurstPaints() = CachedBurstPaints(
+    outer = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = AndroidPaint.Style.STROKE
+        strokeWidth = 58f
+        strokeCap = AndroidPaint.Cap.ROUND
+        strokeJoin = AndroidPaint.Join.ROUND
+    },
+    inner = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = AndroidPaint.Style.STROKE
+        strokeWidth = 28f
+        strokeCap = AndroidPaint.Cap.ROUND
+        strokeJoin = AndroidPaint.Join.ROUND
+    }
+)
+
 private fun createGlowStroke(
     horizontal: Boolean,
     halfLength: Float,
@@ -203,6 +225,7 @@ internal fun SaninSplash(
     val ribbonGlow = remember(emblemRes) { createGlowPair(true, 104f, 46f, 23f) }
     val upperTriangleGlow = remember(emblemRes) { createGlowPair(false, 43f, 38f, 19f) }
     val lowerTriangleGlow = remember(emblemRes) { createGlowPair(false, 43f, 38f, 19f) }
+    val burstPaints = remember { createBurstPaints() }
 
     val blackMaskImage = remember(artwork) { artwork.second.asImageBitmap() }
 
@@ -297,28 +320,16 @@ internal fun SaninSplash(
             }
 
 
-            fun drawEmblemBurst(path: Path, intensity: Float) {
+            fun drawEmblemBurst(
+                canvas: android.graphics.Canvas,
+                path: android.graphics.Path,
+                intensity: Float
+            ) {
                 if (intensity <= 0f) return
-                // A brief bloom follows the emblem's real silhouette. The two
-                // soft strokes create an outward light spill without drawing
-                // a separate halo shape or changing the logo's dimensions.
-                withTransform({
-                    translate(left, top)
-                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
-                    translate(groupTranslateX, groupTranslateY)
-                    scale(groupScale, groupScale, pivot = Offset.Zero)
-                }) {
-                    drawPath(
-                        path,
-                        Color.White.copy(alpha = 0.16f * intensity),
-                        style = Stroke(width = 58f, cap = StrokeCap.Round)
-                    )
-                    drawPath(
-                        path,
-                        Color.White.copy(alpha = 0.30f * intensity),
-                        style = Stroke(width = 28f, cap = StrokeCap.Round)
-                    )
-                }
+                burstPaints.outer.alpha = (0.16f * intensity * 255f).roundToInt()
+                burstPaints.inner.alpha = (0.30f * intensity * 255f).roundToInt()
+                canvas.drawPath(path, burstPaints.outer)
+                canvas.drawPath(path, burstPaints.inner)
             }
 
 
@@ -403,9 +414,19 @@ internal fun SaninSplash(
             val burstOut = 1f - smooth((p - 0.945f) / 0.045f)
             val burst = burstIn * burstOut
             if (burst > 0f) {
-                drawEmblemBurst(ribbonPath, burst)
-                drawEmblemBurst(upperTrianglePath, burst)
-                drawEmblemBurst(lowerTrianglePath, burst)
+                withTransform({
+                    translate(left, top)
+                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
+                    translate(groupTranslateX, groupTranslateY)
+                    scale(groupScale, groupScale, pivot = Offset.Zero)
+                }) {
+                    drawIntoCanvas { canvas ->
+                        val nativeCanvas = canvas.nativeCanvas
+                        drawEmblemBurst(nativeCanvas, nativeRibbonPath, burst)
+                        drawEmblemBurst(nativeCanvas, nativeUpperTrianglePath, burst)
+                        drawEmblemBurst(nativeCanvas, nativeLowerTrianglePath, burst)
+                    }
+                }
             }
         }
     }
