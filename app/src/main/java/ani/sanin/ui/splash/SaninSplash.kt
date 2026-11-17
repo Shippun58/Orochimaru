@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -72,12 +74,18 @@ internal fun SaninSplash(
         finalLogo to blackMask
     }
     val animation = remember { Animatable(0f) }
+    val currentOnFinished = rememberUpdatedState(onFinished)
 
-    LaunchedEffect(onFinished) {
+    // Keep the timeline alive across parent recompositions. A changing callback
+    // must not cancel and restart the splash animation halfway through.
+    LaunchedEffect(Unit) {
         delay(120)
-        animation.animateTo(1f, animationSpec = tween(durationMillis = 3_900))
+        animation.animateTo(
+            1f,
+            animationSpec = tween(durationMillis = 3_900, easing = LinearEasing)
+        )
         delay(180)
-        onFinished()
+        currentOnFinished.value()
     }
 
         val ribbonPath = remember(emblemRes) {
@@ -97,13 +105,14 @@ internal fun SaninSplash(
         }
 
 
+    val blackMaskImage = remember(artwork) { artwork.second.asImageBitmap() }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val blackMask = artwork.second.asImageBitmap()
             val fit = min(
                 size.width / artwork.first.width,
                 size.height / artwork.first.height
@@ -259,7 +268,9 @@ internal fun SaninSplash(
             }
 
 
-            val travel = smooth((p - 0.08f) / 0.83f)
+            // Constant-speed travel avoids the apparent pauses caused by
+            // applying easing both to the master timeline and the path motion.
+            val travel = ((p - 0.08f) / 0.83f).coerceIn(0f, 1f)
             val fadeIn = smooth((p - 0.08f) / 0.10f)
             val fadeOut = 1f - smooth((p - 0.81f) / 0.10f)
             val streakStrength = fadeIn * fadeOut
@@ -308,7 +319,7 @@ internal fun SaninSplash(
 
             // The opaque black silhouette sits above the light, preserving the
             // dark icon while letting the moving glow show from behind its edges.
-            drawImage(blackMask, dstOffset = dstOffset, dstSize = dstSize)
+            drawImage(blackMaskImage, dstOffset = dstOffset, dstSize = dstSize)
 
             // Each segment starts filling only after its travelling glow
             // reaches the endpoint. The ribbon and upper triangle fill upward
@@ -318,7 +329,7 @@ internal fun SaninSplash(
             // mid-fill stall caused by easing twice near the animation endpoint.
             // Finish the fill before the burst, leaving a distinct beat for
             // the emblem to flare and then settle to clean solid white.
-            val fillProgress = ((p - 0.82f) / 0.09f).coerceIn(0f, 1f)
+            val fillProgress = ((p - 0.80f) / 0.11f).coerceIn(0f, 1f)
             if (fillProgress > 0f) {
                 drawSegmentFill(ribbonPath, fillProgress, 59f, 479f, fromBottom = true)
                 drawSegmentFill(upperTrianglePath, fillProgress, 8f, 185f, fromBottom = true)
