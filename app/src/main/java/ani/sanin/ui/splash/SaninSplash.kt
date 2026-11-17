@@ -72,7 +72,11 @@ private fun createGlowStroke(
             android.graphics.Color.TRANSPARENT
         )
     }
-    val positions = floatArrayOf(0f, 0.32f, 0.50f, 0.68f, 1f)
+    val positions = if (core) {
+        floatArrayOf(0f, 0.38f, 0.50f, 0.62f, 1f)
+    } else {
+        floatArrayOf(0f, 0.32f, 0.50f, 0.68f, 1f)
+    }
     val shader = LinearGradient(
         if (horizontal) -halfLength else 0f,
         if (horizontal) 0f else -halfLength,
