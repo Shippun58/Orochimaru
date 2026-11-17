@@ -272,7 +272,7 @@ internal fun SaninSplash(
             // applying easing both to the master timeline and the path motion.
             val travel = ((p - 0.08f) / 0.83f).coerceIn(0f, 1f)
             val fadeIn = smooth((p - 0.08f) / 0.10f)
-            val fadeOut = 1f - smooth((p - 0.81f) / 0.10f)
+            val fadeOut = 1f - smooth((p - 0.91f) / 0.035f)
             val streakStrength = fadeIn * fadeOut
 
             // Each highlight follows one of the three exact vector paths.
