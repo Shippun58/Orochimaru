@@ -129,9 +129,9 @@ class SettingsAnimeActivity : AppCompatActivity() {
                     desc = "Seconds before server load timeout",
                     choice = SubscreenBuilder.Choice(
                         title = "Server Timeout",
-                        options = arrayOf("4s", "8s", "12s (Default)", "16s", "20s", "30s"),
+                        options = arrayOf("4s", "8s", "12s", "16s", "20s", "30s (Default)"),
                         currentIndex = when (PrefManager.getVal<Int>(PrefName.ServerLoadTimeoutSeconds)) {
-                            4 -> 0; 8 -> 1; 12 -> 2; 16 -> 3; 20 -> 4; 30 -> 5; else -> 2
+                            4 -> 0; 8 -> 1; 12 -> 2; 16 -> 3; 20 -> 4; 30 -> 5; else -> 5
                         },
                     ) { idx -> PrefManager.setVal(PrefName.ServerLoadTimeoutSeconds, intArrayOf(4, 8, 12, 16, 20, 30)[idx]) },
                 ),
@@ -157,10 +157,7 @@ class SettingsAnimeActivity : AppCompatActivity() {
                     desc = "Manual or automatic stream start",
                     choice = SubscreenBuilder.Choice(
                         title = "Source selection",
-                        options = arrayOf(
-                            "Manual — pick the source yourself on the source screen",
-                            "Automatic — play the first link from the selected source",
-                        ),
+                        options = arrayOf("Manual", "Automatic"),
                         currentIndex = if (PrefManager.getVal<Int>(PrefName.AutoPlayMode) == 1) 1 else 0,
                     ) { idx -> PrefManager.setVal(PrefName.AutoPlayMode, if (idx == 1) 1 else 0) },
                 ),
@@ -206,8 +203,8 @@ class SettingsAnimeActivity : AppCompatActivity() {
                     switch = PrefManager.getVal<Boolean>(PrefName.AutoTrackNewShows) to { v: Boolean -> PrefManager.setVal(PrefName.AutoTrackNewShows, v) },
                 ),
                 SubscreenBuilder.Entry(
-                    title = "Include in Library",
-                    desc = "Show anime list in library tab",
+                    title = "Include Listed Anime in Discover",
+                    desc = "Show anime already on your AniList list in the Home/Discover rows (trending, top rated, most favourite).",
                     switch = PrefManager.getVal<Boolean>(PrefName.IncludeAnimeList) to {
                         PrefManager.setVal(PrefName.IncludeAnimeList, it); restartApp()
                     },

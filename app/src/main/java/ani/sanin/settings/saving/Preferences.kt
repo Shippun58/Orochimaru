@@ -96,7 +96,7 @@ enum class PrefName(val data: Pref) {
     AutoTrackNewShows(Pref(Location.General, Boolean::class, false)),
     AutoUpdateExtensions(Pref(Location.General, Boolean::class, true)),
     ConfirmPlayerExit(Pref(Location.General, Boolean::class, false)),
-    ServerLoadTimeoutSeconds(Pref(Location.General, Int::class, 12)),
+    ServerLoadTimeoutSeconds(Pref(Location.General, Int::class, 30)),
     AnikotoCommentsEnabled(Pref(Location.General, Int::class, 1)),
 
     EpisodeMetadataSource(Pref(Location.UI, Int::class, 0)),
