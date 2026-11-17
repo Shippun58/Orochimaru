@@ -107,7 +107,7 @@ internal fun SaninSplash(
             val fit = min(
                 size.width / artwork.first.width,
                 size.height / artwork.first.height
-            ) * 0.56f
+            ) * 0.48f
             val imageWidth = artwork.first.width * fit
             val imageHeight = artwork.first.height * fit
             val left = (size.width - imageWidth) / 2f
