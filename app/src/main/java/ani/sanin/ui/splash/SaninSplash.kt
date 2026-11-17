@@ -2,6 +2,10 @@ package ani.sanin.ui.splash
 
 import ani.sanin.R
 import android.graphics.Bitmap
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.core.Animatable
@@ -17,7 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
@@ -25,12 +29,97 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
 import kotlin.math.min
 import kotlin.math.roundToInt
+
+private class CachedGlowStroke(
+    val shader: Shader,
+    val matrix: Matrix,
+    val paint: AndroidPaint
+)
+
+private data class CachedGlowPair(
+    val halo: CachedGlowStroke,
+    val core: CachedGlowStroke
+)
+
+private fun createGlowStroke(
+    horizontal: Boolean,
+    halfLength: Float,
+    width: Float,
+    core: Boolean
+): CachedGlowStroke {
+    val colors = if (core) {
+        intArrayOf(
+            android.graphics.Color.TRANSPARENT,
+            android.graphics.Color.argb(224, 255, 255, 255),
+            android.graphics.Color.WHITE,
+            android.graphics.Color.argb(224, 255, 255, 255),
+            android.graphics.Color.TRANSPARENT
+        )
+    } else {
+        intArrayOf(
+            android.graphics.Color.TRANSPARENT,
+            android.graphics.Color.argb(56, 255, 255, 255),
+            android.graphics.Color.argb(199, 255, 255, 255),
+            android.graphics.Color.argb(56, 255, 255, 255),
+            android.graphics.Color.TRANSPARENT
+        )
+    }
+    val positions = floatArrayOf(0f, 0.32f, 0.50f, 0.68f, 1f)
+    val shader = LinearGradient(
+        if (horizontal) -halfLength else 0f,
+        if (horizontal) 0f else -halfLength,
+        if (horizontal) halfLength else 0f,
+        if (horizontal) 0f else halfLength,
+        colors,
+        positions,
+        Shader.TileMode.CLAMP
+    )
+    val matrix = Matrix()
+    val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+        style = AndroidPaint.Style.STROKE
+        strokeWidth = width
+        strokeCap = AndroidPaint.Cap.BUTT
+        strokeJoin = AndroidPaint.Join.MITER
+        this.shader = shader
+    }
+    return CachedGlowStroke(shader, matrix, paint)
+}
+
+private fun createGlowPair(
+    horizontal: Boolean,
+    halfLength: Float,
+    haloWidth: Float,
+    coreWidth: Float
+) = CachedGlowPair(
+    halo = createGlowStroke(horizontal, halfLength, haloWidth, core = false),
+    core = createGlowStroke(horizontal, halfLength, coreWidth, core = true)
+)
+
+private fun drawCachedGlowStroke(
+    canvas: android.graphics.Canvas,
+    path: android.graphics.Path,
+    stroke: CachedGlowStroke,
+    center: Float,
+    crossAxis: Float,
+    horizontal: Boolean,
+    strength: Float
+) {
+    stroke.matrix.setTranslate(
+        if (horizontal) center else crossAxis,
+        if (horizontal) crossAxis else center
+    )
+    stroke.shader.setLocalMatrix(stroke.matrix)
+    stroke.paint.alpha = (strength.coerceIn(0f, 1f) * 255f).roundToInt()
+    canvas.drawPath(path, stroke.paint)
+}
 
 private fun Drawable.toBitmap(): Bitmap {
     if (this is BitmapDrawable) bitmap?.let { return it }
@@ -104,6 +193,12 @@ internal fun SaninSplash(
             ).toPath()
         }
 
+    val nativeRibbonPath = remember(ribbonPath) { ribbonPath.asAndroidPath() }
+    val nativeUpperTrianglePath = remember(upperTrianglePath) { upperTrianglePath.asAndroidPath() }
+    val nativeLowerTrianglePath = remember(lowerTrianglePath) { lowerTrianglePath.asAndroidPath() }
+    val ribbonGlow = remember(emblemRes) { createGlowPair(true, 104f, 46f, 23f) }
+    val upperTriangleGlow = remember(emblemRes) { createGlowPair(false, 43f, 38f, 19f) }
+    val lowerTriangleGlow = remember(emblemRes) { createGlowPair(false, 43f, 38f, 19f) }
 
     val blackMaskImage = remember(artwork) { artwork.second.asImageBitmap() }
 
@@ -138,66 +233,21 @@ internal fun SaninSplash(
             val groupTranslateY = if (portrait) 66.9299f else 76.7736f
 
             fun drawShapeGlow(
-                path: Path,
+                canvas: android.graphics.Canvas,
+                path: android.graphics.Path,
                 progress: Float,
                 strength: Float,
                 horizontal: Boolean,
                 axisStart: Float,
                 axisEnd: Float,
                 crossAxis: Float,
-                patchHalfLength: Float,
-                haloWidth: Float,
-                coreWidth: Float
+                paints: CachedGlowPair
             ) {
                 if (strength <= 0f) return
                 val center = axisStart + (axisEnd - axisStart) * progress.coerceIn(0f, 1f)
-                val from = if (horizontal) {
-                    Offset(center - patchHalfLength, crossAxis)
-                } else {
-                    Offset(crossAxis, center - patchHalfLength)
-                }
-                val to = if (horizontal) {
-                    Offset(center + patchHalfLength, crossAxis)
-                } else {
-                    Offset(crossAxis, center + patchHalfLength)
-                }
-                // Build the shaders inside the same transformed canvas as the
-                // vector path. Creating them before withTransform leaves their
-                // coordinates in screen space, which detached the glow below
-                // the centred emblem.
-                withTransform({
-                    translate(left, top)
-                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
-                    translate(groupTranslateX, groupTranslateY)
-                    scale(groupScale, groupScale, pivot = Offset.Zero)
-                }) {
-                    val glow = Brush.linearGradient(
-                        colorStops = arrayOf(
-                            0f to Color.Transparent,
-                            0.32f to Color.White.copy(alpha = 0.22f * strength),
-                            0.50f to Color.White.copy(alpha = 0.78f * strength),
-                            0.68f to Color.White.copy(alpha = 0.22f * strength),
-                            1f to Color.Transparent
-                        ),
-                        start = from,
-                        end = to
-                    )
-                    val core = Brush.linearGradient(
-                        colorStops = arrayOf(
-                            0f to Color.Transparent,
-                            0.38f to Color.White.copy(alpha = 0.88f * strength),
-                            0.50f to Color.White.copy(alpha = strength),
-                            0.62f to Color.White.copy(alpha = 0.88f * strength),
-                            1f to Color.Transparent
-                        ),
-                        start = from,
-                        end = to
-                    )
-                    drawPath(path, glow, style = Stroke(width = haloWidth))
-                    drawPath(path, core, style = Stroke(width = coreWidth))
-                }
+                drawCachedGlowStroke(canvas, path, paints.halo, center, crossAxis, horizontal, strength)
+                drawCachedGlowStroke(canvas, path, paints.core, center, crossAxis, horizontal, strength)
             }
-
 
             fun drawSegmentFill(
                 path: Path,
@@ -279,42 +329,49 @@ internal fun SaninSplash(
             // The ribbon travels left-to-right; the upper triangle travels
             // top-to-bottom; the lower triangle travels bottom-to-top.
             if (streakStrength > 0f) {
-                drawShapeGlow(
-                    path = ribbonPath,
-                    progress = travel,
-                    strength = streakStrength,
-                    horizontal = true,
-                    axisStart = 8f,
-                    axisEnd = 488f,
-                    crossAxis = 245f,
-                    patchHalfLength = 104f,
-                    haloWidth = 46f,
-                    coreWidth = 23f
-                )
-                drawShapeGlow(
-                    path = upperTrianglePath,
-                    progress = travel,
-                    strength = streakStrength * 0.96f,
-                    horizontal = false,
-                    axisStart = 8f,
-                    axisEnd = 185f,
-                    crossAxis = 410f,
-                    patchHalfLength = 43f,
-                    haloWidth = 38f,
-                    coreWidth = 19f
-                )
-                drawShapeGlow(
-                    path = lowerTrianglePath,
-                    progress = 1f - travel,
-                    strength = streakStrength * 1.02f,
-                    horizontal = false,
-                    axisStart = 354f,
-                    axisEnd = 530f,
-                    crossAxis = 86f,
-                    patchHalfLength = 43f,
-                    haloWidth = 38f,
-                    coreWidth = 19f
-                )
+                withTransform({
+                    translate(left, top)
+                    scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
+                    translate(groupTranslateX, groupTranslateY)
+                    scale(groupScale, groupScale, pivot = Offset.Zero)
+                }) {
+                    drawIntoCanvas { canvas ->
+                        val nativeCanvas = canvas.nativeCanvas
+                        drawShapeGlow(
+                            canvas = nativeCanvas,
+                            path = nativeRibbonPath,
+                            progress = travel,
+                            strength = streakStrength,
+                            horizontal = true,
+                            axisStart = 8f,
+                            axisEnd = 488f,
+                            crossAxis = 245f,
+                            paints = ribbonGlow
+                        )
+                        drawShapeGlow(
+                            canvas = nativeCanvas,
+                            path = nativeUpperTrianglePath,
+                            progress = travel,
+                            strength = streakStrength * 0.96f,
+                            horizontal = false,
+                            axisStart = 8f,
+                            axisEnd = 185f,
+                            crossAxis = 410f,
+                            paints = upperTriangleGlow
+                        )
+                        drawShapeGlow(
+                            canvas = nativeCanvas,
+                            path = nativeLowerTrianglePath,
+                            progress = 1f - travel,
+                            strength = streakStrength * 1.02f,
+                            horizontal = false,
+                            axisStart = 354f,
+                            axisEnd = 530f,
+                            crossAxis = 86f,
+                            paints = lowerTriangleGlow
+                        )
+                    }
+                }
             }
 
             // The opaque black silhouette sits above the light, preserving the
