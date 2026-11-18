@@ -44,7 +44,7 @@
                     android:importantForAccessibility="no"
                     android:visibility="gone" />
 
-                <androidx.recyclerview.widget.RecyclerView
+                <ani.sanin.home.BannerCrossfadeRecyclerView
                     android:id="@+id/tmdbBannerCarousel"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"

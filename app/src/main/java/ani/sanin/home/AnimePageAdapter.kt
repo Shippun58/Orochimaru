@@ -53,6 +53,7 @@ import ani.sanin.settings.saving.PrefName
 import ani.sanin.bannerCardSizePx
 import ani.sanin.sizeBannerCard
 import ani.sanin.util.FocusEffectUtil
+import ani.sanin.ui.LensButtonBackground
 import com.google.android.material.card.MaterialCardView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -223,7 +224,9 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
                 else -> false
             }
         }
-        FocusEffectUtil.applyFocusListener(btn)
+        val watchRadiusPx = 12f * btn.resources.displayMetrics.density
+        LensButtonBackground.apply(btn, cornerRadiusPx = watchRadiusPx)
+        FocusEffectUtil.applyFocusListener(btn, cornerRadiusPx = watchRadiusPx)
         btn.nextFocusUpId = R.id.mainCalendarContainer
         binding.animeRecently.isFocusable = true
         binding.animeRecently.nextFocusUpId = R.id.trendingWatchBtn
@@ -361,6 +364,7 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
         } else {
             synopsis.isVisible = false
         }
+        fitPanelSynopsis(trendingBinding.trendingOverlay, synopsis, floorLines = 3)
     }
 
     private fun addTrendingChip(container: LinearLayout, text: String?) {
@@ -491,24 +495,26 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
                 val pos = lm.getPosition(child)
                 if (pos == RecyclerView.NO_POSITION) return
                 val cardW = child.width
-                val stripW = overlay.width - cardW / 4
-                if (cardW <= 0 || stripW <= 0) return
+                if (cardW <= 0) return
                 val progress = (-child.left).toFloat() / cardW
                 val real = pos % media.size
                 val target = if (progress < 0.5f) real else (real + 1) % media.size
                 if (target != lastTarget) {
                     lastTarget = target
                     updateTrendingOverlay(trendingMedia[target])
+                    overlay.translationX = 0f
+                    overlay.animate().cancel()
+                    overlay.alpha = 0f
+                    overlay.animate().alpha(1f).setDuration(160L).start()
                 }
-                val scale = stripW.toFloat() / cardW
-                overlay.translationX =
-                    (if (progress < 0.5f) child.left else child.left + cardW) * scale
             }
 
             override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
                 if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                     lastTarget = -1
                     trendingBinding.trendingOverlay.translationX = 0f
+                    trendingBinding.trendingOverlay.animate().cancel()
+                    trendingBinding.trendingOverlay.alpha = 1f
                     updateTrendingOverlayForCurrent()
                 }
             }

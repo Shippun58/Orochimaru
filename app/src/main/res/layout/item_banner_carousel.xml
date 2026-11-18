@@ -32,6 +32,7 @@
         android:background="@drawable/linear_gradient_bg" />
 
     <LinearLayout
+        android:id="@+id/bannerContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"

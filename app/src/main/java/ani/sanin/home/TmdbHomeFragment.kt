@@ -54,6 +54,7 @@ import ani.sanin.settings.StremioCatalogCard
 import ani.sanin.settings.SettingsAccountActivity
 import ani.sanin.sizeBannerCard
 import ani.sanin.px
+import ani.sanin.ui.LensButtonBackground
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
 import com.lagradost.cloudstream3.HomePageResponse
@@ -263,7 +264,9 @@ class TmdbHomeFragment : Fragment() {
                     else -> false
                 }
             }
-            FocusEffectUtil.applyFocusListener(btn)
+            val watchRadiusPx = 12f * btn.resources.displayMetrics.density
+            LensButtonBackground.apply(btn, cornerRadiusPx = watchRadiusPx)
+            FocusEffectUtil.applyFocusListener(btn, cornerRadiusPx = watchRadiusPx)
         }
     }
 
@@ -1219,6 +1222,7 @@ class TmdbHomeFragment : Fragment() {
         binding.tmdbBannerSynopsis.isVisible = !isPortrait && !largeBanner && synopsis.isNotBlank()
         binding.tmdbBannerSideSynopsis.text = synopsis
         binding.tmdbBannerSideSynopsis.isVisible = !largeBanner && synopsis.isNotBlank()
+        fitPanelSynopsis(binding.tmdbBannerSide, binding.tmdbBannerSideSynopsis, floorLines = 2)
         val genreText = when (item) {
             is BannerItem.Tmdb -> item.media.genreIds.take(3).mapNotNull { genreNames[it] }.joinToString("  •  ")
             is BannerItem.Plugin -> ""
@@ -1505,6 +1509,7 @@ class TmdbHomeFragment : Fragment() {
             }
             binding.tmdbBannerImage.scaleType = ImageView.ScaleType.CENTER_CROP
             binding.tmdbBannerContent.isVisible = false
+            fitPanelSynopsis(binding.tmdbBannerSide, binding.tmdbBannerSideSynopsis, floorLines = 2)
         } else {
             card.sizeBannerCard()
             val (cardW, cardH) = card.bannerCardSizePx()

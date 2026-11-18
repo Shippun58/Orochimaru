@@ -17,6 +17,7 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.content.res.Resources.getSystem
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -185,6 +186,23 @@ fun isClassicBanner(): Boolean = bannerType() == BANNER_TYPE_CLASSIC
 
 fun isModernBanner(): Boolean = bannerType() == BANNER_TYPE_MODERN
 
+private fun Resources.classicBannerHeightDp(): Float {
+    val dm = displayMetrics
+    val screenHeightDp = dm.heightPixels / dm.density
+    val portrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+    val compact = configuration.smallestScreenWidthDp < 600
+    val vyseHeight = if (portrait && compact) {
+        (screenHeightDp * 0.74f).coerceIn(460f, 700f)
+    } else {
+        (screenHeightDp * 0.90f).coerceAtMost(1200f)
+    }
+    val floor = getDimension(R.dimen.banner_classic_height) / dm.density
+    return vyseHeight.coerceAtLeast(floor)
+}
+
+fun Resources.classicBannerHeightPx(): Int =
+    (classicBannerHeightDp() * displayMetrics.density).toInt()
+
 fun View.bannerCardSizePx(maxHeightFraction: Float = 0.55f): Pair<Int, Int> {
     val dm = resources.displayMetrics
     val density = dm.density
@@ -198,7 +216,7 @@ fun View.bannerCardSizePx(maxHeightFraction: Float = 0.55f): Pair<Int, Int> {
         finalW = screenW
     } else if (isClassicBanner()) {
 
-        finalH = resources.getDimension(R.dimen.banner_classic_height) / density
+        finalH = resources.classicBannerHeightDp()
         finalW = screenW
     } else {
         val maxH = (screenH - statusBarHeight / density) * maxHeightFraction

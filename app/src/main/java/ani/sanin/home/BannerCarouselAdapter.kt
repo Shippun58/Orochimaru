@@ -2,6 +2,7 @@ package ani.sanin.home
 
 import android.graphics.drawable.Drawable
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,7 +17,9 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.BANNER_TYPE_MODERN
+import ani.sanin.ui.LensButtonBackground
 import ani.sanin.util.BANNER_MAX_WIDTH
+import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.bannerLoadOptions
 import ani.sanin.util.bindClassicChips
 import ani.sanin.util.currentBannerType
@@ -74,7 +77,46 @@ class BannerCarouselAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(layoutRes, parent, false)
-        return ViewHolder(view)
+        return ViewHolder(view).also(::styleWatchButton)
+    }
+
+    private fun styleWatchButton(holder: ViewHolder) {
+        val density = holder.itemView.resources.displayMetrics.density
+        val radiusPx = when (layoutRes) {
+            R.layout.item_banner_classic -> 18f * density
+            R.layout.item_banner_modern -> 17f * density
+            R.layout.item_banner_carousel -> 12f * density
+            else -> 12f * density
+        }
+        LensButtonBackground.apply(holder.playBtn, cornerRadiusPx = radiusPx)
+        FocusEffectUtil.applyFocusListener(holder.playBtn, cornerRadiusPx = radiusPx)
+        holder.playBtn.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    val rv = holder.itemView.parent as? RecyclerView
+                        ?: return@setOnKeyListener false
+                    val lm = rv.layoutManager as? LinearLayoutManager
+                        ?: return@setOnKeyListener false
+                    val pos = lm.findFirstVisibleItemPosition()
+                    if (pos == RecyclerView.NO_POSITION) return@setOnKeyListener false
+                    val forward = keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                    val target = pos + if (forward) 1 else -1
+                    rv.smoothScrollToPosition(target)
+                    rv.postDelayed({
+                        val newPos = (rv.layoutManager as? LinearLayoutManager)
+                            ?.findFirstVisibleItemPosition() ?: return@postDelayed
+                        if (newPos == RecyclerView.NO_POSITION) return@postDelayed
+                        (rv.layoutManager as? LinearLayoutManager)
+                            ?.findViewByPosition(newPos)
+                            ?.findViewById<View>(R.id.bannerPlayBtn)
+                            ?.requestFocus()
+                    }, 320L)
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -322,6 +364,7 @@ class BannerCarouselAdapter(
         val density = ctx.resources.displayMetrics.density
         applyModernMetrics(holder.itemView, holder.description)
         applyModernContentWidth(holder.itemView, holder.modernContent)
+        fitModernSynopsis(holder.itemView, holder.modernContent, holder.description)
 
         val imageUrl = backdropUrls[media.id]?.takeIf { it.isNotBlank() }
             ?: media.banner?.takeIf { it.isNotBlank() }
@@ -530,6 +573,66 @@ internal fun applyModernContentWidth(root: View, content: View?) {
         }
     }
     if (root.width > 0) apply() else root.post { apply() }
+}
+
+internal fun fitPanelSynopsis(
+    panel: View,
+    synopsis: TextView,
+    floorLines: Int,
+    reservedGapDp: Int = 50,
+    reservedGapCount: Int = 3,
+    capLines: Int = 20,
+) {
+    panel.post {
+        if (!synopsis.isVisible || panel.height <= 0) return@post
+        val res = panel.resources
+        val density = res.displayMetrics.density
+        var fixed = panel.paddingTop + panel.paddingBottom
+        (synopsis.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+            fixed += it.topMargin + it.bottomMargin
+        }
+        for (i in 0 until panel.childCount) {
+            val child = panel.getChildAt(i)
+            if (child === synopsis || child.visibility == View.GONE) continue
+            if (child is android.widget.Space) continue
+            val lp = child.layoutParams as? ViewGroup.MarginLayoutParams
+            if (lp != null && lp.height == 0) continue
+            fixed += child.height + (lp?.topMargin ?: 0) + (lp?.bottomMargin ?: 0)
+        }
+        val perLine = synopsis.paint.fontSpacing + synopsis.lineSpacingExtra
+        if (perLine <= 0f) return@post
+        val reserve = (reservedGapDp * density).toInt() * reservedGapCount
+        val lines = ((panel.height - fixed - reserve) / perLine).toInt()
+            .coerceIn(floorLines, capLines)
+        if (synopsis.maxLines != lines) synopsis.maxLines = lines
+        if (synopsis.maxHeight != Int.MAX_VALUE) synopsis.maxHeight = Int.MAX_VALUE
+    }
+}
+
+internal fun fitModernSynopsis(root: View, content: View?, description: TextView?) {
+    content ?: return
+    description ?: return
+    root.post {
+        if (root.height <= 0) return@post
+        val res = root.resources
+        val floor = res.getInteger(R.integer.banner_modern_synopsis_lines)
+        val breathing = (24 * res.displayMetrics.density).toInt()
+        var used = 0
+        for (i in 0 until content.childCount) {
+            val child = content.getChildAt(i)
+            if (child.visibility == View.GONE) continue
+            val lp = child.layoutParams as? ViewGroup.MarginLayoutParams
+            used += (lp?.topMargin ?: 0) + (lp?.bottomMargin ?: 0)
+            if (child !== description) used += child.height
+        }
+        val perLine = description.paint.fontSpacing + description.lineSpacingExtra
+        val fit = if (perLine > 0f) {
+            ((root.height - used - breathing) / perLine).toInt()
+        } else {
+            floor
+        }
+        description.maxLines = fit.coerceIn(floor, 30)
+    }
 }
 
 private val MODERN_META_MUTED = 0xCCFFFFFF.toInt()

@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.BANNER_TYPE_MODERN
+import ani.sanin.ui.LensButtonBackground
 import ani.sanin.util.BANNER_MAX_WIDTH
 import ani.sanin.util.bannerLoadOptions
 import ani.sanin.util.bindClassicChips
@@ -66,7 +67,17 @@ class TmdbBannerCarouselAdapter(
                 parent,
                 false,
             )
-        return ViewHolder(view)
+        return ViewHolder(view).also(::styleWatchButton)
+    }
+
+    private fun styleWatchButton(holder: ViewHolder) {
+        val density = holder.itemView.resources.displayMetrics.density
+        val radiusPx = when (layoutForBannerType(modernMode)) {
+            R.layout.item_banner_classic -> 18f * density
+            R.layout.item_banner_modern -> 17f * density
+            else -> 12f * density
+        }
+        LensButtonBackground.apply(holder.playBtn, cornerRadiusPx = radiusPx)
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -335,6 +346,7 @@ class TmdbBannerCarouselAdapter(
         val density = ctx.resources.displayMetrics.density
         applyModernMetrics(holder.itemView, holder.description)
         applyModernContentWidth(holder.itemView, holder.modernContent)
+        fitModernSynopsis(holder.itemView, holder.modernContent, holder.description)
         val detail = detailsByIndex[pos]
 
         val imageUrl = item.bannerUrl

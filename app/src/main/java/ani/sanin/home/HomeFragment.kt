@@ -76,6 +76,7 @@ import ani.sanin.openLinkInBrowser
 import ani.sanin.profile.ProfileActivity
 import ani.sanin.px
 import ani.sanin.setSafeOnClickListener
+import ani.sanin.ui.LensButtonBackground
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.setSlideIn
 import ani.sanin.setSlideUp
@@ -86,6 +87,7 @@ import ani.sanin.settings.saving.PrefManager.asLiveBool
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.snackString
 import ani.sanin.bannerCardSizePx
+import ani.sanin.classicBannerHeightPx
 import ani.sanin.sizeBannerCard
 import ani.sanin.statusBarHeight
 import ani.sanin.tryWithSuspend
@@ -1080,24 +1082,26 @@ class HomeFragment : Fragment() {
                                 val pos = lm.getPosition(child)
                                 if (pos == RecyclerView.NO_POSITION || homeBannerItems.isEmpty()) return
                                 val cardW = child.width
-                                val stripW = overlay.width - cardW / 4
-                                if (cardW <= 0 || stripW <= 0) return
+                                if (cardW <= 0) return
                                 val progress = (-child.left).toFloat() / cardW
                                 val real = pos % homeBannerItems.size
                                 val target = if (progress < 0.5f) real else (real + 1) % homeBannerItems.size
                                 if (target != lastTarget) {
                                     lastTarget = target
                                     updateHomeBannerOverlay(homeBannerItems[target])
+                                    overlay.translationX = 0f
+                                    overlay.animate().cancel()
+                                    overlay.alpha = 0f
+                                    overlay.animate().alpha(1f).setDuration(160L).start()
                                 }
-                                val scale = stripW.toFloat() / cardW
-                                overlay.translationX =
-                                    (if (progress < 0.5f) child.left else child.left + cardW) * scale
                             }
 
                             override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
                                 if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                                     lastTarget = -1
                                     binding.homeBannerOverlay.translationX = 0f
+                                    binding.homeBannerOverlay.animate().cancel()
+                                    binding.homeBannerOverlay.alpha = 1f
                                     updateHomeBannerOverlayForCurrent()
                                 }
                             }
@@ -1449,7 +1453,10 @@ class HomeFragment : Fragment() {
                 else -> false
             }
         }
-        FocusEffectUtil.applyFocusListener(btn)
+        val density = btn.resources.displayMetrics.density
+        val watchRadiusPx = 12f * density
+        LensButtonBackground.apply(btn, cornerRadiusPx = watchRadiusPx)
+        FocusEffectUtil.applyFocusListener(btn, cornerRadiusPx = watchRadiusPx)
         btn.nextFocusUpId = R.id.mainCalendarContainer
         btn.nextFocusDownId = homeBannerDownTarget()
     }
@@ -1631,6 +1638,8 @@ class HomeFragment : Fragment() {
 
         overlay.isVisible = !fullBleed
         if (!fullBleed) {
+            overlay.animate().cancel()
+            overlay.alpha = 1f
             overlay.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 width = stripW + cardW / 4
                 height = cardH
@@ -1638,6 +1647,7 @@ class HomeFragment : Fragment() {
             overlay.setPadding(sidePad, 0, sidePad, 0)
             b.homeBannerOverlayLogo.maxWidth = (stripW - sidePad * 2).coerceAtLeast(1)
             b.homeBannerOverlayLogo.maxHeight = (cardH * 0.30f).toInt()
+            b.homeBannerOverlaySynopsis.post { fitHomeBannerSynopsis() }
             b.homeBannerOverlaySynopsis.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 width = (stripW - sidePad * 2 + cardW / 4).coerceAtLeast(1)
             }
@@ -1721,9 +1731,15 @@ class HomeFragment : Fragment() {
         } else if (!desc.isNullOrBlank()) {
             synopsis.text = desc
             synopsis.isVisible = true
+            synopsis.post { fitHomeBannerSynopsis() }
         } else {
             synopsis.isVisible = false
         }
+    }
+
+    private fun fitHomeBannerSynopsis() {
+        val b = _binding ?: return
+        fitPanelSynopsis(b.homeBannerOverlay, b.homeBannerOverlaySynopsis, floorLines = 2)
     }
 
     private fun addHomeOverlayChip(container: LinearLayout, text: String?) {
@@ -1833,7 +1849,7 @@ class HomeFragment : Fragment() {
             AnimeCatalogueHome.displayMedia(sourceId, it)
         }
         if (bannerItems.isNotEmpty()) {
-            val banner = RecyclerView(ctx).apply {
+            val banner = BannerCrossfadeRecyclerView(ctx).apply {
                 layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
                 isNestedScrollingEnabled = false
                 overScrollMode = View.OVER_SCROLL_NEVER
@@ -2064,7 +2080,7 @@ class HomeFragment : Fragment() {
 
     private fun catalogueBannerHeight(): Int = when {
         isModernBanner() -> resources.getDimensionPixelSize(R.dimen.banner_modern_height)
-        isClassicBanner() -> resources.getDimensionPixelSize(R.dimen.banner_classic_height)
+        isClassicBanner() -> resources.classicBannerHeightPx()
         else -> (resources.displayMetrics.widthPixels * 9f / 16f).toInt()
     }
 

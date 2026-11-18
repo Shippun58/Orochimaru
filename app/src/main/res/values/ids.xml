@@ -10,4 +10,6 @@
     <item name="tmdbRowUpcoming" type="id" />
 
     <item name="section_row_tag" type="id" />
+    <item name="banner_morph_content" type="id" />
+    <item name="banner_morph_chips" type="id" />
 </resources>
