@@ -1022,7 +1022,6 @@ class HomeFragment : Fragment() {
     private var bannerAutoScrollHandler: Handler? = null
     private var bannerAutoScrollRunnable: Runnable? = null
     private val bannerOverlayDebounceHandler = Handler(Looper.getMainLooper())
-    private var bannerOverlayDebounceRunnable: (() -> Unit)? = null
 
     private fun setupBannerCarousel() {
         applyHomeBannerLandscapeMode()
@@ -1091,11 +1090,9 @@ class HomeFragment : Fragment() {
                                 if (target != lastTarget) {
                                     lastTarget = target
                                     bannerOverlayDebounceHandler.removeCallbacksAndMessages(null)
-                                    bannerOverlayDebounceRunnable = {
-                                        updateHomeBannerOverlay(homeBannerItems[target])
-                                    }
                                     bannerOverlayDebounceHandler.postDelayed(
-                                        bannerOverlayDebounceRunnable, 160L
+                                        Runnable { updateHomeBannerOverlay(homeBannerItems[target]) },
+                                        160L
                                     )
                                 }
                             }
