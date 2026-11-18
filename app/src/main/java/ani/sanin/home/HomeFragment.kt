@@ -1021,6 +1021,8 @@ class HomeFragment : Fragment() {
     private val bannerSnapHelper = PagerSnapHelper()
     private var bannerAutoScrollHandler: Handler? = null
     private var bannerAutoScrollRunnable: Runnable? = null
+    private val bannerOverlayDebounceHandler = Handler(Looper.getMainLooper())
+    private var bannerOverlayDebounceRunnable: (() -> Unit)? = null
 
     private fun setupBannerCarousel() {
         applyHomeBannerLandscapeMode()
@@ -1088,17 +1090,20 @@ class HomeFragment : Fragment() {
                                 val target = if (progress < 0.5f) real else (real + 1) % homeBannerItems.size
                                 if (target != lastTarget) {
                                     lastTarget = target
-                                    updateHomeBannerOverlay(homeBannerItems[target])
-                                    overlay.translationX = 0f
-                                    overlay.animate().cancel()
-                                    overlay.alpha = 0f
-                                    overlay.animate().alpha(1f).setDuration(160L).start()
+                                    bannerOverlayDebounceHandler.removeCallbacksAndMessages(null)
+                                    bannerOverlayDebounceRunnable = {
+                                        updateHomeBannerOverlay(homeBannerItems[target])
+                                    }
+                                    bannerOverlayDebounceHandler.postDelayed(
+                                        bannerOverlayDebounceRunnable, 160L
+                                    )
                                 }
                             }
 
                             override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
                                 if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                                     lastTarget = -1
+                                    bannerOverlayDebounceHandler.removeCallbacksAndMessages(null)
                                     binding.homeBannerOverlay.translationX = 0f
                                     binding.homeBannerOverlay.animate().cancel()
                                     binding.homeBannerOverlay.alpha = 1f
@@ -2175,6 +2180,7 @@ class HomeFragment : Fragment() {
         loggedOutRowRecyclers.clear()
         loggedOutItemFocusListeners.clear()
         bannerAutoScrollHandler?.removeCallbacksAndMessages(null)
+        bannerOverlayDebounceHandler.removeCallbacksAndMessages(null)
         bannerSnapHelper.attachToRecyclerView(null)
         homeLoading = false
         _binding = null
