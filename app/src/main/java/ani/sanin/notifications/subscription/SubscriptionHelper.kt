@@ -161,6 +161,40 @@ class SubscriptionHelper {
         }
 
         @Suppress("UNCHECKED_CAST")
+        fun importSubscription(
+            id: Int,
+            name: String,
+            image: String?,
+            banner: String? = null,
+            isAnime: Boolean = true,
+            isAdult: Boolean = false
+        ): Boolean {
+            val data = PrefManager.getNullableCustomVal(
+                SUBSCRIPTIONS,
+                null,
+                Map::class.java
+            ) as? MutableMap<Int, SubscribeMedia>
+                ?: mutableMapOf()
+            if (data.containsKey(id)) return false
+            data[id] = SubscribeMedia(isAnime, isAdult, id, name, image, banner)
+            PrefManager.setCustomVal(SUBSCRIPTIONS, data)
+            val current = PrefManager.getNullableCustomVal(
+                "Selected-$id", null, Selected::class.java
+            )
+            if (current == null) {
+                saveSelected(
+                    id,
+                    Selected().apply {
+                        sourceIndex = 0
+                        preferDub = PrefManager.getVal(PrefName.PreferDub)
+                        latest = 0f
+                    }
+                )
+            }
+            return true
+        }
+
+        @Suppress("UNCHECKED_CAST")
         fun saveSubscription(media: Media, subscribed: Boolean) {
             val data = PrefManager.getNullableCustomVal(
                 SUBSCRIPTIONS,

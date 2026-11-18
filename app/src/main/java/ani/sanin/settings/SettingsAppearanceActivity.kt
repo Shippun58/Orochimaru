@@ -299,21 +299,7 @@ class SettingsAppearanceActivity : AppCompatActivity() {
             ),
 
             SubscreenBuilder.Section(
-                "Side Rail & Focus", R.drawable.ic_set_nav,
-                entries = listOf(
-                    SubscreenBuilder.Entry(
-                        title = "Focus Style", desc = "Visual ring on focused items",
-                        choice = SubscreenBuilder.Choice(
-                            title = "Focus Style",
-                            options = arrayOf("Glow", "Breathing", "Pulse", "Shaking", "None"),
-                            currentIndex = PrefManager.getVal<Int>(PrefName.FocusEffect),
-                        ) { idx -> PrefManager.setVal(PrefName.FocusEffect, idx) },
-                    ),
-                ),
-            ),
-
-            SubscreenBuilder.Section(
-                "Navigation Pills", R.drawable.ic_set_nav,
+                "Navigation Pills", R.drawable.ic_nav_pills_24,
                 entries = listOf(
                     SubscreenBuilder.Entry(
                         title = "Pill Height", desc = "Button height",

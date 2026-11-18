@@ -106,6 +106,7 @@ class AnimeWatchFragment : Fragment() {
 
     var continueEp: Boolean = false
     var loaded = false
+    private var sourceMemoryApplied = false
     private var loadEpisodesJob: kotlinx.coroutines.Job? = null
 
     override fun onCreateView(
@@ -234,10 +235,14 @@ class AnimeWatchFragment : Fragment() {
                 }
                 FocusEffectUtil.applyFocusListener(binding.mediaWatchAddToList)
 
-                if (!PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)) {
-                    if (media.selected != null) {
-                        media.selected!!.sourceIndex = 0
-                        media.selected!!.server = null
+                if (!sourceMemoryApplied) {
+                    sourceMemoryApplied = true
+                    if (!PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)) {
+                        if (media.selected != null) {
+                            media.selected!!.sourceIndex = 0
+                            media.selected!!.server = null
+                            model.saveSelected(media.id, media.selected!!)
+                        }
                     }
                 }
                 if (media.format == "LOCAL") {
@@ -257,6 +262,12 @@ class AnimeWatchFragment : Fragment() {
 
                 if (!loaded) {
                     model.watchSources = if (media.isAdult) HAnimeSources else AnimeSources
+                    val lastSourceIndex = model.watchSources!!.list.lastIndex
+                    if (media.selected!!.sourceIndex !in 0..lastSourceIndex) {
+                        media.selected!!.sourceIndex = 0
+                        media.selected!!.server = null
+                        model.saveSelected(media.id, media.selected!!)
+                    }
                     Logger.log(
                         "Watch: initialized sources=${model.watchSources!!.names.size} " +
                             "selected='${model.watchSources!!.list.getOrNull(media.selected!!.sourceIndex)?.name}' " +
@@ -483,6 +494,9 @@ class AnimeWatchFragment : Fragment() {
         model.saveSelected(media.id, selected)
         media.selected = selected
         val parser = model.watchSources?.get(i)!!
+        if (PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)) {
+            PrefManager.setVal(PrefName.LastAnimeSource, parser.name)
+        }
         Logger.log(
             "Watch: source change '${model.watchSources?.get(oldIdx)?.name ?: "?"}'($oldIdx) -> '${parser.name}'($i)"
         )

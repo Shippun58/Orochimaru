@@ -9,6 +9,8 @@ import ani.sanin.R
 import ani.sanin.cloudstream.TmdbDetailsActivity
 import ani.sanin.cloudstream.TmdbDetailsActivity.Companion.ARG_MEDIA_ID
 import ani.sanin.cloudstream.TmdbDetailsActivity.Companion.ARG_MEDIA_TYPE
+import ani.sanin.settings.saving.PrefManager
+import ani.sanin.settings.saving.PrefName
 import ani.sanin.util.Logger
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -18,11 +20,16 @@ class OrochimaruMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+        PrefManager.init(applicationContext)
         PushSync.sync(applicationContext)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
+        PrefManager.init(applicationContext)
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled) ||
+            !PrefManager.getVal<Boolean>(PrefName.PushNotifications)
+        ) return
         val data = message.data ?: return
         if (data["type"] != "airing") return
 

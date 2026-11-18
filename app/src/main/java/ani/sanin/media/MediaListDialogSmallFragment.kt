@@ -240,19 +240,21 @@ class MediaListDialogSmallFragment : DialogFragment() {
                     PrefManager.setCustomVal("removeList", removeList.minus(media.id))
                 }
                 Refresh.all()
-                if (PrefManager.getVal<Boolean>(PrefName.ListStatusNotification) && media.userStatus != newStatus) {
-                    val intent = Intent(requireActivity(), NotificationPopupActivity::class.java).apply {
-                        putExtra("title", statusNotificationPhrase(media, newStatus))
-                        putExtra("text", getString(R.string.list_updated))
-                        putExtra("coverUrl", media.cover)
+                if (PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) {
+                    if (PrefManager.getVal<Boolean>(PrefName.ListStatusNotification) && media.userStatus != newStatus) {
+                        val intent = Intent(requireActivity(), NotificationPopupActivity::class.java).apply {
+                            putExtra("title", statusNotificationPhrase(media, newStatus))
+                            putExtra("text", getString(R.string.list_updated))
+                            putExtra("coverUrl", media.cover)
+                        }
+                        requireActivity().startActivity(intent)
+                    } else {
+                        val intent = Intent(requireActivity(), NotificationPopupActivity::class.java).apply {
+                            putExtra("title", getString(R.string.list_updated))
+                            putExtra("text", "")
+                        }
+                        requireActivity().startActivity(intent)
                     }
-                    requireActivity().startActivity(intent)
-                } else {
-                    val intent = Intent(requireActivity(), NotificationPopupActivity::class.java).apply {
-                        putExtra("title", getString(R.string.list_updated))
-                        putExtra("text", "")
-                    }
-                    requireActivity().startActivity(intent)
                 }
                 dismissAllowingStateLoss()
             }

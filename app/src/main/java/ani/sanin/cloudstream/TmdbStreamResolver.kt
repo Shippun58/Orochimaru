@@ -221,7 +221,8 @@ object TmdbStreamResolver {
         season: Int?,
         episodeNumber: Int?
     ): Pair<CsInstalledSource?, StreamResult> {
-        for (source in sources) {
+        val candidates = if (PrefManager.getVal<Boolean>(PrefName.SearchSources)) sources else sources.take(1)
+        for (source in candidates) {
             val result = resolveStreams(context, source, d, season, episodeNumber)
             if (result is StreamResult.Success) return source to result
         }

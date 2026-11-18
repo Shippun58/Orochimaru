@@ -301,7 +301,6 @@
     <string name="extensions">Extensions</string>
     <string name="extension_updates_available">Extension updates available</string>
     <string name="player_settings">Player Settings</string>
-    <string name="recentlyListOnly">Only show my content in \"Recently Updated\"</string>
     <string name="download_manager_select">Download Manager</string>
     <string name="downloadInSd">Download in SD card</string>
     <string name="noSdFound">No SD card was Found.</string>
@@ -510,6 +509,9 @@
     <string name="filter">Filter</string>
     <string name="year">Year</string>
     <string name="apply">Apply</string>
+    <string name="exit">Exit</string>
+    <string name="exit_player_title">Exit playback?</string>
+    <string name="exit_player_message">Your progress is saved. You can resume anytime.</string>
     <string name="cancel">Cancel</string>
     <string name="edit">Edit</string>
     <string name="publish">Publish</string>
@@ -1250,7 +1252,6 @@ Non quae tempore quo provident laudantium qui illo dolor vel quia dolor et exerc
     <string name="change_download_location_desc">Change the location where all the downloaded stuff goes</string>
     <string name="always_continue_content_desc">Continue where you left off</string>
     <string name="search_source_list_desc">Auto-select the next server if the previous server doesn\'t have the media</string>
-    <string name="recentlyListOnly_desc">Show only your list items in the recent tab</string>
     <string name="adult_only_content_desc">Show only adult content in the explore page</string>
     <string name="anime_add_repository_desc">Add Anime Extensions from various sources</string>
     <string name="manga_add_repository_desc">Add Manga Extensions from various sources</string>

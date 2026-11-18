@@ -79,6 +79,7 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
         const val ARG_IMDB_ID = "imdbId"
         const val ARG_SOURCE_ADDON = "sourceAddon"
         const val ARG_TITLE = "title"
+        const val ARG_FROM_CONTINUE = "fromContinue"
         private const val TAG_WATCH = "tmdbWatch"
 
         const val TAB_INFO = 0
@@ -138,6 +139,10 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
             if (existing != null) {
                 fm.beginTransaction().remove(existing).commitNow()
             }
+            val fromContinue = intent.getBooleanExtra(ARG_FROM_CONTINUE, false)
+            intent.removeExtra(ARG_FROM_CONTINUE)
+            val autoContinue = fromContinue &&
+                PrefManager.getVal<Boolean>(PrefName.ContinueMedia)
             fm.beginTransaction()
                 .add(R.id.tmdbDetailFragmentContainer, TmdbWatchFragment.newInstance(
                     mediaType = mediaType,
@@ -147,6 +152,7 @@ class TmdbDetailsActivity : AppCompatActivity(), TmdbWatchFragment.Host {
                     imdbId = imdbId,
                     sourceAddonUrl = sourceAddonUrl,
                     title = argTitle,
+                    autoContinue = autoContinue,
                 ), TAG_WATCH)
                 .commit()
         } else {

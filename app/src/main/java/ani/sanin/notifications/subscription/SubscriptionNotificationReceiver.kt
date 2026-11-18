@@ -13,6 +13,9 @@ import kotlinx.coroutines.runBlocking
 class SubscriptionNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         Logger.log("SubscriptionNotificationReceiver: onReceive")
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled) ||
+            !PrefManager.getVal<Boolean>(PrefName.EpisodeNotifications)
+        ) return
         runBlocking {
             SubscriptionNotificationTask().execute(context)
         }

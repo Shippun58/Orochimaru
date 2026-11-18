@@ -89,6 +89,7 @@ class TmdbWatchFragment : Fragment() {
         const val ARG_TITLE = "title"
         const val ARG_PLUGIN_SOURCE = "pluginSource"
         const val ARG_PLUGIN_URL = "pluginUrl"
+        const val ARG_AUTO_CONTINUE = "autoContinue"
         private const val EPISODE_CAP = 24
 
         private const val HEADER_ITEM_COUNT = 1
@@ -101,6 +102,7 @@ class TmdbWatchFragment : Fragment() {
             imdbId: String? = null,
             sourceAddonUrl: String? = null,
             title: String? = null,
+            autoContinue: Boolean = false,
         ): TmdbWatchFragment = TmdbWatchFragment().apply {
             arguments = Bundle().apply {
                 putString(ARG_MEDIA_TYPE, mediaType)
@@ -110,6 +112,7 @@ class TmdbWatchFragment : Fragment() {
                 imdbId?.let { putString(ARG_IMDB_ID, it) }
                 sourceAddonUrl?.let { putString(ARG_SOURCE_ADDON, it) }
                 title?.let { putString(ARG_TITLE, it) }
+                if (autoContinue) putBoolean(ARG_AUTO_CONTINUE, true)
             }
         }
     }
@@ -174,6 +177,7 @@ class TmdbWatchFragment : Fragment() {
     private var extrasSheetRows: List<ExtrasItem> = emptyList()
     private var extrasJob: Job? = null
     private var gridSpan = 4
+    private var autoContinuePending = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -194,6 +198,8 @@ class TmdbWatchFragment : Fragment() {
         imdbId = arguments?.getString(ARG_IMDB_ID)?.takeIf { it.isNotBlank() }
         sourceAddonUrl = arguments?.getString(ARG_SOURCE_ADDON)?.takeIf { it.isNotBlank() }
         argTitle = arguments?.getString(ARG_TITLE)?.takeIf { it.isNotBlank() }
+        autoContinuePending = savedInstanceState == null &&
+            (arguments?.getBoolean(ARG_AUTO_CONTINUE) ?: false)
 
         if (pluginUrl != null) mediaId = pluginUrl.hashCode()
         episodeStyle = (PrefManager.getNullableCustomVal("tmdb_style", 2, Int::class.java)
@@ -397,7 +403,7 @@ class TmdbWatchFragment : Fragment() {
             updateContinueCard()
             loadSimklWatched()
 
-            autoSearchOnOpen()
+            autoSearchOnOpen(isInitialOpen = true)
         }
     }
 
@@ -518,7 +524,7 @@ class TmdbWatchFragment : Fragment() {
         buildAdapter()
         updateContinueCard()
         loadSimklWatched()
-        autoSearchOnOpen()
+        autoSearchOnOpen(isInitialOpen = true)
     }
 
     private fun buildPluginSeasons(load: TvSeriesLoadResponse): List<TmdbSeason> {
@@ -1091,8 +1097,12 @@ class TmdbWatchFragment : Fragment() {
 
     private fun applyDefaultProvider() {
         if (selectedSourceIndex >= 0 || selectedStremioIndex >= 0) return
-        val savedId = PrefManager.getNullableCustomVal("tmdb_source_$mediaId", null, String::class.java)
-        if (!savedId.isNullOrEmpty() && applyProviderId(savedId)) return
+        if (PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)) {
+            val savedId = PrefManager.getNullableCustomVal("tmdb_source_$mediaId", null, String::class.java)
+            if (!savedId.isNullOrEmpty() && applyProviderId(savedId)) return
+            val lastId = PrefManager.getVal<String>(PrefName.LastTmdbSource)
+            if (lastId.isNotEmpty() && applyProviderId(lastId)) return
+        }
         val preferredId = pluginSourceId
             ?: PrefManager.getVal<String>(PrefName.ContentSource).takeIf { it != "simkl" && it != "tmdb" }
         if (preferredId != null && applyProviderId(preferredId)) return
@@ -1471,10 +1481,20 @@ class TmdbWatchFragment : Fragment() {
         startActivity(intent)
     }
 
-    private fun autoSearchOnOpen() {
+    private fun consumeAutoContinue(): Boolean {
+        val pending = autoContinuePending
+        autoContinuePending = false
+        return pending
+    }
+
+    private fun autoSearchOnOpen(isInitialOpen: Boolean = false) {
         autoSearchJob?.cancel()
         if (isResolving || extrasSheetActive) return
         val d = detail ?: return
+        if (isInitialOpen && !consumeAutoContinue()) {
+            setSourceStatus(getString(R.string.tmdb_watch_sources))
+            return
+        }
         selectedStremio?.let { addon ->
             if (addon.extrasOnly == true) {
                 startExtrasSheet(addon)
@@ -1788,9 +1808,12 @@ class TmdbWatchFragment : Fragment() {
     }
 
     private fun saveSourcePref() {
+        val remember = PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)
 
         selectedStremio?.let {
-            PrefManager.setCustomVal("tmdb_source_$mediaId", StremioAddonManager.sourceId(it))
+            val id = StremioAddonManager.sourceId(it)
+            PrefManager.setCustomVal("tmdb_source_$mediaId", id)
+            if (remember) PrefManager.setVal(PrefName.LastTmdbSource, id)
             return
         }
         if (selectedSourceIndex == -1) {
@@ -1799,6 +1822,7 @@ class TmdbWatchFragment : Fragment() {
         }
         val source = sources.getOrNull(selectedSourceIndex) ?: return
         PrefManager.setCustomVal("tmdb_source_$mediaId", source.id)
+        if (remember) PrefManager.setVal(PrefName.LastTmdbSource, source.id)
     }
 
     private fun showStremioInfo(addon: StremioAddon) {

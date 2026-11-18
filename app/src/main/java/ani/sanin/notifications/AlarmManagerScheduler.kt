@@ -15,6 +15,10 @@ import java.util.concurrent.TimeUnit
 
 class AlarmManagerScheduler(private val context: Context) : TaskScheduler {
     override fun scheduleRepeatingTask(taskType: TaskType, interval: Long) {
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) {
+            cancelTask(taskType)
+            return
+        }
         if (TimeUnit.MINUTES.toMillis(interval) < TimeUnit.MINUTES.toMillis(15)) {
             cancelTask(taskType)
             return

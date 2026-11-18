@@ -12,6 +12,10 @@ class AnilistNotificationWorker(appContext: Context, workerParams: WorkerParamet
 
     override suspend fun doWork(): Result {
         Logger.log("AnilistNotificationWorker: doWork")
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) {
+            Logger.log("AnilistNotificationWorker: master switch off")
+            return Result.success()
+        }
         if (!PrefManager.getVal<Boolean>(PrefName.AnilistNotifications)) {
             Logger.log("AnilistNotificationWorker: disabled by pref")
             return Result.success()

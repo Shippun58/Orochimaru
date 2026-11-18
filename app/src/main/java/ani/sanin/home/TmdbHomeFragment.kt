@@ -993,6 +993,7 @@ class TmdbHomeFragment : Fragment() {
                             .putExtra(TmdbDetailsActivity.ARG_MEDIA_TYPE, mediaType)
                             .putExtra(TmdbDetailsActivity.ARG_MEDIA_ID, tmdbId)
                             .putExtra(TmdbDetailsActivity.ARG_OPEN_TAB, 1)
+                            .putExtra(TmdbDetailsActivity.ARG_FROM_CONTINUE, true)
                     )
                 },
                 simklMoreAdapter(items, "Continue Watching")

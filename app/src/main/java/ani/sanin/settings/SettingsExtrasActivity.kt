@@ -65,7 +65,7 @@ class SettingsExtrasActivity : AppCompatActivity() {
             SubscreenBuilder.Section("Notifications", R.drawable.ic_set_overlay, listOf(
                 SubscreenBuilder.Entry(
                     title = "Alert Settings",
-                    desc = "Configure what you get notified about",
+                    desc = "Alerts, subscriptions, push & popups",
                     iconRes = R.drawable.ic_set_overlay,
                     onClick = { startActivity(Intent(this, SettingsNotificationActivity::class.java)) },
                 ),

@@ -69,7 +69,9 @@ fun updateProgress(media: Media, number: String) {
                         a, null,
                         if (media.userStatus == "REPEATING") media.userStatus!! else "CURRENT"
                     )
-                    if (PrefManager.getVal<Boolean>(PrefName.ListStatusNotification)) {
+                    if (PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled) &&
+                        PrefManager.getVal<Boolean>(PrefName.ListStatusNotification)
+                    ) {
                         val newStatus = if (media.userStatus == "REPEATING") "REPEATING" else "CURRENT"
                         App.currentActivity()?.let { activity ->
                             val intent = Intent(activity, NotificationPopupActivity::class.java).apply {

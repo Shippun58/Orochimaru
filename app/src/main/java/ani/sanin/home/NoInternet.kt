@@ -66,7 +66,7 @@ class NoInternet : AppCompatActivity() {
 
         binding.root.doOnAttach {
             initActivity(this)
-            selectedOption = minOf(PrefManager.getVal<Int>(PrefName.DefaultStartUpTab), 1)
+            selectedOption = PrefManager.getVal<Int>(PrefName.DefaultStartUpTab).coerceIn(0, 3)
 
             binding.includedNavbar.navbarContainer.updateLayoutParams<ViewGroup.MarginLayoutParams> {
                 bottomMargin = navBarHeight
@@ -98,7 +98,7 @@ class NoInternet : AppCompatActivity() {
     private class ViewPagerAdapter(fragmentManager: FragmentManager, lifecycle: Lifecycle) :
         FragmentStateAdapter(fragmentManager, lifecycle) {
 
-        override fun getItemCount(): Int = 3
+        override fun getItemCount(): Int = 4
 
         override fun createFragment(position: Int): Fragment {
             return when (position) {

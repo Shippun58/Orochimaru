@@ -13,6 +13,9 @@ import kotlinx.coroutines.runBlocking
 class AnilistNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         Logger.log("AnilistNotificationReceiver: onReceive")
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled) ||
+            !PrefManager.getVal<Boolean>(PrefName.AnilistNotifications)
+        ) return
         runBlocking {
             AnilistNotificationTask().execute(context)
         }

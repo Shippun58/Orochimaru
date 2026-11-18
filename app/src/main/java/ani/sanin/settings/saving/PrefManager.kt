@@ -41,6 +41,24 @@ object PrefManager {
             context.getSharedPreferences(Location.Protected.location, Context.MODE_PRIVATE)
         Compat.importOldPrefs(context)
         migrateRenamedFloatPrefs()
+        migrateProgressUpdateMode()
+    }
+
+    private fun migrateProgressUpdateMode() {
+        val general = getPrefLocation(Location.General)
+        if (general.contains(PrefName.ProgressUpdateMode.name)) return
+        val auto = general.getBoolean("AutoTrackNewShows", false)
+        val ask = getPrefLocation(Location.Player).getBoolean("AskIndividualPlayer", true)
+        val mode = when {
+            auto -> 0
+            ask -> 1
+            else -> 0
+        }
+        general.edit()
+            .putInt(PrefName.ProgressUpdateMode.name, mode)
+            .remove("AutoTrackNewShows")
+            .apply()
+        getPrefLocation(Location.Player).edit().remove("AskIndividualPlayer").apply()
     }
 
     private fun migrateRenamedFloatPrefs() {

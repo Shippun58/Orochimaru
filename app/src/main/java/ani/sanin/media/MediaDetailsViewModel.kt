@@ -26,6 +26,7 @@ import ani.sanin.others.Jikan
 import ani.sanin.others.Kitsu
 import ani.sanin.others.TheIntroDB
 import ani.sanin.parsers.AnimeSources
+import ani.sanin.parsers.HAnimeSources
 import ani.sanin.parsers.ShowResponse
 import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
@@ -58,6 +59,12 @@ class MediaDetailsViewModel : ViewModel() {
             PrefManager.getNullableCustomVal("Selected-${media.id}", null, Selected::class.java)
                 ?: Selected().let {
                     it.sourceIndex = 0
+                    if (PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)) {
+                        val lastName = PrefManager.getVal<String>(PrefName.LastAnimeSource)
+                        val sources = if (media.isAdult) HAnimeSources else AnimeSources
+                        val idx = sources.list.indexOfFirst { parser -> parser.name == lastName }
+                        if (idx >= 0) it.sourceIndex = idx
+                    }
                     it.preferDub = PrefManager.getVal(PrefName.PreferDub)
                     saveSelected(media.id, it)
                     it

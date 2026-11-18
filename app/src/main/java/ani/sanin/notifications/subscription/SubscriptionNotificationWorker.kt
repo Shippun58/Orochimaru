@@ -12,6 +12,10 @@ class SubscriptionNotificationWorker(appContext: Context, workerParams: WorkerPa
 
     override suspend fun doWork(): Result {
         Logger.log("SubscriptionNotificationWorker: doWork")
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) {
+            Logger.log("SubscriptionNotificationWorker: master switch off")
+            return Result.success()
+        }
         if (!PrefManager.getVal<Boolean>(PrefName.EpisodeNotifications)) {
             Logger.log("SubscriptionNotificationWorker: disabled by pref")
             return Result.success()

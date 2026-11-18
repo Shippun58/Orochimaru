@@ -3,6 +3,8 @@ package ani.sanin.notifications.comment
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import ani.sanin.settings.saving.PrefManager
+import ani.sanin.settings.saving.PrefName
 import ani.sanin.util.Logger
 import eu.kanade.tachiyomi.data.notification.Notifications
 
@@ -10,6 +12,10 @@ class CommentNotificationWorker(appContext: Context, workerParams: WorkerParamet
     CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
         Logger.log("CommentNotificationWorker: doWork")
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) {
+            Logger.log("CommentNotificationWorker: master switch off")
+            return Result.success()
+        }
         if (System.currentTimeMillis() - lastCheck < 60000) {
             Logger.log("CommentNotificationWorker: doWork skipped")
             return Result.success()

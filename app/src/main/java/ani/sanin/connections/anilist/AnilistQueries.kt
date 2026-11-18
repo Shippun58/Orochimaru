@@ -710,7 +710,8 @@ class AnilistQueries {
         fun processMedia(
             type: String,
             currentMedia: List<MediaList>?,
-            repeatingMedia: List<MediaList>?
+            repeatingMedia: List<MediaList>?,
+            fromContinue: Boolean = false
         ) {
             val subMap = mutableMapOf<Int, Media>()
             val returnArray = arrayListOf<Media>()
@@ -718,7 +719,7 @@ class AnilistQueries {
             (currentMedia ?: emptyList()).forEach { entry ->
                 val media = Media(entry)
                 if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
-                    media.cameFromContinue = true
+                    if (fromContinue) media.cameFromContinue = true
                     subMap[media.id] = media
                 } else {
                     removedMedia.add(media)
@@ -728,7 +729,7 @@ class AnilistQueries {
             (repeatingMedia ?: emptyList()).forEach { entry ->
                 val media = Media(entry)
                 if (media.id !in removeList && (!hidePrivate || !media.isListPrivate)) {
-                    media.cameFromContinue = true
+                    if (fromContinue) media.cameFromContinue = true
                     subMap[media.id] = media
                 } else {
                     removedMedia.add(media)
@@ -764,7 +765,8 @@ class AnilistQueries {
         if (toShow.getOrNull(0) == true) processMedia(
             "Anime",
             response?.data?.currentAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
-            response?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed()
+            response?.data?.repeatingAnime?.lists?.flatMap { it.entries ?: emptyList() }?.reversed(),
+            fromContinue = true
         )
         if (toShow.getOrNull(2) == true) processMedia(
             "AnimePlanned",
@@ -1451,15 +1453,13 @@ class AnilistQueries {
         val list = mutableMapOf<String, ArrayList<Media>>()
 
         fun filterRecentUpdates(page: Page?): ArrayList<Media> {
-            val listOnly = getPreference(PrefName.RecentlyListOnly)
             val adultOnly = getPreference(PrefName.AdultOnly)
             val idArr = mutableSetOf<Int>()
             return page?.airingSchedules?.mapNotNull { i ->
                 i.media?.takeIf { !idArr.contains(it.id) }?.let {
                     val shouldAdd = when {
-                        !listOnly && adultOnly && it.isAdult == true -> true
-                        !listOnly && !adultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
-                        listOnly && it.mediaListEntry != null -> true
+                        adultOnly && it.isAdult == true -> true
+                        !adultOnly && it.countryOfOrigin == "JP" && it.isAdult == false -> true
                         else -> false
                     }
                     if (shouldAdd) {

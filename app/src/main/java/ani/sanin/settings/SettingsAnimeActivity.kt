@@ -78,10 +78,10 @@ class SettingsAnimeActivity : AppCompatActivity() {
             SubscreenBuilder.Section("Behavior", R.drawable.ic_set_misc, entries = listOf(
                 SubscreenBuilder.Entry(
                     title = "Startup Tab",
-                    desc = "Which tab opens on launch",
+                    desc = "Which tab opens on launch (per anime / TMDB mode)",
                     choice = SubscreenBuilder.Choice(
                         title = "Startup Tab",
-                        options = arrayOf("Home", "Search", "Library", "Extensions"),
+                        options = arrayOf("Home", "Explore", "Discover", "Library"),
                         currentIndex = PrefManager.getVal<Int>(PrefName.DefaultStartUpTab).coerceIn(0, 3),
                     ) { idx -> PrefManager.setVal(PrefName.DefaultStartUpTab, idx) },
                 ),
@@ -92,7 +92,7 @@ class SettingsAnimeActivity : AppCompatActivity() {
                 ),
                 SubscreenBuilder.Entry(
                     title = "Continue Media",
-                    desc = "Auto-resume from last position",
+                    desc = "Auto-continue episodes; disable for manual selection",
                     switch = PrefManager.getVal<Boolean>(PrefName.ContinueMedia) to { v: Boolean -> PrefManager.setVal(PrefName.ContinueMedia, v) },
                 ),
                 SubscreenBuilder.Entry(
@@ -107,20 +107,15 @@ class SettingsAnimeActivity : AppCompatActivity() {
                 ),
                 SubscreenBuilder.Entry(
                     title = "Search All Sources",
-                    desc = "Search across all installed sources",
+                    desc = "Try all sources when one returns nothing",
                     switch = PrefManager.getVal<Boolean>(PrefName.SearchSources) to { v: Boolean -> PrefManager.setVal(PrefName.SearchSources, v) },
                 ),
                 SubscreenBuilder.Entry(
-                    title = "Recently Updated Only",
-                    desc = "Only show recently updated entries",
-                    switch = PrefManager.getVal<Boolean>(PrefName.RecentlyListOnly) to { v: Boolean -> PrefManager.setVal(PrefName.RecentlyListOnly, v) },
-                ),
-                SubscreenBuilder.Entry(
                     title = "Keyboard Mode",
-                    desc = "System keyboard or in-app toggle",
+                    desc = "System keyboard or Custom Sanin Keyboard",
                     choice = SubscreenBuilder.Choice(
                         title = "Keyboard Mode",
-                        options = arrayOf("System Keyboard", "In-App Toggle"),
+                        options = arrayOf("System Keyboard", "Custom Sanin Keyboard"),
                         currentIndex = if (PrefManager.getVal<Int>(PrefName.KeyboardMode) == 2) 1 else 0,
                     ) { idx -> PrefManager.setVal(PrefName.KeyboardMode, if (idx == 1) 2 else 0) },
                 ),
@@ -137,7 +132,7 @@ class SettingsAnimeActivity : AppCompatActivity() {
                 ),
                 SubscreenBuilder.Entry(
                     title = "Smart Source Memory",
-                    desc = "Remember last source across sessions",
+                    desc = "Remember last used source for new titles",
                     switch = PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence) to {
                         PrefManager.setVal(PrefName.SmartSourcePersistence, it)
                     },
@@ -196,11 +191,6 @@ class SettingsAnimeActivity : AppCompatActivity() {
                     title = "Auto-Sync AniList",
                     desc = "Keep AniList library in sync when you set MAL as your tracker.",
                     switch = PrefManager.getVal<Boolean>(PrefName.AutoSyncAniList) to { v: Boolean -> PrefManager.setVal(PrefName.AutoSyncAniList, v) },
-                ),
-                SubscreenBuilder.Entry(
-                    title = "Auto-Update Progress",
-                    desc = "Turning on hides the prompt to track a new show and tracks automatically.",
-                    switch = PrefManager.getVal<Boolean>(PrefName.AutoTrackNewShows) to { v: Boolean -> PrefManager.setVal(PrefName.AutoTrackNewShows, v) },
                 ),
                 SubscreenBuilder.Entry(
                     title = "Include Listed Anime in Discover",

@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 class CommentNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         Logger.log("CommentNotificationReceiver: onReceive")
+        if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) return
         runBlocking {
             CommentNotificationTask().execute(context)
         }

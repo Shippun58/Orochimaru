@@ -12,14 +12,17 @@ import androidx.lifecycle.lifecycleScope
 import ani.sanin.R
 import ani.sanin.connections.anilist.Anilist
 import ani.sanin.connections.anilist.api.NotificationType
+import ani.sanin.connections.simkl.Simkl
 import ani.sanin.databinding.ActivitySettingsSubscreenBinding
 import ani.sanin.initActivity
 import ani.sanin.media.Media
 import ani.sanin.navBarHeight
 import ani.sanin.notifications.TaskScheduler
+import ani.sanin.notifications.push.PushSync
 import ani.sanin.notifications.subscription.NotificationPopupActivity
 import ani.sanin.notifications.subscription.SubscriptionHelper
 import ani.sanin.notifications.subscription.SubscriptionNotificationWorker
+import ani.sanin.notifications.subscription.TmdbSubscriptionHelper
 import ani.sanin.notifications.anilist.AnilistNotificationWorker
 import ani.sanin.notifications.comment.CommentNotificationWorker
 import ani.sanin.openSettings
@@ -35,6 +38,8 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class SettingsNotificationActivity : AppCompatActivity() {
+    private var pendingAlarmReschedule = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ThemeManager(this).applyTheme()
@@ -50,8 +55,12 @@ class SettingsNotificationActivity : AppCompatActivity() {
         }
         binding.subscreenBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
         binding.subscreenTitle.text = getString(R.string.notifications)
-        binding.subscreenSubtitle.text = "Alerts, subscriptions & popups"
+        binding.subscreenSubtitle.text = "Alerts, subscriptions, push & popups"
         binding.subscreenIcon.setImageResource(R.drawable.ic_round_notifications_active_24)
+
+        Simkl.getSavedToken()
+        val notificationsEnabled = PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)
+        val simklLoggedIn = Simkl.token != null
 
         val timeNames = SubscriptionNotificationWorker.checkIntervals.map {
             val mins = it % 60
@@ -78,6 +87,24 @@ class SettingsNotificationActivity : AppCompatActivity() {
 
         fun buildSections(): List<SubscreenBuilder.Section> = listOf(
             SubscreenBuilder.Section(
+                "General", R.drawable.ic_round_notifications_active_24,
+                entries = listOf(
+                    SubscreenBuilder.Entry(
+                        title = "Notifications",
+                        desc = "Master switch for every alert, popup and background check",
+                        iconRes = R.drawable.ic_round_notifications_active_24,
+                        switch = notificationsEnabled to { enabled: Boolean ->
+                            PrefManager.setVal(PrefName.NotificationsEnabled, enabled)
+                            TaskScheduler.refresh(context)
+                            PushSync.sync(context)
+                            toast(if (enabled) "Notifications enabled" else "Notifications disabled")
+                            recreate()
+                        },
+                    ),
+                ),
+            ),
+
+            SubscreenBuilder.Section(
                 "Subscriptions", R.drawable.ic_round_notifications_none_24,
                 entries = listOf(
                     SubscreenBuilder.Entry(
@@ -90,19 +117,49 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             currentIndex = PrefManager.getVal<Int>(PrefName.SubscriptionNotificationInterval),
                         ) { i ->
                             PrefManager.setVal(PrefName.SubscriptionNotificationInterval, i)
-                            TaskScheduler.create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
+                            TaskScheduler.refresh(context)
                         },
                         onLongClick = {
-                            TaskScheduler.create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
+                            TaskScheduler.refresh(context)
                         },
                     ),
                     SubscreenBuilder.Entry(
                         title = getString(R.string.view_subscriptions),
-                        desc = getString(R.string.view_subscriptions_desc),
+                        desc = "View and edit anime and manga subscriptions",
                         iconRes = R.drawable.ic_round_search_24,
                         onClick = {
                             SubscriptionsBottomDialog.newInstance(SubscriptionHelper.getSubscriptions())
                                 .show(supportFragmentManager, "subscriptions")
+                        },
+                    ),
+                    SubscreenBuilder.Entry(
+                        title = "View TMDB subscriptions",
+                        desc = "View and remove TV show subscriptions",
+                        iconRes = R.drawable.ic_round_search_24,
+                        onClick = {
+                            val subs = TmdbSubscriptionHelper.getSubscriptions().values.toList()
+                            if (subs.isEmpty()) {
+                                toast("No TMDB subscriptions")
+                            } else {
+                                val titles = subs.map { it.name }.toTypedArray()
+                                val selected = BooleanArray(titles.size)
+                                context.customAlertDialog().apply {
+                                    setTitle("TMDB subscriptions")
+                                    multiChoiceItems(titles, selected) {}
+                                    setPosButton("Remove selected") {
+                                        var removed = 0
+                                        selected.forEachIndexed { index, checked ->
+                                            if (checked) {
+                                                TmdbSubscriptionHelper.delete(subs[index].id)
+                                                removed++
+                                            }
+                                        }
+                                        toast("Removed $removed subscriptions")
+                                    }
+                                    setNegButton(R.string.cancel)
+                                    show()
+                                }
+                            }
                         },
                     ),
                     SubscreenBuilder.Entry(
@@ -219,6 +276,57 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             }
                         },
                     ),
+                    SubscreenBuilder.Entry(
+                        title = "Import Simkl library",
+                        desc = "Add shows you are watching on Simkl to subscriptions",
+                        iconRes = R.drawable.ic_round_playlist_add_24,
+                        onClick = {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    if (!Simkl.getSavedToken() || Simkl.token == null) {
+                                        withContext(Dispatchers.Main) { toast("Log in to Simkl first") }
+                                        return@launch
+                                    }
+                                    val library = Simkl.getLibrary()
+                                    if (library == null) {
+                                        withContext(Dispatchers.Main) { toast("Could not load Simkl library") }
+                                        return@launch
+                                    }
+                                    val watching = (library.shows ?: emptyList()).filter {
+                                        val status = it.status?.lowercase()
+                                        status == "watching" || status == "current"
+                                    }
+                                    var imported = 0
+                                    watching.forEach { item ->
+                                        val name = item.title ?: return@forEach
+                                        val image = Simkl.imageUrl(item.poster)
+                                        val anilistId = item.ids?.anilist
+                                        val tmdbId = item.ids?.tmdb
+                                        when {
+                                            anilistId != null && anilistId > 0 -> {
+                                                if (SubscriptionHelper.importSubscription(anilistId, name, image)) imported++
+                                            }
+                                            tmdbId != null && tmdbId > 0 -> {
+                                                if (!TmdbSubscriptionHelper.isSubscribed(tmdbId)) {
+                                                    TmdbSubscriptionHelper.subscribe(tmdbId, name, "tv", image, null)
+                                                    imported++
+                                                }
+                                            }
+                                        }
+                                    }
+                                    PushSync.sync(context)
+                                    withContext(Dispatchers.Main) {
+                                        toast(
+                                            if (watching.isEmpty()) "No watching shows found on Simkl"
+                                            else "Imported $imported subscriptions from Simkl"
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) { toast(e.message ?: "Import failed") }
+                                }
+                            }
+                        },
+                    ),
                 ),
             ),
 
@@ -226,8 +334,8 @@ class SettingsNotificationActivity : AppCompatActivity() {
                 "AniList & Comments", R.drawable.ic_anilist,
                 entries = listOf(
                     SubscreenBuilder.Entry(
-                        title = getString(R.string.anilist_notification_filters),
-                        desc = getString(R.string.anilist_notification_filters_desc),
+                        title = "Ignored Categories",
+                        desc = "Checked categories are ignored. Uncheck a category to receive it",
                         iconRes = R.drawable.ic_anilist,
                         onClick = {
                             val types = NotificationType.entries.map { it.name }
@@ -261,7 +369,7 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             currentIndex = PrefManager.getVal<Int>(PrefName.AnilistNotificationInterval),
                         ) { i ->
                             PrefManager.setVal(PrefName.AnilistNotificationInterval, i)
-                            TaskScheduler.create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
+                            TaskScheduler.refresh(context)
                         },
                     ),
                     SubscreenBuilder.Entry(
@@ -274,7 +382,37 @@ class SettingsNotificationActivity : AppCompatActivity() {
                             currentIndex = PrefManager.getVal<Int>(PrefName.CommentNotificationInterval),
                         ) { i ->
                             PrefManager.setVal(PrefName.CommentNotificationInterval, i)
-                            TaskScheduler.create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
+                            TaskScheduler.refresh(context)
+                        },
+                    ),
+                ),
+            ),
+
+            SubscreenBuilder.Section(
+                "Push Notifications", R.drawable.ic_round_new_releases_24,
+                entries = listOf(
+                    SubscreenBuilder.Entry(
+                        title = "Server push (FCM)",
+                        desc = "Alerts for AniList, TMDB and Simkl titles sent from our push server. These can arrive up to an hour late, so on-device checks are usually faster.",
+                        iconRes = R.drawable.ic_round_new_releases_24,
+                        isEnabled = notificationsEnabled,
+                        switch = PrefManager.getVal<Boolean>(PrefName.PushNotifications) to { enabled: Boolean ->
+                            PrefManager.setVal(PrefName.PushNotifications, enabled)
+                            PushSync.sync(context)
+                            if (enabled) {
+                                toast("Push enabled. Delivery can take up to an hour")
+                            }
+                        },
+                    ),
+                    SubscreenBuilder.Entry(
+                        title = "Include Simkl titles",
+                        desc = if (simklLoggedIn) "Add shows marked watching on Simkl to push alerts"
+                        else "Log in to Simkl to use this",
+                        iconRes = R.drawable.ic_anilist,
+                        isEnabled = notificationsEnabled && simklLoggedIn,
+                        switch = PrefManager.getVal<Boolean>(PrefName.NotificationSimkl) to { enabled: Boolean ->
+                            PrefManager.setVal(PrefName.NotificationSimkl, enabled)
+                            PushSync.sync(context)
                         },
                     ),
                 ),
@@ -284,8 +422,8 @@ class SettingsNotificationActivity : AppCompatActivity() {
                 "Alert Popups", R.drawable.ic_round_notifications_active_24,
                 entries = listOf(
                     SubscreenBuilder.Entry(
-                        title = getString(R.string.notification_for_checking_subscriptions),
-                        desc = getString(R.string.notification_for_checking_subscriptions_desc),
+                        title = "Show checking progress",
+                        desc = "Display a progress notification while subscriptions are being checked",
                         iconRes = R.drawable.ic_round_notifications_active_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.SubscriptionCheckingNotifications) to {
                             PrefManager.setVal(PrefName.SubscriptionCheckingNotifications, it)
@@ -302,39 +440,39 @@ class SettingsNotificationActivity : AppCompatActivity() {
                     ),
                     SubscreenBuilder.Entry(
                         title = getString(R.string.notification_popup),
-                        desc = getString(R.string.notification_popup_desc),
+                        desc = "Show a popup at the top of the screen when a new alert arrives",
                         iconRes = R.drawable.ic_round_notifications_none_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.NotificationPopup) to {
                             PrefManager.setVal(PrefName.NotificationPopup, it)
                         },
                     ),
                     SubscreenBuilder.Entry(
-                        title = "New Episode Airing",
-                        desc = "Show popup when a new episode airs",
+                        title = "AniList Airing Alerts",
+                        desc = "New episodes from shows you follow on AniList",
                         iconRes = R.drawable.ic_round_new_releases_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.NotificationEpisodeAiring) to {
                             PrefManager.setVal(PrefName.NotificationEpisodeAiring, it)
                         },
                     ),
                     SubscreenBuilder.Entry(
-                        title = "New Comment Reply",
-                        desc = "Show popup when someone replies to your comment",
+                        title = "AniList Replies & Mentions",
+                        desc = "Replies and mentions in AniList activity",
                         iconRes = R.drawable.ic_round_comment_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.NotificationNewComment) to {
                             PrefManager.setVal(PrefName.NotificationNewComment, it)
                         },
                     ),
                     SubscreenBuilder.Entry(
-                        title = "Completed Episode",
-                        desc = "Show popup when an episode is marked complete",
+                        title = "Media Data Changes",
+                        desc = "AniList entries are edited (metadata updates)",
                         iconRes = R.drawable.ic_round_playlist_add_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.NotificationCompletedEpisode) to {
                             PrefManager.setVal(PrefName.NotificationCompletedEpisode, it)
                         },
                     ),
                     SubscreenBuilder.Entry(
-                        title = "Completed Anime",
-                        desc = "Show popup when an anime is marked complete",
+                        title = "Media Merge & Removal",
+                        desc = "AniList duplicates merged, entries removed or related media added",
                         iconRes = R.drawable.ic_round_playlist_play_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.NotificationCompletedAnime) to {
                             PrefManager.setVal(PrefName.NotificationCompletedAnime, it)
@@ -342,15 +480,15 @@ class SettingsNotificationActivity : AppCompatActivity() {
                     ),
                     SubscreenBuilder.Entry(
                         title = "New Follower",
-                        desc = "Show popup when someone follows you",
+                        desc = "Someone follows you on AniList",
                         iconRes = R.drawable.ic_round_person_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.NotificationNewFollower) to {
                             PrefManager.setVal(PrefName.NotificationNewFollower, it)
                         },
                     ),
                     SubscreenBuilder.Entry(
-                        title = "List Status Notification",
-                        desc = "Show popup when anime list status changes",
+                        title = "Detailed list update popup",
+                        desc = "Show cover and status when you change a list status. Off shows a generic \"List updated\" popup",
                         iconRes = R.drawable.ic_round_playlist_play_24,
                         switch = PrefManager.getVal<Boolean>(PrefName.ListStatusNotification) to {
                             PrefManager.setVal(PrefName.ListStatusNotification, it)
@@ -373,36 +511,52 @@ class SettingsNotificationActivity : AppCompatActivity() {
                                     setMessage(R.string.use_alarm_manager_confirm)
                                     setPosButton(R.string.use) {
                                         PrefManager.setVal(PrefName.UseAlarmManager, true)
+                                        var waitingForPermission = false
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                            if (!(context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) {
+                                            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                                            if (!alarmManager.canScheduleExactAlarms()) {
+                                                waitingForPermission = true
+                                                pendingAlarmReschedule = true
                                                 context.startActivity(Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM"))
                                             }
+                                        }
+                                        if (!waitingForPermission) {
+                                            TaskScheduler.refresh(context)
+                                            context.recreate()
                                         }
                                     }
                                     setNegButton(R.string.cancel) {
                                         PrefManager.setVal(PrefName.UseAlarmManager, false)
-                                        recreate()
+                                        context.recreate()
                                     }
                                     show()
                                 }
                             } else {
                                 PrefManager.setVal(PrefName.UseAlarmManager, false)
-                                TaskScheduler.create(context, true).cancelAllTasks()
-                                TaskScheduler.create(context, false).scheduleAllTasks(context)
+                                TaskScheduler.refresh(context)
+                                context.recreate()
                             }
                         },
                     ),
                     SubscreenBuilder.Entry(
-                        title = "AniList Count",
-                        desc = "Fetch notification count from AniList and display it as a badge on the bell icon",
+                        title = "AniList Notifications",
+                        desc = "Master switch for AniList alerts and the bell badge count",
                         iconRes = R.drawable.ic_anilist,
-                        switch = PrefManager.getVal<Boolean>(PrefName.AnilistNotifications) to { v: Boolean -> PrefManager.setVal(PrefName.AnilistNotifications, v) },
+                        switch = PrefManager.getVal<Boolean>(PrefName.AnilistNotifications) to { v: Boolean ->
+                            PrefManager.setVal(PrefName.AnilistNotifications, v)
+                            TaskScheduler.refresh(context)
+                            PushSync.sync(context)
+                        },
                     ),
                     SubscreenBuilder.Entry(
-                        title = "New Episode Alerts",
-                        desc = "Notify when new episodes air for shows you are tracking",
+                        title = "Subscription Alerts",
+                        desc = "Check your anime and TMDB subscriptions for new episodes",
                         iconRes = R.drawable.ic_round_notifications_active_24,
-                        switch = PrefManager.getVal<Boolean>(PrefName.EpisodeNotifications) to { v: Boolean -> PrefManager.setVal(PrefName.EpisodeNotifications, v) },
+                        switch = PrefManager.getVal<Boolean>(PrefName.EpisodeNotifications) to { v: Boolean ->
+                            PrefManager.setVal(PrefName.EpisodeNotifications, v)
+                            TaskScheduler.refresh(context)
+                            PushSync.sync(context)
+                        },
                     ),
                     SubscreenBuilder.Entry(
                         title = "Test Notification",
@@ -420,5 +574,14 @@ class SettingsNotificationActivity : AppCompatActivity() {
         )
 
         SubscreenBuilder.build(this, binding.subscreenContent, buildSections())
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (pendingAlarmReschedule) {
+            pendingAlarmReschedule = false
+            TaskScheduler.refresh(this)
+            recreate()
+        }
     }
 }

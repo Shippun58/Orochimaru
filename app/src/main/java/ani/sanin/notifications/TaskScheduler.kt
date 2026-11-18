@@ -18,7 +18,12 @@ interface TaskScheduler {
     }
 
     fun scheduleAllTasks(context: Context) {
+        val enabled = PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)
         for (taskType in TaskType.entries) {
+            if (!enabled) {
+                cancelTask(taskType)
+                continue
+            }
             val interval = when (taskType) {
                 TaskType.COMMENT_NOTIFICATION -> CommentNotificationWorker.checkIntervals[PrefManager.getVal(
                     PrefName.CommentNotificationInterval
@@ -45,7 +50,18 @@ interface TaskScheduler {
             }
         }
 
+        fun refresh(context: Context) {
+            if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) {
+                create(context, true).cancelAllTasks()
+                create(context, false).cancelAllTasks()
+                return
+            }
+            create(context, PrefManager.getVal(PrefName.UseAlarmManager)).scheduleAllTasks(context)
+            scheduleSingleWork(context)
+        }
+
         fun scheduleSingleWork(context: Context) {
+            if (!PrefManager.getVal<Boolean>(PrefName.NotificationsEnabled)) return
             val workManager = androidx.work.WorkManager.getInstance(context)
             if (PrefManager.getVal<Int>(PrefName.CommentsEnabled) == 1) {
                 workManager.enqueueUniqueWork(

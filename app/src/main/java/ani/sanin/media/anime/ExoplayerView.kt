@@ -2104,16 +2104,8 @@ class ExoplayerView :
         preloading = false
         val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
         val showProgressDialog =
-            if (PrefManager.getVal<Boolean>(PrefName.AutoTrackNewShows)) {
-                false
-            } else if (PrefManager.getVal(PrefName.AskIndividualPlayer)) {
-                PrefManager.getCustomVal(
-                    "${media.id}_progressDialog",
-                    true,
-                )
-            } else {
-                false
-            }
+            PrefManager.getVal<Int>(PrefName.ProgressUpdateMode).coerceIn(0, 2) == 1 &&
+                PrefManager.getCustomVal("${media.id}_progressDialog", true)
 
         val isTmdbContent = media.id < 0
         val shouldShowDialog = if (isLiveStream()) {
@@ -4550,7 +4542,7 @@ class ExoplayerView :
         }
 
         val incognito = PrefManager.getVal<Boolean>(PrefName.Incognito)
-        val simklProgressEnabled = PrefManager.getCustomVal("${media.id}_save_progress", true)
+        val simklProgressEnabled = progressSavingEnabled(media.id)
         if (!isLiveStream() && Simkl.token != null && media.id < 0 && !incognito && simklProgressEnabled) {
 
             val playerCurrentPosition = if (::exoPlayer.isInitialized) exoPlayer.currentPosition else 0L
@@ -5651,6 +5643,13 @@ class ExoplayerView :
         super.onPlaybackStateChanged(playbackState)
     }
 
+    private fun progressSavingEnabled(id: Int): Boolean =
+        when (PrefManager.getVal<Int>(PrefName.ProgressUpdateMode).coerceIn(0, 2)) {
+            0 -> true
+            2 -> false
+            else -> PrefManager.getCustomVal("${id}_save_progress", true)
+        }
+
     private fun updateAniProgress() {
         val incognito: Boolean = PrefManager.getVal(PrefName.Incognito)
 
@@ -5659,7 +5658,7 @@ class ExoplayerView :
         }
 
         if (media.id < 0) {
-            val saveProgress = PrefManager.getCustomVal("${media.id}_save_progress", true)
+            val saveProgress = progressSavingEnabled(media.id)
             if (episodeLength <= 0f || incognito || Simkl.token == null || !saveProgress) return
             val currentPos = exoPlayer.currentPosition
             val episodeEnd = currentPos / episodeLength > PrefManager.getVal<Float>(PrefName.WatchPercentage)
@@ -5708,10 +5707,7 @@ class ExoplayerView :
             else Anilist.userid != null
         if (!incognito && (episodeEnd || episode0) && trackerReady
         ) {
-            if (PrefManager.getCustomVal(
-                    "${media.id}_save_progress",
-                    true,
-                ) &&
+            if (progressSavingEnabled(media.id) &&
                 (if (media.isAdult) PrefManager.getVal(PrefName.UpdateForHPlayer) else true)
             ) {
                 if (episode0 && !episodeEnd) {
@@ -5971,17 +5967,22 @@ class ExoplayerView :
         }
         if (PrefManager.getVal<Boolean>(PrefName.ConfirmPlayerExit)) {
             val dialogView = layoutInflater.inflate(R.layout.dialog_exit_player, null)
-            val dialog = AlertDialog.Builder(this, R.style.MyPopup)
-                .setView(dialogView)
-                .create()
+            val dialog = android.app.Dialog(this, R.style.MyPopup)
+            dialog.setContentView(dialogView)
+            dialog.setCancelable(true)
             dialogView.findViewById<View>(R.id.exitYes).setOnClickListener {
                 dialog.dismiss()
                 finishAndRemoveTask()
             }
             dialogView.findViewById<View>(R.id.exitNo).setOnClickListener { dialog.dismiss() }
-            dialog.setOnShowListener { dialogView.findViewById<View>(R.id.exitYes).requestFocus() }
+            dialog.setOnShowListener { dialogView.findViewById<View>(R.id.exitNo).requestFocus() }
             dialog.window?.apply {
-                setDimAmount(0.5f)
+                setBackgroundDrawableResource(android.R.color.transparent)
+                setDimAmount(0.6f)
+                setLayout(
+                    (340 * resources.displayMetrics.density).toInt(),
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT
+                )
                 attributes.windowAnimations = android.R.style.Animation_Dialog
             }
             dialog.show()

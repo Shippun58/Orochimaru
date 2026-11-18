@@ -172,7 +172,7 @@ class PlayerSettingsActivity :
                 ),
                 SubscreenBuilder.Entry(
                     title = "Wrap Buttons",
-                    desc = "Player control button style",
+                    desc = "Background tint behind player control buttons",
                     choice = SubscreenBuilder.Choice(
                         title = "Wrap Buttons",
                         options = wrapBtnLabels,
@@ -273,7 +273,7 @@ class PlayerSettingsActivity :
                 SubscreenBuilder.Entry(
                     title = "Decoder",
                     desc = "Hardware is fastest; Hardware+ falls back to software; Software is most compatible.",
-                    iconRes = R.drawable.ic_baseline_extension_24,
+                    iconRes = R.drawable.ic_baseline_memory_24,
                     choice = SubscreenBuilder.Choice(
                         title = "Decoder",
                         options = arrayOf("Hardware", "Hardware+", "Software"),
@@ -637,11 +637,13 @@ class PlayerSettingsActivity :
         SubscreenBuilder.build(this, binding.tabContent, listOf(
             SubscreenBuilder.Section(getString(R.string.update_progress), R.drawable.ic_set_anime, entries = listOf(
                 SubscreenBuilder.Entry(
-                    title = getString(R.string.ask_update_progress_anime),
-                    desc = getString(R.string.ask_update_progress_info_ep),
-                    switch = PrefManager.getVal<Boolean>(PrefName.AskIndividualPlayer) to {
-                        PrefManager.setVal(PrefName.AskIndividualPlayer, it)
-                    },
+                    title = "Update progress",
+                    desc = "Always saves; Ask prompts once per title; Never skips tracking",
+                    choice = SubscreenBuilder.Choice(
+                        title = "Update progress",
+                        options = arrayOf("Always", "Ask per title", "Never"),
+                        currentIndex = PrefManager.getVal<Int>(PrefName.ProgressUpdateMode).coerceIn(0, 2),
+                    ) { idx -> PrefManager.setVal(PrefName.ProgressUpdateMode, idx) },
                 ),
                 SubscreenBuilder.Entry(
                     title = getString(R.string.ask_update_progress_chapter_zero),
