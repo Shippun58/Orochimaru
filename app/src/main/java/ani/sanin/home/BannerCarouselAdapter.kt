@@ -585,14 +585,15 @@ internal fun fitPanelSynopsis(
 ) {
     panel.post {
         if (!synopsis.isVisible || panel.height <= 0) return@post
+        val group = panel as? ViewGroup ?: return@post
         val res = panel.resources
         val density = res.displayMetrics.density
         var fixed = panel.paddingTop + panel.paddingBottom
         (synopsis.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
             fixed += it.topMargin + it.bottomMargin
         }
-        for (i in 0 until panel.childCount) {
-            val child = panel.getChildAt(i)
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
             if (child === synopsis || child.visibility == View.GONE) continue
             if (child is android.widget.Space) continue
             val lp = child.layoutParams as? ViewGroup.MarginLayoutParams
@@ -610,28 +611,28 @@ internal fun fitPanelSynopsis(
 }
 
 internal fun fitModernSynopsis(root: View, content: View?, description: TextView?) {
-    content ?: return
-    description ?: return
+    val group = content as? ViewGroup ?: return
+    val desc = description ?: return
     root.post {
         if (root.height <= 0) return@post
         val res = root.resources
         val floor = res.getInteger(R.integer.banner_modern_synopsis_lines)
         val breathing = (24 * res.displayMetrics.density).toInt()
         var used = 0
-        for (i in 0 until content.childCount) {
-            val child = content.getChildAt(i)
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
             if (child.visibility == View.GONE) continue
             val lp = child.layoutParams as? ViewGroup.MarginLayoutParams
             used += (lp?.topMargin ?: 0) + (lp?.bottomMargin ?: 0)
-            if (child !== description) used += child.height
+            if (child !== desc) used += child.height
         }
-        val perLine = description.paint.fontSpacing + description.lineSpacingExtra
+        val perLine = desc.paint.fontSpacing + desc.lineSpacingExtra
         val fit = if (perLine > 0f) {
             ((root.height - used - breathing) / perLine).toInt()
         } else {
             floor
         }
-        description.maxLines = fit.coerceIn(floor, 30)
+        desc.maxLines = fit.coerceIn(floor, 30)
     }
 }
 
