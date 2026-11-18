@@ -12,6 +12,8 @@ import android.view.View
 
 object LensButtonBackground {
 
+    val WATCH_TINT = 0xCC161922.toInt()
+
     private fun isNight(context: Context): Boolean =
         (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES

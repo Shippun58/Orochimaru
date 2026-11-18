@@ -265,7 +265,11 @@ class TmdbHomeFragment : Fragment() {
                 }
             }
             val watchRadiusPx = 12f * btn.resources.displayMetrics.density
-            LensButtonBackground.apply(btn, cornerRadiusPx = watchRadiusPx)
+            LensButtonBackground.apply(
+                btn,
+                tint = LensButtonBackground.WATCH_TINT,
+                cornerRadiusPx = watchRadiusPx,
+            )
             FocusEffectUtil.applyFocusListener(btn, cornerRadiusPx = watchRadiusPx)
         }
     }

@@ -77,7 +77,12 @@ class TmdbBannerCarouselAdapter(
             R.layout.item_banner_modern -> 17f * density
             else -> 12f * density
         }
-        LensButtonBackground.apply(holder.playBtn, cornerRadiusPx = radiusPx)
+        LensButtonBackground.apply(
+            holder.playBtn,
+            tint = LensButtonBackground.WATCH_TINT,
+            cornerRadiusPx = radiusPx,
+        )
+        holder.playBtn.backgroundTintList = null
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {

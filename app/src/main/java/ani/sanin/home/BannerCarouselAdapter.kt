@@ -88,7 +88,12 @@ class BannerCarouselAdapter(
             R.layout.item_banner_carousel -> 12f * density
             else -> 12f * density
         }
-        LensButtonBackground.apply(holder.playBtn, cornerRadiusPx = radiusPx)
+        LensButtonBackground.apply(
+            holder.playBtn,
+            tint = LensButtonBackground.WATCH_TINT,
+            cornerRadiusPx = radiusPx,
+        )
+        holder.playBtn.backgroundTintList = null
         FocusEffectUtil.applyFocusListener(holder.playBtn, cornerRadiusPx = radiusPx)
         holder.playBtn.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -582,6 +587,7 @@ internal fun fitPanelSynopsis(
     reservedGapDp: Int = 50,
     reservedGapCount: Int = 3,
     capLines: Int = 20,
+    hideWhenNoRoom: Boolean = false,
 ) {
     panel.post {
         if (!synopsis.isVisible || panel.height <= 0) return@post
@@ -603,8 +609,13 @@ internal fun fitPanelSynopsis(
         val perLine = synopsis.paint.fontSpacing + synopsis.lineSpacingExtra
         if (perLine <= 0f) return@post
         val reserve = (reservedGapDp * density).toInt() * reservedGapCount
-        val lines = ((panel.height - fixed - reserve) / perLine).toInt()
-            .coerceIn(floorLines, capLines)
+        val available = panel.height - fixed - reserve
+        val rawLines = (available / perLine).toInt()
+        if (rawLines < 1) {
+            if (hideWhenNoRoom) synopsis.isVisible = false
+            return@post
+        }
+        val lines = rawLines.coerceIn(floorLines, capLines)
         if (synopsis.maxLines != lines) synopsis.maxLines = lines
         if (synopsis.maxHeight != Int.MAX_VALUE) synopsis.maxHeight = Int.MAX_VALUE
     }
@@ -627,12 +638,9 @@ internal fun fitModernSynopsis(root: View, content: View?, description: TextView
             if (child !== desc) used += child.height
         }
         val perLine = desc.paint.fontSpacing + desc.lineSpacingExtra
-        val fit = if (perLine > 0f) {
-            ((root.height - used - breathing) / perLine).toInt()
-        } else {
-            floor
-        }
-        desc.maxLines = fit.coerceIn(floor, 30)
+        val fit = if (perLine > 0f) ((root.height - used - breathing) / perLine).toInt() else 1
+        desc.maxLines = fit.coerceIn(1, 4)
+        if (desc.maxHeight != Int.MAX_VALUE) desc.maxHeight = Int.MAX_VALUE
     }
 }
 

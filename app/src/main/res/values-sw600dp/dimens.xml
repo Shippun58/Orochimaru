@@ -12,7 +12,7 @@
     <dimen name="banner_modern_synopsis_text">12sp</dimen>
     <dimen name="banner_modern_meta_text">12sp</dimen>
     <dimen name="banner_modern_meta_gap">8dp</dimen>
-    <integer name="banner_modern_synopsis_lines">3</integer>
+    <integer name="banner_modern_synopsis_lines">4</integer>
 
     <dimen name="banner_classic_height">355dp</dimen>
     <dimen name="banner_classic_logo_width">300dp</dimen>

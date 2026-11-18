@@ -1270,7 +1270,6 @@ class HomeFragment : Fragment() {
         btnLp.gravity = if (classic) Gravity.CENTER_HORIZONTAL else Gravity.NO_GRAVITY
         btn.layoutParams = btnLp
         if (classic) {
-            btn.setBackgroundResource(R.drawable.banner_classic_pill_bg)
             btn.minWidth = 0
             btn.minHeight = 0
             btn.minimumHeight = res.getDimensionPixelSize(R.dimen.banner_classic_watch_height)
@@ -1289,7 +1288,6 @@ class HomeFragment : Fragment() {
             btn.gravity = Gravity.CENTER
             btn.setAllCaps(false)
         } else {
-            btn.setBackgroundResource(R.drawable.tag_chip_bg)
             btn.gravity = Gravity.CENTER
             btn.setPadding(
                 (20 * density).toInt(), (8 * density).toInt(),
@@ -1300,6 +1298,13 @@ class HomeFragment : Fragment() {
                 ctx.getThemeColor(com.google.android.material.R.attr.colorOnBackground)
             )
         }
+        val navWatchRadiusPx = (if (classic) 18f else 12f) * density
+        LensButtonBackground.apply(
+            btn,
+            tint = LensButtonBackground.WATCH_TINT,
+            cornerRadiusPx = navWatchRadiusPx,
+        )
+        FocusEffectUtil.applyFocusListener(btn, cornerRadiusPx = navWatchRadiusPx)
     }
 
     private fun navBannerChipsLabels(media: Media): List<String> {
@@ -1455,7 +1460,11 @@ class HomeFragment : Fragment() {
         }
         val density = btn.resources.displayMetrics.density
         val watchRadiusPx = 12f * density
-        LensButtonBackground.apply(btn, cornerRadiusPx = watchRadiusPx)
+        LensButtonBackground.apply(
+            btn,
+            tint = LensButtonBackground.WATCH_TINT,
+            cornerRadiusPx = watchRadiusPx,
+        )
         FocusEffectUtil.applyFocusListener(btn, cornerRadiusPx = watchRadiusPx)
         btn.nextFocusUpId = R.id.mainCalendarContainer
         btn.nextFocusDownId = homeBannerDownTarget()
@@ -1731,7 +1740,6 @@ class HomeFragment : Fragment() {
         } else if (!desc.isNullOrBlank()) {
             synopsis.text = desc
             synopsis.isVisible = true
-            synopsis.post { fitHomeBannerSynopsis() }
         } else {
             synopsis.isVisible = false
         }
@@ -1739,7 +1747,14 @@ class HomeFragment : Fragment() {
 
     private fun fitHomeBannerSynopsis() {
         val b = _binding ?: return
-        fitPanelSynopsis(b.homeBannerOverlay, b.homeBannerOverlaySynopsis, floorLines = 2)
+        fitPanelSynopsis(
+            b.homeBannerOverlay,
+            b.homeBannerOverlaySynopsis,
+            floorLines = 1,
+            reservedGapDp = 30,
+            reservedGapCount = 1,
+            hideWhenNoRoom = true,
+        )
     }
 
     private fun addHomeOverlayChip(container: LinearLayout, text: String?) {

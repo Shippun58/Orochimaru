@@ -225,7 +225,11 @@ class AnimePageAdapter : RecyclerView.Adapter<AnimePageAdapter.AnimePageViewHold
             }
         }
         val watchRadiusPx = 12f * btn.resources.displayMetrics.density
-        LensButtonBackground.apply(btn, cornerRadiusPx = watchRadiusPx)
+        LensButtonBackground.apply(
+            btn,
+            tint = LensButtonBackground.WATCH_TINT,
+            cornerRadiusPx = watchRadiusPx,
+        )
         FocusEffectUtil.applyFocusListener(btn, cornerRadiusPx = watchRadiusPx)
         btn.nextFocusUpId = R.id.mainCalendarContainer
         binding.animeRecently.isFocusable = true
