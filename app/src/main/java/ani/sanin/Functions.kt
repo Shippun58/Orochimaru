@@ -178,6 +178,7 @@ const val BANNER_TYPE_MODERN = 2
 
 fun bannerType(): Int = try {
     PrefManager.getVal<Int>(PrefName.BannerType)
+        .coerceIn(BANNER_TYPE_COMPACT, BANNER_TYPE_CLASSIC)
 } catch (_: Exception) {
     BANNER_TYPE_COMPACT
 }

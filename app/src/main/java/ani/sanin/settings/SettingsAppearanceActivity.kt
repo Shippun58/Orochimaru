@@ -193,8 +193,9 @@ class SettingsAppearanceActivity : AppCompatActivity() {
                         desc = "Pick how your carousel banner looks.",
                         choice = SubscreenBuilder.Choice(
                             title = "Banner Type",
-                            options = arrayOf("Compact", "Classic", "Modern"),
-                            currentIndex = PrefManager.getVal<Int>(PrefName.BannerType),
+                            options = arrayOf("Compact", "Classic"),
+                            currentIndex = PrefManager.getVal<Int>(PrefName.BannerType)
+                                .coerceIn(0, 1),
                         ) { idx -> PrefManager.setVal(PrefName.BannerType, idx) },
                     ),
                     SubscreenBuilder.Entry(
