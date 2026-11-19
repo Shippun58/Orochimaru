@@ -1237,7 +1237,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         PrefManager.setCustomVal("tmdb_last_${mediaId}", "${season ?: 1}:${epNumber ?: 1}")
     }
 
-    // --- plugin loading (mirrors watch fragment) ---
+
 
     private suspend fun loadPlugin(url: String): TmdbDetail? {
         val sourceId = pluginSourceId
@@ -1351,7 +1351,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         )
     }
 
-    // --- shared helpers (mirror watch fragment) ---
+
 
     private fun stremioCsSource(addon: StremioAddon): CsInstalledSource = CsInstalledSource(
         id = StremioAddonManager.sourceId(addon),
@@ -1453,7 +1453,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
-    // --- rows RecyclerView ---
+
 
     private inner class RowsAdapter :
         androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {

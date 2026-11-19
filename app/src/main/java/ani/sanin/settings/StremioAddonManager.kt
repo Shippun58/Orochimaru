@@ -33,9 +33,9 @@ data class StremioAddon(
     val transportUrl: String,
     val transportName: String = "http",
     val manifest: StremioAddonManifest,
-    // null = not probed yet, true = only info/recommendation cards, false = playable streams
+
     val extrasOnly: Boolean? = null,
-    // true = turned off by the user; hidden from home, watch tab, server sheet, search, etc.
+
     val disabled: Boolean = false,
 )
 
@@ -68,10 +68,10 @@ object StremioAddonManager {
             runCatching { json.decodeFromString<StremioAddon>(encoded) }.getOrNull()
         }
 
-    /** Every installed add-on, including disabled ones (settings UI + install checks). */
+
     fun allInstalled(): List<StremioAddon> = rawInstalled()
 
-    /** Active add-ons only; disabled ones are hidden from the app everywhere. */
+
     fun installed(): List<StremioAddon> = rawInstalled().filterNot { it.disabled }
 
     fun isInstalled(transportUrl: String): Boolean =

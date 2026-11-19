@@ -51,7 +51,7 @@ import kotlinx.coroutines.withTimeout
 
 object ImdbMedia {
 
-    /** Deterministic negative id so per-title prefs (tmdb_source_$mediaId) stay unique. */
+
     fun syntheticMediaId(imdbId: String): Int =
         -1 - (imdbId.lowercase().hashCode() and 0x7FFFFFFF)
 
@@ -93,7 +93,7 @@ object ImdbMedia {
         return meta
     }
 
-    /** Nuvio-style detail built from the addon/Cinemeta meta for titles absent from TMDB. */
+
     suspend fun loadDetail(
         mediaType: String,
         imdbId: String,
@@ -131,7 +131,7 @@ object ImdbMedia {
         )
     }
 
-    /** Episodes for one season from the cached Cinemeta meta (titles absent from TMDB). */
+
     suspend fun episodesFor(
         mediaType: String,
         imdbId: String,

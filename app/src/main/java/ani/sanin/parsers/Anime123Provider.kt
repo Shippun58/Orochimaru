@@ -14,18 +14,18 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import me.xdrop.fuzzywuzzy.FuzzySearch
 
-/**
- * 123Anime (123animehub.cc).
- *
- * Search is an AJAX endpoint returning {html} with <div class="item"> cards.
- * Episodes are not listed on the show page, so the latest episode number ("Ep 220") from the
- * search card is used as the total (it matches the finished-show length and the current count
- * for airing shows).
- *
- * Episode lookup is `ajax/episode/info?epr=<slug>/<episode>`. Only the number directly after
- * the slug is the episode; VyseTV's `slug/<season>/<ep>` format is wrong (it silently played the
- * wrong episode). The returned target is a Vidplay-style embed, handled by EmbedRouter.
- */
+
+
+
+
+
+
+
+
+
+
+
+
 class Anime123Provider : NativeAnimeParser() {
 
     override val name = "123Anime"

@@ -116,7 +116,7 @@ object GlassPill {
         view.clipToOutline = true
     }
 
-    /** Flat grey used by sheet rows (inner quality rows) */
+
     fun serverRowGrey(context: Context): Int {
         val themed = themedContext(context)
         val tv = android.util.TypedValue()
@@ -133,10 +133,10 @@ object GlassPill {
         }
     }
 
-    /**
-     * One segment of a merged server card: flat grey fill with selective corners and an
-     * optional primary rim along the top edge (sheet look, per-row).
-     */
+
+
+
+
     fun applyServerRowCard(
         view: View,
         cornerRadiusDp: Float = 16f,
@@ -329,7 +329,7 @@ private class TopLitRimDrawable(
     }
 }
 
-/** Rounded vertical accent bar at the start edge — "currently playing" selection marker. */
+
 private class ServerSelectedBarDrawable(
     private val color: Int,
     private val barWidthPx: Float,
@@ -361,7 +361,7 @@ private class ServerSelectedBarDrawable(
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
-/** Stroke of only the top edge (with upper corner arcs) — the "small primary rim". */
+
 private class TopEdgeRimDrawable(    private val peak: Int,
     private val thicknessPx: Float,
     private val radius: Float,

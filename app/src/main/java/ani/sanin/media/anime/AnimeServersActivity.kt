@@ -656,7 +656,7 @@ class AnimeServersActivity : AppCompatActivity() {
     private val serverAudioRx = Regex("\\b(sub|dub|softsub|hardsub)\\b", RegexOption.IGNORE_CASE)
     private val serverQualityRx = Regex("\\b(\\d{3,4}\\s*p|auto|unknown)\\b", RegexOption.IGNORE_CASE)
 
-    /** "Vidstream - Vidstream 720p (dub)" -> ("Vidstream", "720p", "dub") */
+
     private fun splitServerTitle(name: String): Triple<String, String?, String?> {
         var cleaned = name
         val audio = serverAudioRx.find(cleaned)?.groupValues?.getOrNull(1)?.lowercase()
@@ -1157,7 +1157,7 @@ class AnimeServersActivity : AppCompatActivity() {
         lifecycleScope.launch { launchGroupResolution(index) }
     }
 
-    // --- playback ---
+
 
     private fun playVideo(extractor: VideoExtractor, videoIdx: Int, group: Group) {
         val m = media ?: return
@@ -1229,7 +1229,7 @@ class AnimeServersActivity : AppCompatActivity() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
-    // --- rows RecyclerView ---
+
 
     private inner class RowsAdapter :
         RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -1408,7 +1408,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 itemView.layoutParams = lp
             }
 
-            /** SubHead-style line above the merged card (TMDB spec). */
+
             fun bindServer(group: Group, server: VideoServer, isFirstServer: Boolean) {
                 binding.root.background = null
                 val (cleanName, _, parsedAudio) = splitServerTitle(server.name)
@@ -1435,7 +1435,7 @@ class AnimeServersActivity : AppCompatActivity() {
                 setRowMargins(if (isFirstServer) 12 else 12, 4)
             }
 
-            /** Segment of the merged grey card; first row carries the top rim. */
+
             fun bindVideo(
                 group: Group,
                 extractor: VideoExtractor,

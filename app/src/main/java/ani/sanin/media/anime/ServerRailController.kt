@@ -64,9 +64,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
-// ---------------------------------------------------------------------
-// Shared state models (process-lifetime, safe to hold in static caches)
-// ---------------------------------------------------------------------
+
+
+
 
 private sealed class AnimeGroupState {
     object Loading : AnimeGroupState()
@@ -103,12 +103,12 @@ internal object AnimeRailCache {
     fun fail(key: String, reason: String) = RailRepo.failAnime(key, reason)
 }
 
-// ---------------------------------------------------------------------
-// RailRepo: process-level resolution + cache.
-// Jobs are NOT tied to any activity, so they survive player restarts
-// (restartWithServer) and results are cached so reopening the rail
-// never re-resolves a source that already succeeded.
-// ---------------------------------------------------------------------
+
+
+
+
+
+
 
 private object RailRepo {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -130,7 +130,7 @@ private object RailRepo {
     fun tmdbKey(mediaId: Int, season: Int?, ep: Int?, groupKey: String) =
         "T:$mediaId|$season|$ep|$groupKey"
 
-    /** Drop cached entries belonging to a previous episode (episode change). */
+
     fun prune(mediaId: Int, epKey: String?, season: Int?, ep: Int?) {
         synchronized(lock) {
             animeCache.keys.removeAll {
@@ -142,7 +142,7 @@ private object RailRepo {
         }
     }
 
-    /** Refresh-all: drop cache + cancel running jobs for the current episode. */
+
     fun refreshAnime(mediaId: Int, epKey: String?) {
         synchronized(lock) {
             val prefix = "A:$mediaId|$epKey|"
@@ -414,15 +414,15 @@ private object RailRepo {
     }
 }
 
-/**
- * In-player Sources & Tracks rail: a mini version of the servers screen.
- * Sources tab — anime mode: source chips + per-source servers (grey containers, top rim,
- * grouped cards); TMDB mode: source chips (CS3 + Stremio) + stream/info/extras cards,
- * like the TMDB servers screen. Resolution runs process-wide (RailRepo) and is cached
- * across player restarts.
- * Tracks tab — replaces the old tracks dialog: bold white Video/Audio headers with the
- * player's video and audio tracks underneath, same container + selected-indicator look.
- */
+
+
+
+
+
+
+
+
+
 @OptIn(UnstableApi::class)
 class ServerRailController(
     private val activity: ExoplayerView,
@@ -661,8 +661,8 @@ class ServerRailController(
         tabs.getTabAt(1)?.view?.nextFocusDownId = downId
     }
 
-    /** Rebuilds the list for the Tracks tab: bold white Video header, then video tracks,
-     *  then Audio header + audio tracks — replacing the old tracks dialog sheet. */
+
+
     private fun rebuildTracks() {
         val tracks = activity.playerCurrentTracks()
         val videos = trackEntries(tracks, C.TRACK_TYPE_VIDEO)
@@ -702,7 +702,7 @@ class ServerRailController(
         restoreRowFocus(focusPosition, focusKey)
     }
 
-    /** Called from onTracksChanged so an open Tracks tab always reflects current tracks. */
+
     fun notifyTracksChanged() {
         if (isOpen() && currentTab == Tab.TRACKS) rebuildTracks()
     }
@@ -945,7 +945,7 @@ class ServerRailController(
         restoreRowFocus(focusPosition, focusKey)
     }
 
-    // --- Anime mode ---
+
 
     private fun buildAnimeGroups() {
         groups.clear()
@@ -1179,7 +1179,7 @@ class ServerRailController(
         }
     }
 
-    // --- TMDB mode ---
+
 
     private fun tmdbSeasonEp(): Pair<Int?, Int?> {
         val ep = currentEpisode()
@@ -1409,8 +1409,8 @@ class ServerRailController(
         }
     }
 
-    /** Mirror of TmdbStreamResolver.buildExtractors naming, to map links back to
-     *  (extractor name, video index) so the playing row can be highlighted. */
+
+
     private fun tmdbExtractorNames(
         links: List<TmdbStreamResolver.StreamResult.PlayableLink>,
     ): Map<TmdbStreamResolver.StreamResult.PlayableLink, Pair<String, Int>> {
@@ -1448,7 +1448,7 @@ class ServerRailController(
         return ep.selectedExtractor == nameAndIdx.first && ep.selectedVideo == nameAndIdx.second
     }
 
-    // --- chips ---
+
 
     private fun buildChips() {
         val focusedIndex = chipByIndex.indexOfFirst { it.hasFocus() }
@@ -1534,7 +1534,7 @@ class ServerRailController(
         }
     }
 
-    // --- row refresh ---
+
 
     private fun requestRowsRefresh() {
         if (currentTab != Tab.SOURCES || rowsRefreshPosted || !isOpen()) return
@@ -1576,7 +1576,7 @@ class ServerRailController(
         restoreRowFocus(focusPosition, focusKey)
     }
 
-    // --- text helpers (parity with the servers screen) ---
+
 
     private fun splitServerTitle(name: String): Triple<String, String?, String?> {
         val audioRx = Regex("\\b(sub|dub|softsub|hardsub)\\b", RegexOption.IGNORE_CASE)
@@ -1616,7 +1616,7 @@ class ServerRailController(
         return if (lines.isEmpty()) null else lines.joinToString("\n")
     }
 
-    // --- actions ---
+
 
     private fun switchServer(group: Group, extractor: VideoExtractor, videoIdx: Int) {
         if (launching) return
@@ -1741,7 +1741,7 @@ class ServerRailController(
         }
     }
 
-    // --- focus helpers ---
+
 
     private fun focusedAdapterPosition(): Int {
         val focused = recycler.findFocus() ?: return RecyclerView.NO_POSITION
@@ -1789,7 +1789,7 @@ class ServerRailController(
         }
     }
 
-    // --- adapter ---
+
 
     private inner class RailAdapter : RecyclerView.Adapter<RailViewHolder>() {
 
@@ -1879,7 +1879,7 @@ class ServerRailController(
             )
         }
 
-        /** SubHead-style header above a merged grey card (or host grouping in TMDB mode). */
+
         fun bindHeader(row: Row.Header) {
             val b = rowB ?: return
             b.root.background = null
@@ -1903,7 +1903,7 @@ class ServerRailController(
             setRowMargins(12, 4)
         }
 
-        /** Bold white header for the Tracks tab (Video / Audio sections). */
+
         fun bindTrackHeader(row: Row.TrackHeader) {
             val b = rowB ?: return
             b.root.background = null

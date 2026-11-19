@@ -16,13 +16,13 @@ import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.Executor
 import kotlin.math.max
 
-/**
- * Extracts seek preview frames with Media3's FrameExtractor.
- *
- * Everything is kept in memory: frames are cached in a small LruCache and the extractor is
- * released as soon as the player source changes or the player goes away. No preview data is
- * written to disk.
- */
+
+
+
+
+
+
+
 @UnstableApi
 class SeekPreviewController(
     context: Context,

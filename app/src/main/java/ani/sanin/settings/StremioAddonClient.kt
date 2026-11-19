@@ -533,7 +533,7 @@ object StremioAddonClient {
         return result.getOrNull()
     }
 
-    /** Direct Cinemeta meta lookup by imdb id: meta/{movie|series}/{tt-id}.json */
+
     suspend fun loadCinemetaMeta(tmdbType: String, imdbId: String): StremioMetaDetails? =
         withContext(Dispatchers.IO) {
             val url = "https://v3-cinemeta.strem.io/meta/${stremioType(tmdbType)}/$imdbId.json"
@@ -559,7 +559,7 @@ object StremioAddonClient {
             parsed
         }
 
-    /** Cinemeta catalog title search; returns (type, imdb id) of the first match or null. */
+
     suspend fun searchCinemetaId(tmdbType: String, query: String): Pair<String, String>? =
         withContext(Dispatchers.IO) {
             val types = if (tmdbType == "tv") listOf("series", "movie") else listOf("movie", "series")

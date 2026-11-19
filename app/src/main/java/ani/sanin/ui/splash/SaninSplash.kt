@@ -189,8 +189,8 @@ internal fun SaninSplash(
     val animation = remember { Animatable(0f) }
     val currentOnFinished = rememberUpdatedState(onFinished)
 
-    // Keep the timeline alive across parent recompositions. A changing callback
-    // must not cancel and restart the splash animation halfway through.
+
+
     LaunchedEffect(Unit) {
         delay(120)
         animation.animateTo(
@@ -287,8 +287,8 @@ internal fun SaninSplash(
                 } else {
                     minY + (maxY - minY) * progress.coerceIn(0f, 1f)
                 }
-                // Use the exact same origin and scale as the glow. Only the
-                // clip boundary moves; the emblem geometry never shifts.
+
+
                 withTransform({
                     translate(left, top)
                     scale(imageWidth / viewportWidth, imageHeight / viewportHeight, pivot = Offset.Zero)
@@ -331,16 +331,16 @@ internal fun SaninSplash(
             }
 
 
-            // Constant-speed travel avoids the apparent pauses caused by
-            // applying easing both to the master timeline and the path motion.
+
+
             val travel = ((p - 0.08f) / 0.38f).coerceIn(0f, 1f)
             val fadeIn = smooth((p - 0.08f) / 0.10f)
             val fadeOut = 1f - smooth((p - 0.42f) / 0.04f)
             val streakStrength = fadeIn * fadeOut
 
-            // Each highlight follows one of the three exact vector paths.
-            // The ribbon travels left-to-right; the upper triangle travels
-            // top-to-bottom; the lower triangle travels bottom-to-top.
+
+
+
             if (streakStrength > 0f) {
                 withTransform({
                     translate(left, top)
@@ -387,18 +387,18 @@ internal fun SaninSplash(
                 }
             }
 
-            // The opaque black silhouette sits above the light, preserving the
-            // dark icon while letting the moving glow show from behind its edges.
+
+
             drawImage(blackMaskImage, dstOffset = dstOffset, dstSize = dstSize)
 
-            // Each segment starts filling only after its travelling glow
-            // reaches the endpoint. The ribbon and upper triangle fill upward
-            // from their lower ends; the lower triangle fills downward.
-            // Give the fill a longer, steady run instead of compressing it
-            // into the final few frames. A linear boundary avoids the apparent
-            // mid-fill stall caused by easing twice near the animation endpoint.
-            // Finish the fill before the burst, leaving a distinct beat for
-            // the emblem to flare and then settle to clean solid white.
+
+
+
+
+
+
+
+
             val fillProgress = ((p - 0.80f) / 0.11f).coerceIn(0f, 1f)
             if (fillProgress > 0f) {
                 drawSegmentFill(ribbonPath, fillProgress, 59f, 479f, fromBottom = true)
@@ -406,8 +406,8 @@ internal fun SaninSplash(
                 drawSegmentFill(lowerTrianglePath, fillProgress, 354f, 530f, fromBottom = false)
             }
 
-            // A short brightness burst peaks just after all three sections
-            // have filled, then fades away before the splash completes.
+
+
             val burstIn = smooth((p - 0.91f) / 0.035f)
             val burstOut = 1f - smooth((p - 0.945f) / 0.045f)
             val burst = burstIn * burstOut

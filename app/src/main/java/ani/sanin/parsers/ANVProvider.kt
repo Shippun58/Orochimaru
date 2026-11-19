@@ -27,16 +27,16 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/**
- * ANV (anv.to).
- *
- * The site exposes a small catalog API at /api/catalog that proxies its anime catalog:
- *  - SearchAnime  / AnimeDetail: catalog entries keyed by ANV's own numeric id (not AniList!)
- *  - /api/episode: per-episode stream list, requires a valid `shiro_watch` cookie.
- *
- * Note: VyseTV fed AniList ids to /api/episode. That does not work (the API answers
- * "unavailable"); ANV wants its internal catalog id, which is what the catalog returns.
- */
+
+
+
+
+
+
+
+
+
+
 class ANVProvider : NativeAnimeParser() {
 
     override val name = "ANV"

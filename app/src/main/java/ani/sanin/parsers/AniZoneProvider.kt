@@ -17,18 +17,18 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import me.xdrop.fuzzywuzzy.FuzzySearch
 
-/**
- * AniZone (anizone.to).
- *
- * The site stopped rendering search results as plain markup; it now embeds a JS literal:
- *   items: JSON.parse('[{\u0022slug\u0022:...}]')
- * The literal is JS-escaped (unicode escapes and up to three backslashes before slashes),
- * so it must be unescaped once like JS would, then JSON-parsed.
- *
- * Playback lives on /anime/<slug>/<ep> inside:
- *   vidstackPlayer(JSON.parse('{"src":...,"subtitles":[...]}'))
- * Audio (sub/dub) is a track inside the HLS master, switchable in-app, not a separate list.
- */
+
+
+
+
+
+
+
+
+
+
+
+
 class AniZoneProvider : NativeAnimeParser() {
 
     override val name = "AniZone"
@@ -280,10 +280,10 @@ class AniZoneProvider : NativeAnimeParser() {
         Mapper.json.parseToJsonElement(jsUnescape(jsLiteral)) as? JsonObject
     }.getOrNull()
 
-    /**
-     * Evaluates the escaping rules of a single-quoted JS string literal once, so the result
-     * is valid JSON. Handles \uXXXX, \xXX and the backslash pairs the site emits for "/".
-     */
+
+
+
+
     private fun jsUnescape(value: String): String {
         val out = StringBuilder(value.length)
         var i = 0

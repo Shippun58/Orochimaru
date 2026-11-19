@@ -71,9 +71,9 @@
 -keepclassmembers,allowoptimization class androidx.core.content.res.ColorStateListInflaterCompat { *; }
 -dontwarn androidx.core.content.res.ResourcesCompat
 
-# Plugins loaded from external dex call androidx.core view/insets APIs that R8
-# would otherwise strip since the app does not reference them directly
-# (e.g. CfWebViewDialog -> ViewCompat.setOnApplyWindowInsetsListener).
+
+
+
 -keep class androidx.core.view.ViewCompat { *; }
 -keep class androidx.core.view.WindowInsetsCompat { *; }
 -keep class androidx.core.view.WindowInsetsCompat$* { *; }
@@ -96,14 +96,14 @@
 -keep class com.google.android.material.dialog.** { *; }
 -dontwarn com.google.android.material.**
 
-# CloudStream plugins are loaded from external dex files, so R8 cannot see
-# their Compose references. Keep the Compose stack intact or plugin settings
-# screens fail with NoClassDefFoundError (e.g. XDMovies).
+
+
+
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
 
-# Plugins are compiled against the CloudStream/AndroidX/Material R classes and
-# resolve resource ids by name at runtime. Keep every generated R class.
+
+
 -keep class **.R { *; }
 -keep class **.R$* { *; }
 
