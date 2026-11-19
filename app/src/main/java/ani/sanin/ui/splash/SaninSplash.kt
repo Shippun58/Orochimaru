@@ -399,7 +399,7 @@ internal fun SaninSplash(
 
 
 
-            val fillProgress = ((p - 0.80f) / 0.11f).coerceIn(0f, 1f)
+            val fillProgress = ((p - 0.46f) / 0.11f).coerceIn(0f, 1f)
             if (fillProgress > 0f) {
                 drawSegmentFill(ribbonPath, fillProgress, 59f, 479f, fromBottom = true)
                 drawSegmentFill(upperTrianglePath, fillProgress, 8f, 185f, fromBottom = true)
@@ -408,8 +408,8 @@ internal fun SaninSplash(
 
 
 
-            val burstIn = smooth((p - 0.91f) / 0.035f)
-            val burstOut = 1f - smooth((p - 0.945f) / 0.045f)
+            val burstIn = smooth((p - 0.57f) / 0.035f)
+            val burstOut = 1f - smooth((p - 0.605f) / 0.045f)
             val burst = burstIn * burstOut
             if (burst > 0f) {
                 withTransform({
