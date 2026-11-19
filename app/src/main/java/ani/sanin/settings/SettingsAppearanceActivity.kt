@@ -435,7 +435,7 @@ class SettingsAppearanceActivity : AppCompatActivity() {
 
         icon.setImageResource(R.drawable.ic_set_home)
         title.text = "Home Screen"
-        desc.text = "Show, hide & reorder home feed sections"
+        desc.text = "Banner style & feed sections"
         desc.visibility = View.VISIBLE
 
         val bannerRow = inflater.inflate(R.layout.item_settings_section_entry, items, false)
@@ -449,182 +449,18 @@ class SettingsAppearanceActivity : AppCompatActivity() {
         bannerRow.setOnClickListener { showBannerStyleDialog() }
         items.addView(bannerRow)
 
-        val hintDefault = "Drag to reorder \u2014 hold the arrows and move, or press UP/DOWN"
-        val hint = TextView(this).apply {
-            text = hintDefault
-            setPadding(16, 12, 16, 8)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            val tvColor = TypedValue()
-            theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, tvColor, true)
-            setTextColor(tvColor.data)
-            alpha = 0.72f
+        val sectionsRow = inflater.inflate(R.layout.item_settings_section_entry, items, false)
+        sectionsRow.findViewById<ImageView>(R.id.entryIcon).setImageResource(R.drawable.ic_set_cards)
+        sectionsRow.findViewById<TextView>(R.id.entryTitle).text = "Home Sections"
+        sectionsRow.findViewById<TextView>(R.id.entryDesc).apply {
+            text = "Choose, reorder & hide sections by mode"
+            visibility = View.VISIBLE
         }
-
-        val order = homeOrderList()
-        val visibility = homeVisibilityList()
-        val rows = mutableListOf<View>()
-        var dragRow: Int? = null
-        var keyboardRow: Int? = null
-
-        fun saveOrder() {
-            PrefManager.setVal(PrefName.HomeLayoutOrder, order.toList())
+        FocusEffectUtil.applyFocusListener(sectionsRow)
+        sectionsRow.setOnClickListener {
+            startActivity(android.content.Intent(this, HomeSectionsActivity::class.java))
         }
-
-        fun tintArrows(row: View, active: Boolean) {
-            val tv = TypedValue()
-            theme.resolveAttribute(
-                if (active) com.google.android.material.R.attr.colorPrimary else com.google.android.material.R.attr.colorOnSurface,
-                tv, true
-            )
-            row.findViewById<ImageView>(R.id.homeRowUpArrow).setColorFilter(tv.data)
-            row.findViewById<ImageView>(R.id.homeRowDownArrow).setColorFilter(tv.data)
-        }
-
-        fun refreshArrows() {
-            rows.forEachIndexed { pos, row -> tintArrows(row, dragRow == pos || keyboardRow == pos) }
-        }
-
-        fun moveRow(fromPos: Int, toPos: Int) {
-            if (fromPos == toPos) return
-            order.add(toPos, order.removeAt(fromPos))
-            val row = rows.removeAt(fromPos)
-            rows.add(toPos, row)
-            items.removeViewAt(fromPos + 1)
-            items.addView(row, toPos + 1)
-        }
-
-        val dragDisarm = object : OnBackPressedCallback(false) {
-            override fun handleOnBackPressed() {
-                dragRow = null
-                keyboardRow = null
-                hint.text = hintDefault
-                rows.forEach { it.elevation = 0f }
-                refreshArrows()
-                saveOrder()
-                isEnabled = false
-            }
-        }
-        onBackPressedDispatcher.addCallback(this, dragDisarm)
-
-        fun updateDragDisarmState() {
-            dragDisarm.isEnabled = keyboardRow != null || dragRow != null
-        }
-
-        order.forEach { idx ->
-            val row = inflater.inflate(R.layout.item_home_section_row, items, false)
-            row.findViewById<TextView>(R.id.homeRowTitle).text = homeSectionTitles[idx]
-            row.findViewById<TextView>(R.id.homeRowDesc).text = homeSectionDescs[idx]
-            val dragHandle = row.findViewById<LinearLayout>(R.id.homeRowDragHandle)
-            val switch = row.findViewById<MaterialSwitch>(R.id.homeRowSwitch)
-            switch.isChecked = visibility[idx]
-            tintArrows(row, false)
-
-            switch.setOnCheckedChangeListener { _, checked ->
-                visibility[idx] = checked
-                PrefManager.setVal(PrefName.HomeLayout, visibility.toList())
-                restartApp()
-            }
-            row.findViewById<TextView>(R.id.homeRowTitle).setOnClickListener {
-                switch.isChecked = !switch.isChecked
-            }
-
-            dragHandle.setOnClickListener {
-                val pos = rows.indexOf(row)
-                if (keyboardRow == pos) {
-                    keyboardRow = null
-                    hint.text = hintDefault
-                    refreshArrows()
-                    saveOrder()
-                    updateDragDisarmState()
-                } else {
-                    keyboardRow = pos
-                    hint.text = "Press UP/DOWN to reorder, ENTER to confirm"
-                    refreshArrows()
-                    updateDragDisarmState()
-                }
-                dragHandle.post { dragHandle.requestFocus() }
-            }
-
-            dragHandle.setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                val pos = rows.indexOf(row)
-                if (keyboardRow != pos) return@setOnKeyListener false
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (pos > 0) { moveRow(pos, pos - 1); keyboardRow = pos - 1; refreshArrows() }
-                        true
-                    }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (pos < rows.size - 1) { moveRow(pos, pos + 1); keyboardRow = pos + 1; refreshArrows() }
-                        true
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        keyboardRow = null
-                        hint.text = hintDefault
-                        refreshArrows()
-                        saveOrder()
-                        updateDragDisarmState()
-                        false
-                    }
-                    else -> false
-                }
-            }
-
-            row.setOnTouchListener { v, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        val pos = rows.indexOf(row)
-                        if (keyboardRow == pos) {
-                            keyboardRow = null
-                            dragRow = pos
-                            row.elevation = 8f
-                            hint.text = "Release to drop"
-                            refreshArrows()
-                            updateDragDisarmState()
-                            v.parent?.requestDisallowInterceptTouchEvent(true)
-                            true
-                        } else false
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        if (dragRow != null) {
-                            val rawY = event.rawY
-                            var target = dragRow!!
-                            rows.forEach { r ->
-                                val arr = IntArray(2)
-                                r.getLocationOnScreen(arr)
-                                if (rawY >= arr[1] && rawY <= arr[1] + r.height) target = rows.indexOf(r)
-                            }
-                            if (target != dragRow) {
-                                moveRow(dragRow!!, target)
-                                dragRow = target
-                                refreshArrows()
-                            }
-                            true
-                        } else false
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        if (dragRow != null) {
-                            row.elevation = 0f
-                            dragRow = null
-                            hint.text = hintDefault
-                            refreshArrows()
-                            saveOrder()
-                            updateDragDisarmState()
-                            v.parent?.requestDisallowInterceptTouchEvent(false)
-                        }
-                        false
-                    }
-                    else -> false
-                }
-            }
-
-            FocusEffectUtil.applyFocusListener(row)
-            FocusEffectUtil.applyFocusListener(dragHandle)
-            rows.add(row)
-            items.addView(row)
-        }
-
-        items.addView(hint)
+        items.addView(sectionsRow)
 
         var expanded = false
         fun toggleSection() {

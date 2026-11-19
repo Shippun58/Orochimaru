@@ -149,6 +149,9 @@
             android:name=".settings.SettingsAppearanceActivity"
             android:parentActivityName=".MainActivity" />
         <activity
+            android:name=".settings.HomeSectionsActivity"
+            android:parentActivityName=".settings.SettingsAppearanceActivity" />
+        <activity
             android:name=".settings.SettingsAnimationActivity"
             android:parentActivityName=".MainActivity" />
         <activity

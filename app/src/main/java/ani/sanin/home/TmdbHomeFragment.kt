@@ -120,6 +120,16 @@ class TmdbHomeFragment : Fragment() {
     private var bannerCarouselAdapter: TmdbBannerCarouselAdapter? = null
     private val bannerSnapHelper = PagerSnapHelper()
     private var loggedOutCtaButton: View? = null
+    private var sectionProviderLabel: String? = null
+    private var sectionConfig: List<HomeSectionEntry> = emptyList()
+    private var appliedConfigVersion = -1
+    private var currentProviderId: String? = null
+    private data class RenderedSection(
+        val providerId: String?,
+        val sectionKey: String?,
+        val views: List<View>,
+    )
+    private val renderedSections = mutableListOf<RenderedSection>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -311,6 +321,9 @@ class TmdbHomeFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         startAutoAdvance()
+        if (PrefManager.getVal<Int>(PrefName.HomeSectionsMovieTvVersion) != appliedConfigVersion) {
+            load()
+        }
 
         val live = Refresh.activity.getOrPut(requireActivity().hashCode()) { androidx.lifecycle.MutableLiveData(false) }
         live.observe(viewLifecycleOwner) { if (it == true) { load(); live.postValue(false) } }
@@ -333,6 +346,7 @@ class TmdbHomeFragment : Fragment() {
     }
 
     private fun load() {
+        appliedConfigVersion = PrefManager.getVal<Int>(PrefName.HomeSectionsMovieTvVersion)
         val sourceId = PrefManager.getVal<String>(PrefName.ContentSource)
         val allSources = sourceId == CsRuntime.ALL_SOURCES_ID
         val stremioAddon = StremioAddonManager.addonForSourceId(sourceId)
@@ -340,9 +354,13 @@ class TmdbHomeFragment : Fragment() {
         val apiIndex = CsRuntime.apiIndexOf(sourceId)
         val plugin = if (sourceId == "simkl" || sourceId == "tmdb") null
             else CsRepos.installed(requireContext()).firstOrNull { it.id == pluginId }
+        sectionConfig = HomeSectionsConfig.loadMovieTv()
+        renderedSections.clear()
+        currentProviderId = null
         loadJob?.cancel()
         binding.tmdbHomeSections.removeAllViews()
         loggedOutCtaButton = null
+        sectionProviderLabel = null
         binding.tmdbHomeSpinner.isVisible = true
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
 
@@ -353,8 +371,13 @@ class TmdbHomeFragment : Fragment() {
             }
 
             if (stremioAddon != null) {
-                val loaded = loadStremioHome(stremioAddon)
-                if (!loaded) addEmptyState("No catalog available for ${stremioAddon.manifest.name}")
+                currentProviderId = "stremio:${stremioAddon.transportUrl}"
+                loadStremioHome(stremioAddon)
+                applySectionConfig()
+                currentProviderId = null
+                if (binding.tmdbHomeSections.childCount == 0) {
+                    addEmptyState("No sections available for ${stremioAddon.manifest.name}")
+                }
                 if (_binding != null) binding.tmdbHomeSpinner.isVisible = false
                 return@launch
             }
@@ -363,16 +386,24 @@ class TmdbHomeFragment : Fragment() {
             loadBanner(plugin, apiIndex, mainPageCache)
 
             if (plugin != null) {
-                val hasPluginSections = loadPluginSections(plugin, apiIndex, mainPageCache)
-                if (!hasPluginSections) addEmptyState("No catalog available for ${plugin.name}")
+                currentProviderId = "cs:${plugin.id}"
+                loadPluginSections(plugin, apiIndex, mainPageCache)
+                applySectionConfig()
+                currentProviderId = null
+                if (binding.tmdbHomeSections.childCount == 0) {
+                    addEmptyState("No sections available for ${plugin.name}")
+                }
             } else {
                 val loggedOut = isSimklLoggedOut()
                 if (loggedOut) {
                     addLoggedOutCta()
                     loadPublicSections()
                 } else {
+                    currentProviderId = "simkl"
                     loadSimklContinueWatching()
                     loadSimklHomeSections()
+                    applySectionConfig()
+                    currentProviderId = null
                 }
             }
             if (_binding != null) binding.tmdbHomeSpinner.isVisible = false
@@ -394,46 +425,125 @@ class TmdbHomeFragment : Fragment() {
         var rendered = 0
 
         if (!isSimklLoggedOut()) {
-            rendered += loadProviderGroup("Simkl") {
+            rendered += loadProviderGroup("simkl", "Simkl") {
                 loadSimklContinueWatching()
                 loadSimklHomeSections()
             }
         }
         for (plugin in plugins) {
             if (_binding == null) return
-            rendered += loadProviderGroup(plugin.name) {
+            rendered += loadProviderGroup("cs:${plugin.id}", plugin.name) {
                 loadPluginSections(plugin, null, mainPageCache)
             }
         }
         for (addon in addons) {
             if (_binding == null) return
-            rendered += loadProviderGroup(addon.manifest.name) {
+            rendered += loadProviderGroup("stremio:${addon.transportUrl}", addon.manifest.name) {
                 loadStremioHome(addon, updateBanner = false)
             }
         }
-        if (rendered == 0) addEmptyState("No catalogs available")
+        applySectionConfig()
+        if (rendered == 0 || binding.tmdbHomeSections.childCount == 0) {
+            addEmptyState("No catalogs available")
+        }
         applyTmdbBannerFocusChain()
     }
 
-    private suspend fun loadProviderGroup(name: String, block: suspend () -> Unit): Int {
+    private suspend fun loadProviderGroup(
+        providerId: String,
+        name: String,
+        block: suspend () -> Unit,
+    ): Int {
         if (!isAdded || _binding == null) return 0
         val start = binding.tmdbHomeSections.childCount
-        block()
+        sectionProviderLabel = name
+        currentProviderId = providerId
+        try {
+            block()
+        } finally {
+            sectionProviderLabel = null
+            currentProviderId = null
+        }
         if (!isAdded || _binding == null) return 0
-        val added = binding.tmdbHomeSections.childCount - start
-        if (added > 0) binding.tmdbHomeSections.addView(providerHeaderView(name), start)
-        return added
+        return binding.tmdbHomeSections.childCount - start
     }
 
-    private fun providerHeaderView(name: String): TextView {
-        val ctx = requireContext()
-        return TextView(ctx).apply {
-            text = name
-            setPadding(24, 28, 24, 2)
-            textSize = 20f
+    private fun sectionHeader(ctx: android.content.Context, title: String): View {
+        val titleColor = ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+        val titleView = TextView(ctx).apply {
+            text = title
+            textSize = 16f
             setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
-            setTextColor(ctx.getThemeColor(com.google.android.material.R.attr.colorPrimary))
+            setTextColor(titleColor)
         }
+        val provider = sectionProviderLabel
+        if (provider.isNullOrBlank()) {
+            titleView.setPadding(24, 14, 24, 8)
+            return titleView
+        }
+        val primary = ctx.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+        val chip = TextView(ctx).apply {
+            text = provider
+            textSize = 11f
+            setTextColor(primary)
+            setPadding(8.px, 2.px, 8.px, 2.px)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 999f
+                setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 0x33))
+            }
+        }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(24, 14, 8, 8)
+            addView(
+                titleView,
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            )
+            addView(
+                chip,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginStart = 8.px }
+            )
+        }
+    }
+
+    private fun registerSection(sectionKey: String?, views: List<View>) {
+        if (_binding == null) return
+        renderedSections.add(RenderedSection(currentProviderId, sectionKey, views))
+    }
+
+    private fun applySectionConfig() {
+        val b = _binding ?: return
+        if (renderedSections.isEmpty()) return
+        val byKey = HashMap<String, RenderedSection>()
+        renderedSections.forEach { section ->
+            val pid = section.providerId ?: return@forEach
+            val key = section.sectionKey ?: return@forEach
+            byKey["$pid|$key"] = section
+        }
+        val ordered = mutableListOf<RenderedSection>()
+        val handled = HashSet<String>()
+        sectionConfig.forEach { entry ->
+            val key = "${entry.providerId}|${entry.sectionKey}"
+            val section = byKey[key] ?: return@forEach
+            handled.add(key)
+            if (entry.enabled) ordered.add(section)
+        }
+        renderedSections.forEach { section ->
+            val key = section.providerId?.let { pid ->
+                section.sectionKey?.let { sk -> "$pid|$sk" }
+            }
+            if (key == null || key !in handled) ordered.add(section)
+        }
+        b.tmdbHomeSections.removeAllViews()
+        ordered.forEach { section ->
+            section.views.forEach { b.tmdbHomeSections.addView(it) }
+        }
+        renderedSections.clear()
+        applyTmdbBannerFocusChain()
     }
 
     private fun openMedia(media: TmdbMedia) {
@@ -980,7 +1090,10 @@ class TmdbHomeFragment : Fragment() {
                     val resp = fetchMainPage(api, index, MainPageRequest(page.name, page.data, page.horizontalImages), mainPageCache)
                     resp?.items?.forEach { list ->
                         if (list.list.isNotEmpty()) {
-                            addPluginSection(list.name, list.list, apiKey, list.isHorizontalImages)
+                            addPluginSection(
+                                list.name, list.list, apiKey, list.isHorizontalImages,
+                                sectionKey = "$index:${list.name}"
+                            )
                             added = true
                             apiAdded = true
                         }
@@ -991,7 +1104,10 @@ class TmdbHomeFragment : Fragment() {
                 val resp = fetchMainPage(api, index, MainPageRequest("Home", "", false), mainPageCache)
                 resp?.items?.forEach { list ->
                     if (list.list.isNotEmpty()) {
-                        addPluginSection(list.name, list.list, apiKey, list.isHorizontalImages)
+                        addPluginSection(
+                            list.name, list.list, apiKey, list.isHorizontalImages,
+                            sectionKey = "$index:${list.name}"
+                        )
                         added = true
                         apiAdded = true
                     }
@@ -1003,7 +1119,7 @@ class TmdbHomeFragment : Fragment() {
                     withContext(Dispatchers.IO) { api.quickSearch("") }
                 }.getOrNull()
                 if (!quick.isNullOrEmpty()) {
-                    addPluginSection("Popular", quick, apiKey, false)
+                    addPluginSection("Popular", quick, apiKey, false, sectionKey = "$index:Popular")
                     added = true
                 }
             }
@@ -1048,13 +1164,7 @@ class TmdbHomeFragment : Fragment() {
         if (items.isEmpty()) return
         if (_binding == null) return
         val ctx = requireContext()
-        val header = TextView(ctx).apply {
-            text = "Continue Watching"
-            setPadding(24, 14, 24, 8)
-            textSize = 16f
-            setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
-            setTextColor(ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface))
-        }
+        val header = sectionHeader(ctx, "Continue Watching")
         val list = RecyclerView(ctx).apply {
             setTag(R.id.section_row_tag, true)
             layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
@@ -1082,6 +1192,7 @@ class TmdbHomeFragment : Fragment() {
         }
         binding.tmdbHomeSections.addView(header)
         binding.tmdbHomeSections.addView(list)
+        registerSection("continue", listOf(header, list))
     }
 
     private suspend fun loadSimklHomeSections() = coroutineScope {
@@ -1091,12 +1202,12 @@ class TmdbHomeFragment : Fragment() {
         } else emptyList()
 
         val favourites = all.filter { (it.userRating ?: 0) >= 9 }
-        if (favourites.isNotEmpty()) addSimklSection("Favourites", favourites)
+        if (favourites.isNotEmpty()) addSimklSection("Favourites", favourites, "favorites")
         val planned = all.filter {
             val s = it.status?.lowercase()
             s == "plantowatch" || s == "planning"
         }
-        if (planned.isNotEmpty()) addSimklSection("Planned", planned)
+        if (planned.isNotEmpty()) addSimklSection("Planned", planned, "planned")
         loadRecommended(all)
         startAutoAdvance()
         applyTmdbBannerFocusChain()
@@ -1139,17 +1250,15 @@ class TmdbHomeFragment : Fragment() {
         if (recs.isNotEmpty()) addSection("Recommended", recs)
     }
 
-    private fun addSimklSection(title: String, items: List<Simkl.SimklWatchedItem>) {
+    private fun addSimklSection(
+        title: String,
+        items: List<Simkl.SimklWatchedItem>,
+        sectionKey: String = title.trim().lowercase(),
+    ) {
         if (items.isEmpty()) return
         if (_binding == null) return
         val ctx = requireContext()
-        val header = TextView(ctx).apply {
-            text = title
-            setPadding(24, 14, 24, 8)
-            textSize = 16f
-            setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
-            setTextColor(ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface))
-        }
+        val header = sectionHeader(ctx, title)
         val list = RecyclerView(ctx).apply {
             setTag(R.id.section_row_tag, true)
             layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
@@ -1170,6 +1279,7 @@ class TmdbHomeFragment : Fragment() {
         }
         binding.tmdbHomeSections.addView(header)
         binding.tmdbHomeSections.addView(list)
+        registerSection(sectionKey, listOf(header, list))
         applyTmdbBannerFocusChain()
     }
 
@@ -1190,20 +1300,15 @@ class TmdbHomeFragment : Fragment() {
         title: String,
         items: List<SearchResponse>,
         sourceKey: String,
-        horizontal: Boolean
+        horizontal: Boolean,
+        sectionKey: String = title.trim().lowercase(),
     ) {
         if (items.isEmpty()) return
         if (_binding == null) return
 
         if (title.contains("Continue Watching", ignoreCase = true)) return
         val ctx = requireContext()
-        val header = TextView(ctx).apply {
-            text = title
-            setPadding(24, 14, 24, 8)
-            textSize = 16f
-            setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
-            setTextColor(ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface))
-        }
+        val header = sectionHeader(ctx, title)
         val list = RecyclerView(ctx).apply {
             setTag(R.id.section_row_tag, true)
             layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
@@ -1224,6 +1329,7 @@ class TmdbHomeFragment : Fragment() {
         }
         binding.tmdbHomeSections.addView(header)
         binding.tmdbHomeSections.addView(list)
+        registerSection(sectionKey, listOf(header, list))
     }
 
     private fun addSection(
@@ -1231,17 +1337,12 @@ class TmdbHomeFragment : Fragment() {
         items: List<TmdbMedia>,
         onClick: ((TmdbMedia) -> Unit)? = null,
         showMore: Boolean = true,
+        sectionKey: String = title.trim().lowercase(),
     ) {
         if (items.isEmpty()) return
         if (_binding == null) return
         val ctx = requireContext()
-        val header = TextView(ctx).apply {
-            text = title
-            setPadding(24, 14, 24, 8)
-            textSize = 16f
-            setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
-            setTextColor(ctx.getThemeColor(com.google.android.material.R.attr.colorOnSurface))
-        }
+        val header = sectionHeader(ctx, title)
         val list = RecyclerView(ctx).apply {
             setTag(R.id.section_row_tag, true)
             layoutManager = LinearLayoutManager(ctx, LinearLayoutManager.HORIZONTAL, false)
@@ -1271,6 +1372,7 @@ class TmdbHomeFragment : Fragment() {
         }
         binding.tmdbHomeSections.addView(header)
         binding.tmdbHomeSections.addView(list)
+        registerSection(sectionKey, listOf(header, list))
         applyTmdbBannerFocusChain()
     }
 

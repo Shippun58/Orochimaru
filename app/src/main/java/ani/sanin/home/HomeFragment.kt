@@ -117,6 +117,7 @@ class HomeFragment : Fragment() {
     private var homeBannerLogos: Map<Int, String?> = emptyMap()
 
     private var catalogueMode = false
+    private var appliedSectionsVersion = -1
 
     private var catalogueJob: Job? = null
     private var catalogueBannerJob: Job? = null
@@ -142,6 +143,7 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val scope = lifecycleScope
         catalogueMode = AnimeCatalogueHome.isCatalogueSource(AnimeCatalogueHome.savedSourceId())
+        appliedSectionsVersion = PrefManager.getVal<Int>(PrefName.HomeSectionsAnimeVersion)
         loggedOutMode = !catalogueMode && isTrackerLoggedOut()
         Logger.log("HomeFragment: catalogueMode=$catalogueMode loggedOut=$loggedOutMode source='${AnimeCatalogueHome.savedSourceId()}'")
         fun load() {
@@ -2124,6 +2126,11 @@ class HomeFragment : Fragment() {
                 loadCatalogue()
             }
             return
+        }
+        val sectionsVersion = PrefManager.getVal<Int>(PrefName.HomeSectionsAnimeVersion)
+        if (sectionsVersion != appliedSectionsVersion) {
+            appliedSectionsVersion = sectionsVersion
+            Refresh.activity[1]?.postValue(true)
         }
         if (!model.loaded) Refresh.activity[1]!!.postValue(true)
         reapplyHomeLayout()

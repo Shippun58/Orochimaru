@@ -133,6 +133,10 @@ enum class PrefName(val data: Pref) {
             listOf(0, 1, 2, 3, 4)
         )
     ),
+    HomeSectionsAnime(Pref(Location.UI, String::class, "")),
+    HomeSectionsMovieTv(Pref(Location.UI, String::class, "")),
+    HomeSectionsAnimeVersion(Pref(Location.UI, Int::class, 0)),
+    HomeSectionsMovieTvVersion(Pref(Location.UI, Int::class, 0)),
     BannerAnimations(Pref(Location.UI, Boolean::class, true)),
     LayoutAnimations(Pref(Location.UI, Boolean::class, true)),
     TrendingScroller(Pref(Location.UI, Boolean::class, true)),
