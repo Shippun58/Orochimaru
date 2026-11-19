@@ -71,6 +71,17 @@
 -keepclassmembers,allowoptimization class androidx.core.content.res.ColorStateListInflaterCompat { *; }
 -dontwarn androidx.core.content.res.ResourcesCompat
 
+# Plugins loaded from external dex call androidx.core view/insets APIs that R8
+# would otherwise strip since the app does not reference them directly
+# (e.g. CfWebViewDialog -> ViewCompat.setOnApplyWindowInsetsListener).
+-keep class androidx.core.view.ViewCompat { *; }
+-keep class androidx.core.view.WindowInsetsCompat { *; }
+-keep class androidx.core.view.WindowInsetsCompat\$* { *; }
+-keep class androidx.core.view.OnApplyWindowInsetsListener { *; }
+-keep class androidx.core.view.WindowInsetsAnimationCompat { *; }
+-keep class androidx.core.view.WindowInsetsAnimationCompat\$* { *; }
+-dontwarn androidx.core.view.**
+
 -keep class androidx.activity.** { *; }
 -dontwarn androidx.activity.**
 -keep class androidx.appcompat.** { *; }
