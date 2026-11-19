@@ -346,6 +346,7 @@ class TmdbHomeFragment : Fragment() {
     }
 
     private fun load() {
+        if (!isAdded || _binding == null) return
         appliedConfigVersion = PrefManager.getVal<Int>(PrefName.HomeSectionsMovieTvVersion)
         val sourceId = PrefManager.getVal<String>(PrefName.ContentSource)
         val allSources = sourceId == CsRuntime.ALL_SOURCES_ID
@@ -363,6 +364,7 @@ class TmdbHomeFragment : Fragment() {
         sectionProviderLabel = null
         binding.tmdbHomeSpinner.isVisible = true
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
+            if (_binding == null) return@launch
 
             if (allSources) {
                 loadAllSources()
@@ -373,9 +375,10 @@ class TmdbHomeFragment : Fragment() {
             if (stremioAddon != null) {
                 currentProviderId = "stremio:${stremioAddon.transportUrl}"
                 loadStremioHome(stremioAddon)
+                if (_binding == null) return@launch
                 applySectionConfig()
                 currentProviderId = null
-                if (binding.tmdbHomeSections.childCount == 0) {
+                if (_binding != null && binding.tmdbHomeSections.childCount == 0) {
                     addEmptyState("No sections available for ${stremioAddon.manifest.name}")
                 }
                 if (_binding != null) binding.tmdbHomeSpinner.isVisible = false
@@ -388,9 +391,10 @@ class TmdbHomeFragment : Fragment() {
             if (plugin != null) {
                 currentProviderId = "cs:${plugin.id}"
                 loadPluginSections(plugin, apiIndex, mainPageCache)
+                if (_binding == null) return@launch
                 applySectionConfig()
                 currentProviderId = null
-                if (binding.tmdbHomeSections.childCount == 0) {
+                if (_binding != null && binding.tmdbHomeSections.childCount == 0) {
                     addEmptyState("No sections available for ${plugin.name}")
                 }
             } else {
@@ -402,6 +406,7 @@ class TmdbHomeFragment : Fragment() {
                     currentProviderId = "simkl"
                     loadSimklContinueWatching()
                     loadSimklHomeSections()
+                    if (_binding == null) return@launch
                     applySectionConfig()
                     currentProviderId = null
                 }
