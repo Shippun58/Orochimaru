@@ -76,10 +76,10 @@
 # (e.g. CfWebViewDialog -> ViewCompat.setOnApplyWindowInsetsListener).
 -keep class androidx.core.view.ViewCompat { *; }
 -keep class androidx.core.view.WindowInsetsCompat { *; }
--keep class androidx.core.view.WindowInsetsCompat\$* { *; }
+-keep class androidx.core.view.WindowInsetsCompat$* { *; }
 -keep class androidx.core.view.OnApplyWindowInsetsListener { *; }
 -keep class androidx.core.view.WindowInsetsAnimationCompat { *; }
--keep class androidx.core.view.WindowInsetsAnimationCompat\$* { *; }
+-keep class androidx.core.view.WindowInsetsAnimationCompat$* { *; }
 -dontwarn androidx.core.view.**
 
 -keep class androidx.activity.** { *; }
