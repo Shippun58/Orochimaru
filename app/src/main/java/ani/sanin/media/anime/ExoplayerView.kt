@@ -2397,10 +2397,7 @@ class ExoplayerView :
             exoSubtitle.setOnClickListener {
                 subClick()
             }
-            
-            
-            playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
-                ?.nextFocusDownId = R.id.exo_sub
+            refreshBottomBarFocusLinks()
         }
         val sub: MutableList<MediaItem.SubtitleConfiguration> =
             emptyList<MediaItem.SubtitleConfiguration>().toMutableList()
@@ -5088,15 +5085,32 @@ class ExoplayerView :
 
         playerView.findViewById<View>(R.id.exo_skip)?.nextFocusUpId = R.id.exo_settings
         playerView.findViewById<View>(R.id.exo_skip_timestamp)?.nextFocusUpId = R.id.exo_settings
-        val sourceBtn = playerView.findViewById<View>(R.id.exo_source)
-        val rotateBtn = playerView.findViewById<View>(R.id.exo_rotate)
-        sourceBtn.nextFocusRightId = if (show) R.id.exo_tracks else R.id.exo_rotate
-        rotateBtn.nextFocusLeftId = if (show) R.id.exo_tracks else R.id.exo_source
-        exoSpeed.nextFocusRightId =
-            if (exoSubtitle.isVisible) R.id.exo_sub else R.id.exo_source
+        refreshBottomBarFocusLinks()
         if (!show && btn.hasFocus()) {
             exoSpeed.requestFocus()
         }
+    }
+
+    private fun refreshBottomBarFocusLinks() {
+        if (!::playerView.isInitialized) return
+        val subVisible = ::exoSubtitle.isInitialized && exoSubtitle.isVisible
+        val tracksVisible = playerView.findViewById<View>(R.id.exo_tracks)?.isVisible == true
+        if (::exoSource.isInitialized) {
+            exoSource.nextFocusLeftId =
+                if (subVisible) R.id.exo_sub else androidx.media3.ui.R.id.exo_playback_speed
+            exoSource.nextFocusRightId =
+                if (tracksVisible) R.id.exo_tracks else R.id.exo_rotate
+        }
+        if (::exoSpeed.isInitialized) {
+            exoSpeed.nextFocusRightId =
+                if (subVisible) R.id.exo_sub else R.id.exo_source
+        }
+        if (::exoRotate.isInitialized) {
+            exoRotate.nextFocusLeftId =
+                if (tracksVisible) R.id.exo_tracks else R.id.exo_source
+        }
+        playerView.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
+            ?.nextFocusDownId = if (subVisible) R.id.exo_sub else R.id.exo_source
     }
 
     fun setSubtitlesEnabled(enabled: Boolean) {
@@ -5213,6 +5227,7 @@ class ExoplayerView :
             exoSubtitle.setOnClickListener {
                 subClick()
             }
+            refreshBottomBarFocusLinks()
         }
         updateAudioLanguageInfo()
     }
