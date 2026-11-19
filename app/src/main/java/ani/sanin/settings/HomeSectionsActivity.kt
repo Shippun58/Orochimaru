@@ -2,6 +2,7 @@ package ani.sanin.settings
 
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -54,6 +55,13 @@ class HomeSectionsActivity : AppCompatActivity() {
         binding.homeSectionsList.layoutManager = LinearLayoutManager(this)
         binding.homeSectionsList.adapter = adapter
         setupTouchHelper()
+        adapter.onDragModeChanged = { active ->
+            if (active) {
+                binding.homeSectionsStatus.text = "Reorder mode • drag, or up/down • right to finish"
+            } else {
+                updateStatus()
+            }
+        }
 
         binding.homeSectionsAnimeTab.setOnClickListener { selectMode(HomeSectionsMode.ANIME) }
         binding.homeSectionsMovieTab.setOnClickListener { selectMode(HomeSectionsMode.MOVIE_TV) }
@@ -96,6 +104,7 @@ class HomeSectionsActivity : AppCompatActivity() {
                 HomeSectionsConfig.loadMovieTv().toMutableList()
             }
             if (mode != target) return@launch
+            adapter.dragActivePosition = null
             items.clear()
             items.addAll(initial)
             adapter.notifyDataSetChanged()
@@ -135,14 +144,6 @@ class HomeSectionsActivity : AppCompatActivity() {
         HomeSectionsConfig.save(mode, items.toList())
     }
 
-    private fun move(from: Int, to: Int) {
-        if (from !in items.indices || to !in items.indices || from == to) return
-        items.add(to, items.removeAt(from))
-        adapter.notifyItemMoved(from, to)
-        persist()
-        updateStatus()
-    }
-
     private fun setupTouchHelper() {
         val callback = object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN,
@@ -159,6 +160,7 @@ class HomeSectionsActivity : AppCompatActivity() {
                 val to = target.bindingAdapterPosition
                 if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return false
                 items.add(to, items.removeAt(from))
+                adapter.dragActivePosition = to
                 adapter.notifyItemMoved(from, to)
                 return true
             }
@@ -167,7 +169,7 @@ class HomeSectionsActivity : AppCompatActivity() {
 
             override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
                 super.clearView(recyclerView, viewHolder)
-                persist()
+                adapter.disarmDrag(true)
                 updateStatus()
             }
         }
@@ -185,6 +187,37 @@ class HomeSectionsActivity : AppCompatActivity() {
             val dragHandle: LinearLayout = view.findViewById(R.id.homeRowDragHandle)
             val up: ImageView = view.findViewById(R.id.homeRowUpArrow)
             val down: ImageView = view.findViewById(R.id.homeRowDownArrow)
+        }
+
+        var dragActivePosition: Int? = null
+        var onDragModeChanged: ((Boolean) -> Unit)? = null
+
+        private fun tintArrows(holder: VH, active: Boolean) {
+            val color = holder.itemView.context.getThemeColor(
+                if (active) com.google.android.material.R.attr.colorPrimary
+                else com.google.android.material.R.attr.colorOnSurface
+            )
+            holder.up.setColorFilter(color)
+            holder.down.setColorFilter(color)
+        }
+
+        fun disarmDrag(persist: Boolean) {
+            val had = dragActivePosition != null
+            dragActivePosition = null
+            if (persist && had) persist()
+            onDragModeChanged?.invoke(false)
+            notifyDataSetChanged()
+        }
+
+        private fun moveWithTint(holder: VH, from: Int, to: Int) {
+            if (from !in items.indices || to !in items.indices || from == to) return
+            items.add(to, items.removeAt(from))
+            dragActivePosition = to
+            notifyItemMoved(from, to)
+            notifyItemChanged(if (from < to) from else to)
+            notifyItemChanged(if (from < to) to else from)
+            persist()
+            updateStatus()
         }
 
         override fun getItemCount(): Int = items.size
@@ -213,19 +246,29 @@ class HomeSectionsActivity : AppCompatActivity() {
             val row = holder.itemView
             val drag = holder.dragHandle
             val switch = holder.switch
-            val up = holder.up
-            val down = holder.down
-            val movable = { toUp: Boolean ->
-                val pos = holder.bindingAdapterPosition
-                if (pos != RecyclerView.NO_POSITION) move(pos, if (toUp) pos - 1 else pos + 1)
-            }
 
-            row.setOnClickListener { switch.toggle() }
+            tintArrows(holder, dragActivePosition == position)
+            row.setOnClickListener {
+                if (dragActivePosition == null) switch.toggle()
+            }
             row.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> { drag.requestFocus(); true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { switch.requestFocus(); true }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        val pos = holder.bindingAdapterPosition
+                        if (pos != RecyclerView.NO_POSITION && dragActivePosition != pos) {
+                            dragActivePosition = pos
+                            tintArrows(holder, true)
+                            onDragModeChanged?.invoke(true)
+                        }
+                        drag.post { drag.requestFocus() }
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (dragActivePosition == holder.bindingAdapterPosition) disarmDrag(true)
+                        switch.requestFocus()
+                        true
+                    }
                     KeyEvent.KEYCODE_DPAD_CENTER -> { switch.toggle(); true }
                     else -> false
                 }
@@ -239,42 +282,57 @@ class HomeSectionsActivity : AppCompatActivity() {
                     else -> false
                 }
             }
-            up.setOnClickListener { movable(true) }
-            up.isFocusable = true
-            up.setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_CENTER -> { movable(true); true }
-                    else -> false
+            drag.setOnClickListener {
+                val pos = holder.bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setOnClickListener
+                if (dragActivePosition == pos) {
+                    disarmDrag(true)
+                } else {
+                    dragActivePosition = pos
+                    tintArrows(holder, true)
+                    onDragModeChanged?.invoke(true)
+                    drag.post { drag.requestFocus() }
                 }
             }
-            down.setOnClickListener { movable(false) }
-            down.isFocusable = true
-            down.setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_CENTER -> { movable(false); true }
-                    else -> false
-                }
+            drag.setOnLongClickListener {
+                touchHelper?.startDrag(holder)
+                true
             }
-            drag.setOnClickListener { touchHelper?.startDrag(holder) }
-            drag.setOnLongClickListener { touchHelper?.startDrag(holder); true }
             drag.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                val pos = holder.bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setOnKeyListener false
+                if (dragActivePosition != pos) {
+                    dragActivePosition = pos
+                    tintArrows(holder, true)
+                    onDragModeChanged?.invoke(true)
+                }
                 when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP -> { movable(true); true }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> { movable(false); true }
+                    KeyEvent.KEYCODE_DPAD_UP -> { moveWithTint(holder, pos, pos - 1); true }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> { moveWithTint(holder, pos, pos + 1); true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        disarmDrag(true); row.requestFocus(); true
+                    }
                     KeyEvent.KEYCODE_DPAD_LEFT -> { drag.requestFocus(); true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { row.requestFocus(); true }
-                    KeyEvent.KEYCODE_DPAD_CENTER -> { row.requestFocus(); true }
+                    KeyEvent.KEYCODE_DPAD_CENTER -> {
+                        disarmDrag(true); row.requestFocus(); true
+                    }
                     else -> false
+                }
+            }
+            row.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN &&
+                    dragActivePosition == holder.bindingAdapterPosition
+                ) {
+                    touchHelper?.startDrag(holder)
+                    true
+                } else {
+                    false
                 }
             }
 
             FocusEffectUtil.applyFocusListener(row)
             FocusEffectUtil.applyFocusListener(drag)
-            FocusEffectUtil.applyFocusListener(up)
-            FocusEffectUtil.applyFocusListener(down)
         }
     }
 }
