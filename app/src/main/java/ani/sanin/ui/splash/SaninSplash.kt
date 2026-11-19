@@ -333,9 +333,9 @@ internal fun SaninSplash(
 
             // Constant-speed travel avoids the apparent pauses caused by
             // applying easing both to the master timeline and the path motion.
-            val travel = ((p - 0.08f) / 0.62f).coerceIn(0f, 1f)
+            val travel = ((p - 0.08f) / 0.38f).coerceIn(0f, 1f)
             val fadeIn = smooth((p - 0.08f) / 0.10f)
-            val fadeOut = 1f - smooth((p - 0.68f) / 0.04f)
+            val fadeOut = 1f - smooth((p - 0.42f) / 0.04f)
             val streakStrength = fadeIn * fadeOut
 
             // Each highlight follows one of the three exact vector paths.
