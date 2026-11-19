@@ -348,14 +348,14 @@ class TmdbHomeFragment : Fragment() {
 
             if (allSources) {
                 loadAllSources()
-                binding.tmdbHomeSpinner.isVisible = false
+                if (_binding != null) binding.tmdbHomeSpinner.isVisible = false
                 return@launch
             }
 
             if (stremioAddon != null) {
                 val loaded = loadStremioHome(stremioAddon)
                 if (!loaded) addEmptyState("No catalog available for ${stremioAddon.manifest.name}")
-                binding.tmdbHomeSpinner.isVisible = false
+                if (_binding != null) binding.tmdbHomeSpinner.isVisible = false
                 return@launch
             }
 
@@ -375,20 +375,22 @@ class TmdbHomeFragment : Fragment() {
                     loadSimklHomeSections()
                 }
             }
-            binding.tmdbHomeSpinner.isVisible = false
+            if (_binding != null) binding.tmdbHomeSpinner.isVisible = false
         }
     }
 
     private suspend fun loadAllSources() {
+        val ctx = context ?: return
         val mainPageCache = mutableMapOf<String, HomePageResponse?>()
         loadBanner(null)
 
         val plugins = withContext(Dispatchers.IO) {
-            runCatching { CsRepos.installed(requireContext()) }.getOrDefault(emptyList())
+            runCatching { CsRepos.installed(ctx) }.getOrDefault(emptyList())
         }
         val addons = withContext(Dispatchers.IO) {
             runCatching { StremioAddonManager.homeSources() }.getOrDefault(emptyList())
         }
+        if (_binding == null) return
         var rendered = 0
 
         if (!isSimklLoggedOut()) {
@@ -619,6 +621,7 @@ class TmdbHomeFragment : Fragment() {
         PrefManager.getNullableVal<Simkl.SimklToken>(PrefName.SimklToken, null) == null
 
     private fun addLoggedOutCta() {
+        if (_binding == null || !isAdded) return
         val cta = layoutInflater.inflate(R.layout.view_logged_out_cta, binding.tmdbHomeSections, false)
         val button = cta.findViewById<View>(R.id.loggedOutLinkButton)
         button.setOnClickListener {
@@ -1043,6 +1046,7 @@ class TmdbHomeFragment : Fragment() {
         if (Simkl.token == null) return
         val items = withContext(Dispatchers.IO) { Simkl.getContinueWatching() }
         if (items.isEmpty()) return
+        if (_binding == null) return
         val ctx = requireContext()
         val header = TextView(ctx).apply {
             text = "Continue Watching"
@@ -1137,6 +1141,7 @@ class TmdbHomeFragment : Fragment() {
 
     private fun addSimklSection(title: String, items: List<Simkl.SimklWatchedItem>) {
         if (items.isEmpty()) return
+        if (_binding == null) return
         val ctx = requireContext()
         val header = TextView(ctx).apply {
             text = title
@@ -1169,6 +1174,7 @@ class TmdbHomeFragment : Fragment() {
     }
 
     private fun addEmptyState(text: String) {
+        if (_binding == null || !isAdded) return
         binding.tmdbHomeSections.addView(
             TextView(requireContext()).apply {
                 this.text = text
@@ -1187,6 +1193,7 @@ class TmdbHomeFragment : Fragment() {
         horizontal: Boolean
     ) {
         if (items.isEmpty()) return
+        if (_binding == null) return
 
         if (title.contains("Continue Watching", ignoreCase = true)) return
         val ctx = requireContext()
@@ -1226,6 +1233,7 @@ class TmdbHomeFragment : Fragment() {
         showMore: Boolean = true,
     ) {
         if (items.isEmpty()) return
+        if (_binding == null) return
         val ctx = requireContext()
         val header = TextView(ctx).apply {
             text = title
@@ -1267,6 +1275,7 @@ class TmdbHomeFragment : Fragment() {
     }
 
     private fun showBanner(index: Int) {
+        if (_binding == null) return
         val item = bannerItems.getOrNull(index) ?: return
         bannerIndex = index
         binding.tmdbBannerImage.loadImage(item.bannerUrl)
