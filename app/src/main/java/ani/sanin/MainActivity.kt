@@ -684,7 +684,8 @@ class MainActivity : AppCompatActivity() {
             "Anime"
         } else {
             val src = PrefManager.getVal<String>(PrefName.ContentSource)
-            if (src == "simkl" || src == "tmdb") "Simkl"
+            if (src == CsRuntime.ALL_SOURCES_ID) "All"
+            else if (src == "simkl" || src == "tmdb") "Simkl"
             else StremioAddonManager.addonForSourceId(src)?.manifest?.name
                 ?: CsRuntime.cachedApiName(src)
                 ?: CsRepos.installed(this).firstOrNull { it.id == CsRuntime.pluginIdOf(src) }?.name

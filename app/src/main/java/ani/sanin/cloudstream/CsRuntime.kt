@@ -21,6 +21,8 @@ class CsPluginException(message: String) : Exception(message)
 
 object CsRuntime {
 
+    const val ALL_SOURCES_ID = "__all__"
+
     private const val TAG = "CsRuntime"
 
     private val plugins = mutableMapOf<String, BasePlugin>()

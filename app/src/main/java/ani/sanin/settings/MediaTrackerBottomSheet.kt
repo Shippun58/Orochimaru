@@ -347,6 +347,7 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
         }
 
         fun sourceLabel(names: List<String>, ids: List<String>, saved: String): String? {
+            if (saved == CsRuntime.ALL_SOURCES_ID) return "All"
             val exact = ids.indexOfFirst { it.equals(saved, ignoreCase = true) }
             if (exact >= 0) return names.getOrNull(exact)
             CsRuntime.cachedApiName(saved)?.let { return it }
@@ -358,9 +359,45 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
         }
 
         fun showSourcePicker() {
+            if (!isAdded) return
+            val ctx = requireContext()
+            val dp = ctx.resources.displayMetrics.density
+            var loadingDialog: android.app.AlertDialog? = null
+            var cancelled = false
+            ctx.customAlertDialog().apply {
+                setTitle(R.string.home_metadata)
+                setWidthPx((240 * dp).toInt())
+                setCancelable(true)
+                setOnCancelListener { cancelled = true }
+                setCustomView(android.widget.FrameLayout(ctx).apply {
+                    val size = (dp * 44).toInt()
+                    addView(
+                        ProgressBar(ctx).apply {
+                            indeterminateTintList = android.content.res.ColorStateList.valueOf(
+                                ctx.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+                            )
+                        },
+                        android.widget.FrameLayout.LayoutParams(size, size, Gravity.CENTER).apply {
+                            topMargin = (dp * 16).toInt()
+                            bottomMargin = (dp * 16).toInt()
+                        }
+                    )
+                })
+                attach { d -> loadingDialog = d }
+                show()
+            }
+
             viewLifecycleOwner.lifecycleScope.launch {
-                val (names, ids) = sourceEntries()
-                if (!isAdded) return@launch
+                val entries = try {
+                    sourceEntries()
+                } catch (t: Throwable) {
+                    Logger.log(t)
+                    null
+                } finally {
+                    runCatching { loadingDialog?.dismiss() }
+                }
+                if (!isAdded || cancelled || entries == null) return@launch
+                val (names, ids) = entries
                 val savedSource = PrefManager.getVal<String>(PrefName.ContentSource)
                 Logger.log("MEDIA_TRACKER: picker sources=$ids")
                 Logger.log("MEDIA_TRACKER: current ContentSource=$savedSource")
@@ -370,10 +407,21 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
                 val restoreIdx = ids.indexOfFirst { it.equals(savedSource, ignoreCase = true) }
                     .takeIf { it >= 0 } ?: baseRestore
                 val currentIdx = if (restoreIdx >= 0) restoreIdx else 0
-                pluginNameView.text = sourceLabel(names, ids, savedSource) ?: names[currentIdx]
 
-                val adapterPos = if (currentIdx == 0) 1 else currentIdx + 3
-                val picker = SourcePickerAdapter(requireContext(), names, adapterPos, headerSecond = "Plugin")
+                val picker = SourcePickerAdapter(
+                    requireContext(), names, ids, 0,
+                    headerSecond = "Plugin",
+                    allId = CsRuntime.ALL_SOURCES_ID
+                )
+                val adapterPos = if (savedSource == CsRuntime.ALL_SOURCES_ID) {
+                    picker.positionForAll()
+                } else {
+                    picker.positionForRealIndex(currentIdx)
+                }
+                picker.setChecked(adapterPos)
+                pluginNameView.text = if (savedSource == CsRuntime.ALL_SOURCES_ID) "All"
+                    else sourceLabel(names, ids, savedSource) ?: names.getOrNull(currentIdx)
+
                 requireContext().customAlertDialog().apply {
                     setTitle(R.string.home_metadata)
                     setWidthPx((240 * requireContext().resources.displayMetrics.density).toInt())
@@ -382,22 +430,14 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
                         d.listView?.choiceMode = android.widget.ListView.CHOICE_MODE_NONE
                     }
                     singleChoiceAdapter(picker, adapterPos) { pos ->
-
-                        val idx = when {
-                            pos == 1 -> 0
-                            pos >= 4 -> pos - 3
-                            else -> return@singleChoiceAdapter
-                        }
-                        if (idx !in ids.indices || idx !in names.indices) {
-                            return@singleChoiceAdapter
-                        }
+                        val id = picker.getItemIdFor(pos)
+                        if (id.isBlank()) return@singleChoiceAdapter
+                        val name = picker.getItemNameFor(pos)
 
                         picker.setChecked(pos)
-                        PrefManager.setVal(PrefName.ContentSource, ids[idx])
-                        pluginNameView.text = names[idx]
-                        Logger.log(
-                            "MEDIA_TRACKER: selected '${names[idx]}' id=${ids[idx]}"
-                        )
+                        PrefManager.setVal(PrefName.ContentSource, id)
+                        pluginNameView.text = name
+                        Logger.log("MEDIA_TRACKER: selected '$name' id=$id")
                         (activity as? MainActivity)?.setContentMode("movie_tv")
                     }
                     show()
@@ -406,14 +446,12 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
         }
 
         val savedSourceInit = PrefManager.getVal<String>(PrefName.ContentSource)
-        pluginNameView.text = CsRuntime.cachedApiName(savedSourceInit)
-            ?: CsRepos.installed(requireContext())
-                .firstOrNull { it.id == CsRuntime.pluginIdOf(savedSourceInit) }?.name
-            ?: "Simkl"
-        viewLifecycleOwner.lifecycleScope.launch {
-            val (names, ids) = sourceEntries()
-            if (isAdded) pluginNameView.text = sourceLabel(names, ids, savedSourceInit) ?: pluginNameView.text
-        }
+        pluginNameView.text = if (savedSourceInit == CsRuntime.ALL_SOURCES_ID) "All"
+            else StremioAddonManager.addonForSourceId(savedSourceInit)?.manifest?.name
+                ?: CsRuntime.cachedApiName(savedSourceInit)
+                ?: CsRepos.installed(requireContext())
+                    .firstOrNull { it.id == CsRuntime.pluginIdOf(savedSourceInit) }?.name
+                ?: "Simkl"
         pluginRowInner.setOnClickListener { showSourcePicker() }
         pluginNameView.setOnClickListener { showSourcePicker() }
         pluginArrow.setOnClickListener { showSourcePicker() }
@@ -691,8 +729,10 @@ private class SourcePickerAdapterStructured(
 private class SourcePickerAdapter(
     private val context: Context,
     private val names: List<String>,
+    private val ids: List<String>,
     checkedPosition: Int,
-    private val headerSecond: String = "Plugin"
+    private val headerSecond: String = "Plugin",
+    private val allId: String? = null,
 ) : android.widget.BaseAdapter() {
 
     companion object {
@@ -700,6 +740,11 @@ private class SourcePickerAdapter(
         private const val TYPE_DIVIDER = 1
         private const val TYPE_HEADER = 2
     }
+
+    private val listRows = if (allId != null) 2 else 1
+    private val dividerPos = 1 + listRows
+    private val secondHeaderPos = dividerPos + 1
+    private val firstPluginPos = secondHeaderPos + 1
 
     private fun newRadioIndicator(): android.graphics.drawable.Drawable? {
         val a = context.obtainStyledAttributes(intArrayOf(android.R.attr.listChoiceIndicatorSingle))
@@ -730,36 +775,55 @@ private class SourcePickerAdapter(
         notifyDataSetChanged()
     }
 
-    override fun getCount(): Int = names.size + 3
+    fun positionForAll(): Int = 1
 
-    override fun getItem(position: Int): Any = when {
-        position == 1 -> names[0]
-        position >= 4 -> names[position - 3]
+    fun positionForRealIndex(index: Int): Int =
+        if (index <= 0) (if (allId != null) 2 else 1) else firstPluginPos + (index - 1)
+
+    private fun isHeader(position: Int) = position == 0 || position == secondHeaderPos
+
+    private fun isDivider(position: Int) = position == dividerPos
+
+    private fun isRow(position: Int) = position in 1 until dividerPos || position >= firstPluginPos
+
+    private fun realIndex(position: Int): Int = position - firstPluginPos + 1
+
+    private fun listIndex(position: Int): Int = if (allId != null) position - 2 else position - 1
+
+    fun getItemIdFor(position: Int): String = when {
+        allId != null && position == 1 -> allId
+        position in 1 until dividerPos -> ids.getOrElse(listIndex(position)) { "" }
+        position >= firstPluginPos -> ids.getOrElse(realIndex(position)) { "" }
         else -> ""
     }
+
+    fun getItemNameFor(position: Int): String = when {
+        allId != null && position == 1 -> "All"
+        position in 1 until dividerPos -> names.getOrElse(listIndex(position)) { "" }
+        position >= firstPluginPos -> names.getOrElse(realIndex(position)) { "" }
+        else -> ""
+    }
+
+    override fun getCount(): Int = firstPluginPos + (names.size - 1).coerceAtLeast(0)
+
+    override fun getItem(position: Int): Any = getItemNameFor(position)
 
     override fun getItemId(position: Int): Long = position.toLong()
 
     override fun getViewTypeCount(): Int = 3
 
-    override fun getItemViewType(position: Int): Int = when (position) {
-        0, 3 -> TYPE_HEADER
-        2 -> TYPE_DIVIDER
+    override fun getItemViewType(position: Int): Int = when {
+        isHeader(position) -> TYPE_HEADER
+        isDivider(position) -> TYPE_DIVIDER
         else -> TYPE_ROW
     }
 
-    override fun isEnabled(position: Int): Boolean =
-        position == 1 || position >= 4
-
-    private fun realIndex(position: Int): Int = when (position) {
-        1 -> 0
-        else -> position - 3
-    }
+    override fun isEnabled(position: Int): Boolean = isRow(position)
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
         val primary = context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
-        return when (position) {
-            0, 3 -> {
+        return when {
+            isHeader(position) -> {
                 val header = convertView as? TextView ?: TextView(context).apply {
                     gravity = Gravity.START or Gravity.CENTER_VERTICAL
                     textSize = 12f
@@ -771,15 +835,14 @@ private class SourcePickerAdapter(
                 val dp = context.resources.displayMetrics.density
                 header.setPadding(
                     (dp * 20).toInt(),
-                    if (position == 3) (dp * 12).toInt() else 0,
+                    if (position == secondHeaderPos) (dp * 12).toInt() else 0,
                     (dp * 8).toInt(),
                     0
                 )
                 header
             }
 
-            2 -> {
-
+            isDivider(position) -> {
                 View(context).apply {
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -798,7 +861,7 @@ private class SourcePickerAdapter(
                         gravity = Gravity.CENTER_VERTICAL
                     }
                 row.setTextColor(context.getThemeColor(com.google.android.material.R.attr.colorOnSurface))
-                row.text = names[realIndex(position)]
+                row.text = getItemNameFor(position)
                 row.maxWidth = rowMaxWidth
                 row.ellipsize = android.text.TextUtils.TruncateAt.END
                 row.setSingleLine(true)

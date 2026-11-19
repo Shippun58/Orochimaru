@@ -328,11 +328,13 @@ class TmdbHomeFragment : Fragment() {
         bannerCarouselAdapter = null
         loggedOutCtaButton = null
         logoJob?.cancel()
+        loadJob?.cancel()
         _binding = null
     }
 
     private fun load() {
         val sourceId = PrefManager.getVal<String>(PrefName.ContentSource)
+        val allSources = sourceId == CsRuntime.ALL_SOURCES_ID
         val stremioAddon = StremioAddonManager.addonForSourceId(sourceId)
         val pluginId = CsRuntime.pluginIdOf(sourceId)
         val apiIndex = CsRuntime.apiIndexOf(sourceId)
@@ -344,9 +346,15 @@ class TmdbHomeFragment : Fragment() {
         binding.tmdbHomeSpinner.isVisible = true
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
 
+            if (allSources) {
+                loadAllSources()
+                binding.tmdbHomeSpinner.isVisible = false
+                return@launch
+            }
+
             if (stremioAddon != null) {
                 val loaded = loadStremioHome(stremioAddon)
-                if (!loaded) loadPublicSections()
+                if (!loaded) addEmptyState("No catalog available for ${stremioAddon.manifest.name}")
                 binding.tmdbHomeSpinner.isVisible = false
                 return@launch
             }
@@ -354,22 +362,75 @@ class TmdbHomeFragment : Fragment() {
             val mainPageCache = mutableMapOf<String, HomePageResponse?>()
             loadBanner(plugin, apiIndex, mainPageCache)
 
-            val hasPluginSections = if (plugin != null) {
-                loadPluginSections(plugin, apiIndex, mainPageCache)
-            } else false
-
-            val loggedOut = plugin == null && isSimklLoggedOut()
-            if (loggedOut) {
-                addLoggedOutCta()
-                loadPublicSections()
+            if (plugin != null) {
+                val hasPluginSections = loadPluginSections(plugin, apiIndex, mainPageCache)
+                if (!hasPluginSections) addEmptyState("No catalog available for ${plugin.name}")
             } else {
-                loadSimklContinueWatching()
-                if (!hasPluginSections) {
+                val loggedOut = isSimklLoggedOut()
+                if (loggedOut) {
+                    addLoggedOutCta()
+                    loadPublicSections()
+                } else {
+                    loadSimklContinueWatching()
                     loadSimklHomeSections()
                 }
             }
-            loadExtraAddonSections()
             binding.tmdbHomeSpinner.isVisible = false
+        }
+    }
+
+    private suspend fun loadAllSources() {
+        val mainPageCache = mutableMapOf<String, HomePageResponse?>()
+        loadBanner(null)
+
+        val plugins = withContext(Dispatchers.IO) {
+            runCatching { CsRepos.installed(requireContext()) }.getOrDefault(emptyList())
+        }
+        val addons = withContext(Dispatchers.IO) {
+            runCatching { StremioAddonManager.homeSources() }.getOrDefault(emptyList())
+        }
+        var rendered = 0
+
+        if (!isSimklLoggedOut()) {
+            rendered += loadProviderGroup("Simkl") {
+                loadSimklContinueWatching()
+                loadSimklHomeSections()
+            }
+        }
+        for (plugin in plugins) {
+            if (_binding == null) return
+            rendered += loadProviderGroup(plugin.name) {
+                loadPluginSections(plugin, null, mainPageCache)
+            }
+        }
+        for (addon in addons) {
+            if (_binding == null) return
+            rendered += loadProviderGroup(addon.manifest.name) {
+                loadStremioHome(addon, updateBanner = false)
+            }
+        }
+        if (rendered == 0) addEmptyState("No catalogs available")
+        applyTmdbBannerFocusChain()
+    }
+
+    private suspend fun loadProviderGroup(name: String, block: suspend () -> Unit): Int {
+        if (!isAdded || _binding == null) return 0
+        val start = binding.tmdbHomeSections.childCount
+        block()
+        if (!isAdded || _binding == null) return 0
+        val added = binding.tmdbHomeSections.childCount - start
+        if (added > 0) binding.tmdbHomeSections.addView(providerHeaderView(name), start)
+        return added
+    }
+
+    private fun providerHeaderView(name: String): TextView {
+        val ctx = requireContext()
+        return TextView(ctx).apply {
+            text = name
+            setPadding(24, 28, 24, 2)
+            textSize = 20f
+            setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
+            setTextColor(ctx.getThemeColor(com.google.android.material.R.attr.colorPrimary))
         }
     }
 
@@ -411,7 +472,7 @@ class TmdbHomeFragment : Fragment() {
         }
     }
 
-    private suspend fun loadStremioHome(addon: StremioAddon): Boolean {
+    private suspend fun loadStremioHome(addon: StremioAddon, updateBanner: Boolean = true): Boolean {
         Logger.log(
             "TMDB_HOME: stremio addon='${addon.manifest.name}' types=${addon.manifest.types} " +
                 "capabilities=${StremioAddonClient.capabilities(addon)} " +
@@ -454,8 +515,10 @@ class TmdbHomeFragment : Fragment() {
         }
         val allItems = resolvedShelves.flatMap { it.second }
         val bannerCandidates = allItems.filter { it.id > 0 }
-        bannerItems.clear()
-        bannerItems.addAll(bannerCandidates.take(10).map { BannerItem.Tmdb(it) })
+        if (updateBanner) {
+            bannerItems.clear()
+            bannerItems.addAll(bannerCandidates.take(10).map { BannerItem.Tmdb(it) })
+        }
         resolvedShelves.forEach { (name, items) ->
             addSection(name, items, onClick = ::openMedia, showMore = false)
         }
@@ -463,7 +526,7 @@ class TmdbHomeFragment : Fragment() {
             "TMDB_HOME: stremio '${addon.manifest.name}' shelves=${resolvedShelves.size} " +
                 "cards=${allItems.size} mapped=${mapping.values.count { it != null }}"
         )
-        if (bannerItems.isNotEmpty()) {
+        if (updateBanner && bannerItems.isNotEmpty()) {
             bannerIndex = 0
             showBanner(0)
         }
