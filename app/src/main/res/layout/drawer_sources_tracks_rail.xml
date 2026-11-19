@@ -66,7 +66,6 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="?attr/selectableItemBackgroundBorderless"
             android:focusable="true"
             android:padding="8dp">
 
@@ -97,7 +96,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:buttonTint="?attr/colorPrimary"
             android:fontFamily="@font/poppins"
             android:text="@string/make_default"
             android:textSize="12sp"
