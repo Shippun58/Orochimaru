@@ -1,6 +1,7 @@
 package ani.sanin.settings
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -209,26 +210,71 @@ class HomeSectionsActivity : AppCompatActivity() {
                 updateStatus()
             }
 
-            holder.itemView.setOnClickListener { holder.switch.toggle() }
-            holder.up.isFocusable = true
-            holder.down.isFocusable = true
-            holder.up.setOnClickListener {
+            val row = holder.itemView
+            val drag = holder.dragHandle
+            val switch = holder.switch
+            val up = holder.up
+            val down = holder.down
+            val movable = { toUp: Boolean ->
                 val pos = holder.bindingAdapterPosition
-                if (pos != RecyclerView.NO_POSITION) move(pos, pos - 1)
-            }
-            holder.down.setOnClickListener {
-                val pos = holder.bindingAdapterPosition
-                if (pos != RecyclerView.NO_POSITION) move(pos, pos + 1)
-            }
-            holder.dragHandle.setOnClickListener { touchHelper?.startDrag(holder) }
-            holder.dragHandle.setOnLongClickListener {
-                touchHelper?.startDrag(holder)
-                true
+                if (pos != RecyclerView.NO_POSITION) move(pos, if (toUp) pos - 1 else pos + 1)
             }
 
-            FocusEffectUtil.applyFocusListener(holder.itemView)
-            FocusEffectUtil.applyFocusListener(holder.up)
-            FocusEffectUtil.applyFocusListener(holder.down)
+            row.setOnClickListener { switch.toggle() }
+            row.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { drag.requestFocus(); true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { switch.requestFocus(); true }
+                    KeyEvent.KEYCODE_DPAD_CENTER -> { switch.toggle(); true }
+                    else -> false
+                }
+            }
+            switch.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        drag.requestFocus(); true
+                    }
+                    else -> false
+                }
+            }
+            up.setOnClickListener { movable(true) }
+            up.isFocusable = true
+            up.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER -> { movable(true); true }
+                    else -> false
+                }
+            }
+            down.setOnClickListener { movable(false) }
+            down.isFocusable = true
+            down.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER -> { movable(false); true }
+                    else -> false
+                }
+            }
+            drag.setOnClickListener { touchHelper?.startDrag(holder) }
+            drag.setOnLongClickListener { touchHelper?.startDrag(holder); true }
+            drag.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> { movable(true); true }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> { movable(false); true }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { drag.requestFocus(); true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { row.requestFocus(); true }
+                    KeyEvent.KEYCODE_DPAD_CENTER -> { row.requestFocus(); true }
+                    else -> false
+                }
+            }
+
+            FocusEffectUtil.applyFocusListener(row)
+            FocusEffectUtil.applyFocusListener(drag)
+            FocusEffectUtil.applyFocusListener(up)
+            FocusEffectUtil.applyFocusListener(down)
         }
     }
 }
