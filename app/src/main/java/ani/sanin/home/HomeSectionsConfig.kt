@@ -202,6 +202,8 @@ object HomeSectionsConfig {
             block()
         } catch (e: CancellationException) {
             throw e
+        } catch (e: NotImplementedError) {
+            null
         } catch (e: Exception) {
             null
         }
