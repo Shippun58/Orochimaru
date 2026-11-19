@@ -486,7 +486,7 @@ class TmdbHomeFragment : Fragment() {
             text = provider
             textSize = 11f
             setTextColor(primary)
-            setPadding(8.px, 2.px, 8.px, 2.px)
+            setPadding(8f.px, 2f.px, 8f.px, 2f.px)
             background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = 999f
                 setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 0x33))
@@ -505,7 +505,7 @@ class TmdbHomeFragment : Fragment() {
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { marginStart = 8.px }
+                ).apply { marginStart = 8f.px }
             )
         }
     }
