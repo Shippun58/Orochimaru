@@ -298,7 +298,13 @@ class ExtensionsActivity : AppCompatActivity() {
             }
         }
         FocusEffectUtil.applyFocusListener(binding.modeToggle)
+        binding.modeToggle.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (right - left != oldRight - oldLeft) {
+                updateToggleUI(extensionMode, animate = false)
+            }
+        }
         updateToggleUI(extensionMode, animate = false)
+        binding.modeToggle.post { updateToggleUI(extensionMode, animate = false) }
     }
 
     private fun toggleMode() {
@@ -311,31 +317,34 @@ class ExtensionsActivity : AppCompatActivity() {
         switchMode(next)
     }
 
+    private fun thumbStops(): FloatArray {
+        val track = binding.modeToggle.width.toFloat()
+        val thumb = binding.modeToggleThumb.width.toFloat()
+        if (track <= 0f || thumb <= 0f) return FloatArray(ExtensionMode.entries.size)
+        val pad = 2f * resources.displayMetrics.density
+        val slot = (track - pad * 2f) / ExtensionMode.entries.size
+        val inset = (slot - thumb) / 2f
+        return FloatArray(ExtensionMode.entries.size) { index ->
+            pad + index * slot + inset
+        }
+    }
+
     private fun updateToggleUI(mode: ExtensionMode, animate: Boolean) {
-        val density = resources.displayMetrics.density
-        val thumbStart = 3f * density
-        val thumbEnd = (160 - 30 - 3) * density
-        val isAniyomi = mode == ExtensionMode.ANIYOMI
         binding.modeToggleLabel.text = mode.label
         styleToggleDrawables(mode)
-        if (!animate || !PrefManager.getVal<Boolean>(PrefName.AnimationsEnabled) || !PrefManager.getVal<Boolean>(PrefName.MiscUiAnimations)) {
-            binding.modeToggleThumb.translationX = if (isAniyomi) thumbStart else thumbEnd
+        val targetX = thumbStops()[mode.ordinal]
+        if (!animate || !PrefManager.getVal<Boolean>(PrefName.AnimationsEnabled) || !PrefManager.getVal<Boolean>(PrefName.MiscUiAnimations) || binding.modeToggle.width == 0) {
+            binding.modeToggleThumb.translationX = targetX
             return
         }
         modeToggleAnimating = true
         val currentX = binding.modeToggleThumb.translationX
-        val targetX = if (isAniyomi) thumbStart else thumbEnd
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 300
             interpolator = DecelerateInterpolator(1.5f)
-            var labelSwapped = false
             addUpdateListener { anim ->
                 val t = anim.animatedValue as Float
                 binding.modeToggleThumb.translationX = currentX + (targetX - currentX) * t
-                if (!labelSwapped && t > 0.4f) {
-                    labelSwapped = true
-                    binding.modeToggleLabel.text = mode.label
-                }
             }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
@@ -368,7 +377,7 @@ class ExtensionsActivity : AppCompatActivity() {
             when (mode) {
                 ExtensionMode.ANIYOMI -> R.drawable.ic_toggle_aniyomi
                 ExtensionMode.CLOUDSTREAM -> R.drawable.ic_toggle_cloudstream
-                ExtensionMode.STREMIO -> R.drawable.ic_extension
+                ExtensionMode.STREMIO -> R.drawable.ic_stremio_watermark
             }
         )
         if (mode == ExtensionMode.STREMIO) {
