@@ -25,13 +25,14 @@ object AnimeSources : WatchSources() {
             AnimeJLProvider(),
             LatanimeProvider(),
             AnimeAV1Provider(),
+            AniPmProvider(),
             MKissaProvider(),
         )
     }
 
     private val englishProviderNames = setOf(
         "animegg", "AniWaves", "Reanime", "GojoLive", "MKissa",
-        "AniZone", "ANV", "123Anime"
+        "AniZone", "ANV", "123Anime", "AniPM"
     )
 
     fun isEnglishProvider(saveName: String): Boolean = saveName in englishProviderNames

@@ -29,7 +29,10 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
             }
         }
 
+        val forced = extraData?.get("videoType")
         val format = when {
+            forced.equals("m3u8", ignoreCase = true) -> VideoType.M3U8
+            forced.equals("dash", ignoreCase = true) -> VideoType.DASH
             url.contains(".m3u8", ignoreCase = true) -> VideoType.M3U8
             url.contains(".mpd", ignoreCase = true) -> VideoType.DASH
             else -> VideoType.CONTAINER
@@ -44,10 +47,10 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
             )
         )
 
-        if (url.contains(".m3u8", ignoreCase = true) && !isLocalProxyUrl(url)) {
+        if (format == VideoType.M3U8 && !isLocalProxyUrl(url)) {
             val parsed = parseHlsMaster(url, headers)
             videos.addAll(parsed)
-        } else if (url.contains(".mpd", ignoreCase = true)) {
+        } else if (format == VideoType.DASH) {
 
         } else {
 

@@ -37,6 +37,8 @@ abstract class NativeAnimeParser : AnimeParser() {
 
     open val knownServers: List<String> = emptyList()
 
+    open val backupBaseUrls: List<String> = emptyList()
+
     open fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context: Context = currContext() ?: return
 
@@ -51,7 +53,7 @@ abstract class NativeAnimeParser : AnimeParser() {
             }
         })
 
-        screen.addPreference(EditTextPreference(context).apply {
+        val baseUrlPref = EditTextPreference(context).apply {
             key = "base_url_$saveName"
             title = "Base URL / Mirror"
             summary = providerBaseUrl(saveName) ?: defaultBaseUrl
@@ -64,7 +66,28 @@ abstract class NativeAnimeParser : AnimeParser() {
                 summary = url.ifBlank { defaultBaseUrl }
                 true
             }
-        })
+        }
+        screen.addPreference(baseUrlPref)
+
+        if (backupBaseUrls.isNotEmpty()) {
+            val options = listOf(defaultBaseUrl) + backupBaseUrls
+            screen.addPreference(ListPreference(context).apply {
+                key = "base_url_preset_$saveName"
+                title = "Backup domains"
+                summary = "Quick switch between known mirrors"
+                isPersistent = false
+                entries = options.toTypedArray()
+                entryValues = options.toTypedArray()
+                value = providerBaseUrl(saveName) ?: defaultBaseUrl
+                setOnPreferenceChangeListener { _, newValue ->
+                    val url = newValue.toString()
+                    saveProviderBaseUrl(saveName, url)
+                    baseUrlPref.text = url
+                    baseUrlPref.summary = url
+                    true
+                }
+            })
+        }
 
         screen.addPreference(SwitchPreferenceCompat(context).apply {
             key = "remember_quality_$saveName"
