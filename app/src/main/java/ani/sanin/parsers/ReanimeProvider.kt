@@ -11,6 +11,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
+import me.xdrop.fuzzywuzzy.FuzzySearch
 
 class ReanimeProvider : NativeAnimeParser() {
 
@@ -18,10 +19,12 @@ class ReanimeProvider : NativeAnimeParser() {
     override val saveName = "Reanime"
     override fun isDubAvailableSeparately(sourceLang: Int?): Boolean = true
 
-    override val defaultBaseUrl = "https://reanime.to"
+    override val defaultBaseUrl = "https://reanime.cz"
+    override fun backupBaseUrls(): List<String> = listOf("https://reanime.bz", "https://reanime.wtf")
     override val knownServers = listOf("Reanime")
 
     private val FLIX = "https://flixcloud.cc"
+    private val BAD_DUB_MUXES = setOf("113415" to 2)
 
     override suspend fun search(query: String): List<ShowResponse> = withContext(Dispatchers.IO) {
         try {
@@ -96,6 +99,16 @@ class ReanimeProvider : NativeAnimeParser() {
                         return@withContext buildResponse(anilistId, id, r, detail)
                     }
                 }
+
+                val expectedTitles = queries.map(::normalizeTitle)
+                val fallback = candidates.entries
+                    .map { entry -> entry to titleMatchScore(expectedTitles, entry.value) }
+                    .maxByOrNull { it.second }
+                if (fallback != null && fallback.second >= 75) {
+                    Logger.log("Reanime autoSearch: fuzzy match AniList $anilistId -> ${fallback.first.key} score=${fallback.second}")
+                    return@withContext buildResponse(anilistId, fallback.first.key, fallback.first.value, null)
+                }
+
                 Logger.log("Reanime autoSearch: no match for AniList $anilistId")
                 null
             } catch (e: Exception) {
@@ -110,6 +123,62 @@ class ReanimeProvider : NativeAnimeParser() {
         add(media.nameRomaji)
         media.synonyms?.forEach { add(it) }
     }.filter { it.isNotBlank() }.distinct()
+
+    private fun JsonElement?.asTextOrNull(): String? = (this as? JsonPrimitive)?.contentOrNull
+
+    private fun normalizeTitle(title: String): String =
+        title.lowercase().replace(Regex("""[^a-z0-9]+"""), " ").trim()
+
+    private fun titleMatchScore(expectedTitles: List<String>, r: JsonObject): Int {
+        val titleObj = r["title"] as? JsonObject ?: return 0
+        val candidates = listOfNotNull(
+            titleObj["english"]?.asTextOrNull(),
+            titleObj["romaji"]?.asTextOrNull(),
+            titleObj["native"]?.asTextOrNull()
+        ).map(::normalizeTitle)
+        return candidates.maxOfOrNull { candidate ->
+            expectedTitles.maxOf { expected -> FuzzySearch.ratio(expected, candidate) }
+        } ?: 0
+    }
+
+    private fun subtitleLanguage(label: String, url: String): String {
+        Regex("""_([a-z]{3})_\d+\.(?:ass|vtt|srt)""", RegexOption.IGNORE_CASE).find(url)
+            ?.groupValues?.get(1)?.lowercase()?.let { code ->
+                return when (code) {
+                    "eng" -> "en"
+                    "jpn" -> "ja"
+                    "spa" -> "es"
+                    "fra", "fre" -> "fr"
+                    "deu", "ger" -> "de"
+                    "por" -> "pt"
+                    "ita" -> "it"
+                    "rus" -> "ru"
+                    "kor" -> "ko"
+                    "zho", "chi" -> "zh"
+                    "ara" -> "ar"
+                    "hin" -> "hi"
+                    "tur" -> "tr"
+                    "ind" -> "id"
+                    "vie" -> "vi"
+                    "tha" -> "th"
+                    else -> code
+                }
+            }
+        val normalized = label.substringBefore('(').trim().lowercase()
+        return when {
+            normalized.startsWith("english") -> "en"
+            normalized.startsWith("japanese") -> "ja"
+            normalized.startsWith("spanish") -> "es"
+            normalized.startsWith("french") -> "fr"
+            normalized.startsWith("german") -> "de"
+            normalized.startsWith("portuguese") -> "pt"
+            normalized.startsWith("italian") -> "it"
+            normalized.startsWith("russian") -> "ru"
+            normalized.startsWith("korean") -> "ko"
+            normalized.startsWith("chinese") -> "zh"
+            else -> "und"
+        }
+    }
 
     private fun anilistIdFromCover(r: JsonObject): Int? {
         val cover = r["cover_image"] as? JsonObject ?: return null
@@ -190,6 +259,7 @@ class ReanimeProvider : NativeAnimeParser() {
         val anilistId = extra?.get("anilistId") ?: return emptyList()
         val epNum = episodeLink.toIntOrNull() ?: return emptyList()
         val audio = extra?.get("audio") ?: "sub"
+        if (audio == "dub" && BAD_DUB_MUXES.contains(anilistId to epNum)) return emptyList()
         return withContext(Dispatchers.IO) {
             try {
                 val watchJson = runCatching { get("$baseUrl/api/watch/$animeId/$epNum", baseUrl) }.getOrNull()
@@ -223,7 +293,10 @@ class ReanimeProvider : NativeAnimeParser() {
                 )
                 val results = servers.map { server ->
                     async {
-                        val embedUrl = (server["dataLink"] as? JsonPrimitive)?.contentOrNull ?: return@async null
+                        val rawEmbedUrl = (server["dataLink"] as? JsonPrimitive)?.contentOrNull ?: return@async null
+                        val embedUrl = if (audio == "dub" && !rawEmbedUrl.contains(Regex("""[?&]a="""))) {
+                            rawEmbedUrl + (if ("?" in rawEmbedUrl) "&a=1" else "?a=1")
+                        } else rawEmbedUrl
                         try {
                             val res = FlixcloudExtractor.extract(embedUrl, "$baseUrl/")
                             val resolvedUrl = res.urls.firstOrNull()
@@ -235,10 +308,15 @@ class ReanimeProvider : NativeAnimeParser() {
                             val extraData = mutableMapOf("referer" to "$FLIX/", "origin" to FLIX)
                             val subs = res.subtitles
                             if (subs.isNotEmpty()) {
-                                val subJson = subs.joinToString(",") {
-                                    "{\"url\":\"${it.url.replace("\"", "\\\"")}\",\"language\":\"${it.language}\",\"type\":\"${it.type}\"}"
-                                }
-                                extraData["subtitles"] = "[$subJson]"
+                                extraData["subtitles"] = buildJsonArray {
+                                    subs.forEach { sub ->
+                                        add(buildJsonObject {
+                                            put("url", sub.url)
+                                            put("language", subtitleLanguage(sub.language, sub.url))
+                                            put("type", sub.type)
+                                        })
+                                    }
+                                }.toString()
                             }
                             res.intro?.let { (s, e) -> extraData["intro"] = """{"start":$s,"end":$e}""" }
                             res.outro?.let { (s, e) -> extraData["outro"] = """{"start":$s,"end":$e}""" }

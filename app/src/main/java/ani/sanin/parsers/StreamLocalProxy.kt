@@ -186,7 +186,7 @@ object StreamLocalProxy {
                 if (warm) warmHost(url, referer)
 
                 if (subtitle || !isManifest(url, em)) {
-                    serveStream(s, url, referer, origin, maskBytes, js)
+                    serveStream(s, url, referer, origin, maskBytes, js, subtitle)
                 } else {
                     serveManifest(s, url, referer, origin, pkBytes, maskBytes, em, js)
                 }
@@ -449,6 +449,7 @@ object StreamLocalProxy {
         origin: String,
         mask: ByteArray?,
         js: Boolean,
+        subtitle: Boolean = false,
     ) {
         if (!isHostReachable(url)) {
             Logger.log(Log.WARN, "StreamLocalProxy: segment skip — host known-bad for $url")
@@ -462,13 +463,14 @@ object StreamLocalProxy {
                 writeResponse(socket, "502 Bad Gateway", "text/plain", "WebView fetch failed", null)
                 return
             }
-            val contentType = when {
+            val fallbackContentType = when {
                 url.endsWith(".ass", true) -> "text/x-ass"
                 url.endsWith(".srt", true) -> "application/x-subrip"
                 url.endsWith(".vtt", true) -> "text/vtt"
                 url.contains("/subtitles/", true) -> "text/vtt"
                 else -> "video/mp2t"
             }
+            val contentType = if (subtitle) sniffSubtitleContentType(bytes, fallbackContentType) else fallbackContentType
             writeResponse(socket, "200 OK", contentType, null, bytes.size.toLong())
             socket.getOutputStream().use { out -> out.write(bytes) }
             return
@@ -496,7 +498,7 @@ object StreamLocalProxy {
                 return
             }
 
-            val contentType = when {
+            val fallbackContentType = when {
                 url.endsWith(".ass", true) -> "text/x-ass"
                 url.endsWith(".srt", true) -> "application/x-subrip"
                 url.endsWith(".vtt", true) -> "text/vtt"
@@ -505,10 +507,11 @@ object StreamLocalProxy {
             }
 
             val upstream = resp.body?.byteStream() ?: return
-            val isText = contentType.startsWith("text/") || contentType.contains("subrip")
+            val isText = fallbackContentType.startsWith("text/") || fallbackContentType.contains("subrip")
             if (isText || mask == null) {
                 val bytes = upstream.readBytes()
-                if (mask == null && isText) {
+                val contentType = if (subtitle) sniffSubtitleContentType(bytes, fallbackContentType) else fallbackContentType
+                if (mask == null && subtitle) {
                     Logger.log(
                         "StreamLocalProxy: sub served ${bytes.size}B ct=$contentType head=" +
                             bytes.take(40).toByteArray().decodeToString(throwOnInvalidSequence = false).replace('\n', ' ')
@@ -537,7 +540,7 @@ object StreamLocalProxy {
             }
 
             val out = socket.getOutputStream()
-            writeHead(out, "200 OK", contentType, null, chunked = true)
+            writeHead(out, "200 OK", fallbackContentType, null, chunked = true)
             val xorSource = XorInputStream(upstream, head, got, headerSize, if (shouldXor) mask else null)
             streamChunked(out, xorSource)
         }
@@ -827,6 +830,16 @@ object StreamLocalProxy {
                 else ->
                     handler.postDelayed({ pollFetchResult(wv, handler, tries + 1, holder, latch) }, 100)
             }
+        }
+    }
+
+    private fun sniffSubtitleContentType(bytes: ByteArray, fallback: String): String {
+        val text = bytes.toString(Charsets.UTF_8).trimStart('\uFEFF').trimStart()
+        return when {
+            text.startsWith("WEBVTT", ignoreCase = true) -> "text/vtt"
+            text.startsWith("[Script Info]", ignoreCase = true) -> "text/x-ass"
+            text.contains("Dialogue:", ignoreCase = true) -> "text/x-ass"
+            else -> fallback
         }
     }
 }
