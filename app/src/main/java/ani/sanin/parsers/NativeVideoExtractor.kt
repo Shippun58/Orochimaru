@@ -102,6 +102,12 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
             host == "127.0.0.1" || host == "localhost"
         }.getOrDefault(false)
 
+    private fun variantProxyUrl(masterUrl: String, variant: Int): String {
+        val cleaned = masterUrl.replace(Regex("([?&])variant=[^&]*"), "$1").trimEnd('?', '&')
+        val separator = if (cleaned.contains('?')) "&" else "?"
+        return "$cleaned${separator}variant=$variant"
+    }
+
     private suspend fun parseHlsMaster(
         masterUrl: String,
         headers: Map<String, String>,
@@ -175,12 +181,14 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
                         size = null
                     )
                 )
-                parsedVariants.forEach { (quality, bw, variantUrl) ->
+                val useVariantProxy = allowAudioGroups && isLocalProxyUrl(masterUrl)
+                parsedVariants.forEachIndexed { index, (quality, bw, variantUrl) ->
+                    val playbackUrl = if (useVariantProxy) variantProxyUrl(masterUrl, index) else variantUrl
                     videos.add(
                         Video(
                             quality = quality,
                             format = VideoType.M3U8,
-                            file = FileUrl(variantUrl, baseHeaders),
+                            file = FileUrl(playbackUrl, baseHeaders),
                             size = if (bw != null) bw.toDouble() else null
                         )
                     )

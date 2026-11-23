@@ -127,6 +127,7 @@ object StreamLocalProxy {
         js: Boolean = false,
         subtitle: Boolean = false,
         warm: Boolean = false,
+        variant: Int? = null,
     ): String {
         val params = mutableListOf(
             "url=" + URLEncoder.encode(original, "UTF-8"),
@@ -139,6 +140,7 @@ object StreamLocalProxy {
         if (js) params += "js=1"
         if (subtitle) params += "sub=1"
         if (warm) params += "warm=1"
+        variant?.let { params += "variant=$it" }
         return baseUrl() + "?" + params.joinToString("&")
     }
 
@@ -179,6 +181,7 @@ object StreamLocalProxy {
                 val js = params["js"] == "1"
                 val subtitle = params["sub"] == "1"
                 val warm = params["warm"] == "1"
+                val variant = params["variant"]?.toIntOrNull()
 
                 val pkBytes = pk?.let { runCatching { android.util.Base64.decode(it, android.util.Base64.DEFAULT) }.getOrNull() }
                 val maskBytes = mask?.let { runCatching { android.util.Base64.decode(it, android.util.Base64.DEFAULT) }.getOrNull() }
@@ -188,7 +191,7 @@ object StreamLocalProxy {
                 if (subtitle || !isManifest(url, em)) {
                     serveStream(s, url, referer, origin, maskBytes, js, subtitle)
                 } else {
-                    serveManifest(s, url, referer, origin, pkBytes, maskBytes, em, js)
+                    serveManifest(s, url, referer, origin, pkBytes, maskBytes, em, js, variant)
                 }
             }
         } catch (e: UnknownHostException) {
@@ -213,6 +216,7 @@ object StreamLocalProxy {
         mask: ByteArray?,
         em: Boolean,
         js: Boolean,
+        variant: Int? = null,
     ) {
 
         if (js) {
@@ -221,7 +225,7 @@ object StreamLocalProxy {
                 writeResponse(socket, "502 Bad Gateway", "text/plain", "WebView fetch failed", null)
                 return
             }
-            writeManifest(socket, url, referer, origin, pk, mask, em, js, bodyBytes)
+            writeManifest(socket, url, referer, origin, pk, mask, em, js, bodyBytes, variant)
             return
         }
         val request = Request.Builder().url(url)
@@ -260,7 +264,7 @@ object StreamLocalProxy {
                 return
             }
             val bodyBytes = resp.body?.bytes() ?: ByteArray(0)
-            writeManifest(socket, url, referer, origin, pk, mask, em, js, bodyBytes)
+            writeManifest(socket, url, referer, origin, pk, mask, em, js, bodyBytes, variant)
         }
         return
         } catch (e: java.net.SocketTimeoutException) {
@@ -322,17 +326,46 @@ object StreamLocalProxy {
         em: Boolean,
         js: Boolean,
         rawBytes: ByteArray,
+        variant: Int? = null,
     ) {
         val raw = String(rawBytes, Charsets.UTF_8)
-        val bodyText = decryptPlaylistIfNeeded(raw, pk, em)
-        if (bodyText == null || !bodyText.trimStart().startsWith("#EXTM3U", ignoreCase = true)) {
+        val decrypted = decryptPlaylistIfNeeded(raw, pk, em)
+        if (decrypted == null || !decrypted.trimStart().startsWith("#EXTM3U", ignoreCase = true)) {
             Logger.log(Log.WARN, "StreamLocalProxy: manifest decrypt failed url=$url pk=${pk != null} em=$em size=${raw.length}")
             writeResponse(socket, "502 Bad Gateway", "text/plain", "Manifest decrypt failed", null)
             return
         }
+        val bodyText = if (variant != null) selectMasterVariant(decrypted, variant) ?: decrypted else decrypted
         val base = runCatching { URI(url) }.getOrNull()
         val rewritten = rewritePlaylist(bodyText, base, referer, origin, upstreamUrl = url, pkByteArray = pk, maskByteArray = mask, emFlag = em, jsFlag = js)
         writeResponse(socket, "200 OK", "application/vnd.apple.mpegurl", rewritten, rewritten.toByteArray().size.toLong())
+    }
+
+    private fun selectMasterVariant(master: String, wanted: Int): String? {
+        val selected = mutableListOf<String>()
+        var variantIndex = -1
+        var keepNextUri = false
+        for (line in master.lines()) {
+            val trimmed = line.trim()
+            when {
+                trimmed.startsWith("#EXT-X-STREAM-INF:", ignoreCase = true) -> {
+                    variantIndex++
+                    keepNextUri = variantIndex == wanted
+                    if (keepNextUri) selected += line
+                }
+                trimmed.equals("#EXTM3U", ignoreCase = true) -> selected += line
+                trimmed.startsWith("#EXT-X-I-FRAME-STREAM-INF", ignoreCase = true) -> {}
+                trimmed.startsWith("#") -> selected += line
+                trimmed.isEmpty() -> {}
+                keepNextUri -> {
+                    selected += line
+                    keepNextUri = false
+                }
+            }
+        }
+        return if (variantIndex >= wanted && selected.any { it.trim().startsWith("#EXT-X-STREAM-INF:", ignoreCase = true) }) {
+            selected.joinToString("\n")
+        } else null
     }
 
     private fun decryptPlaylistIfNeeded(raw: String, pk: ByteArray?, em: Boolean): String? {

@@ -4235,8 +4235,13 @@ class ExoplayerView :
                 android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Using MIME type: $mimeType, extension: $extension")
 
                 val cacheDir = this@ExoplayerView.cacheDir
-                val safeId = subtitle.id.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "sub" }
-                val subtitleFile = File(cacheDir, "online_subtitle_${safeId}.$extension")
+                val idHash = runCatching {
+                    java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(subtitle.id.toByteArray(Charsets.UTF_8))
+                        .joinToString("") { byte -> ((byte.toInt() and 0xff) + 0x100).toString(16).substring(1) }
+                }.getOrDefault(subtitle.id.hashCode().toUInt().toString(16))
+                val safeId = subtitle.id.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "sub" }.take(40)
+                val subtitleFile = File(cacheDir, "online_subtitle_${safeId}_${idHash.take(16)}.$extension")
                 subtitleFile.writeText(cleanedContent)
 
                 android.util.Log.d("ExoplayerView", "applyOnlineSubtitle: Saved to ${subtitleFile.absolutePath}")
