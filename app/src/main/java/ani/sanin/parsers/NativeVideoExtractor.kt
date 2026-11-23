@@ -30,26 +30,32 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
         }
 
         val forced = extraData?.get("videoType")
+        val parseMaster = extraData?.get("parseMaster")?.equals("1", ignoreCase = true) == true
         val format = when {
             forced.equals("m3u8", ignoreCase = true) -> VideoType.M3U8
             forced.equals("dash", ignoreCase = true) -> VideoType.DASH
+            parseMaster -> VideoType.M3U8
             url.contains(".m3u8", ignoreCase = true) -> VideoType.M3U8
             url.contains(".mpd", ignoreCase = true) -> VideoType.DASH
             else -> VideoType.CONTAINER
         }
 
-        val videos = mutableListOf(
-            Video(
-                quality = null,
-                format = format,
-                file = FileUrl(url, headers),
-                size = null
+        val videos = mutableListOf<Video>()
+        if (format == VideoType.M3U8 && (!isLocalProxyUrl(url) || parseMaster)) {
+            val parsed = parseHlsMaster(url, headers, allowAudioGroups = parseMaster)
+            if (parsed.isNotEmpty()) {
+                videos.addAll(parsed)
+            }
+        }
+        if (videos.isEmpty()) {
+            videos.add(
+                Video(
+                    quality = null,
+                    format = format,
+                    file = FileUrl(url, headers),
+                    size = null
+                )
             )
-        )
-
-        if (format == VideoType.M3U8 && !isLocalProxyUrl(url)) {
-            val parsed = parseHlsMaster(url, headers)
-            videos.addAll(parsed)
         } else if (format == VideoType.DASH) {
 
         } else {
@@ -96,7 +102,11 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
             host == "127.0.0.1" || host == "localhost"
         }.getOrDefault(false)
 
-    private suspend fun parseHlsMaster(masterUrl: String, headers: Map<String, String>): List<Video> {
+    private suspend fun parseHlsMaster(
+        masterUrl: String,
+        headers: Map<String, String>,
+        allowAudioGroups: Boolean = false,
+    ): List<Video> {
         return withContext(Dispatchers.IO) {
             try {
                 val masterHost = runCatching { URI(masterUrl).host }.getOrNull()
@@ -138,7 +148,7 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
                     it.trim().startsWith("#EXT-X-MEDIA:", ignoreCase = true) &&
                         it.contains("TYPE=AUDIO", ignoreCase = true)
                 }
-                if (hasAudioGroup) {
+                if (hasAudioGroup && !allowAudioGroups) {
                     parsedVariants.map { it.third }.firstOrNull()?.let { variantUrl ->
                         runCatching { warmGet(variantUrl, baseHeaders) }
                         segmentAndKeyUrls(variantUrl, baseHeaders).forEach { url ->
@@ -176,7 +186,8 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
                     )
                 }
 
-                videos.sortedByDescending { it.quality ?: 0 }
+                listOf(videos.first { it.quality == null }) +
+                    videos.filter { it.quality != null }.sortedByDescending { it.quality ?: 0 }
             } catch (_: Exception) {
                 emptyList()
             }
