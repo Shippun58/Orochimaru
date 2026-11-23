@@ -1,6 +1,7 @@
 package ani.sanin.parsers
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
@@ -35,7 +36,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.URI
 import java.util.Locale
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
@@ -290,6 +290,55 @@ class MKissaProvider : NativeAnimeParser() {
     )
 
     private val sourceResolverLock = Mutex()
+    private val resolverHandler = Handler(Looper.getMainLooper())
+    @Volatile private var resolverWebView: WebView? = null
+    @Volatile private var resolverReady = false
+    @Volatile private var resolverScript = ""
+    @Volatile private var resolverCallback: ((String, String) -> Unit)? = null
+    private val resolverBridge = MKissaBridge { kind, value -> resolverCallback?.invoke(kind, value) }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun ensureResolverWebView(context: Context): WebView? {
+        val siteHost = runCatching { URI(siteUrl).host }.getOrNull().orEmpty()
+        resolverWebView?.let { wv ->
+            val currentHost = runCatching { URI(wv.url.orEmpty()).host }.getOrNull().orEmpty()
+            if (currentHost == siteHost) return wv
+            wv.destroy()
+            resolverWebView = null
+            resolverReady = false
+        }
+        return try {
+            WebView(context.applicationContext).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.blockNetworkImage = true
+                settings.loadsImagesAutomatically = false
+                settings.javaScriptCanOpenWindowsAutomatically = false
+                settings.setGeolocationEnabled(false)
+                settings.userAgentString = MK_UA
+                addJavascriptInterface(resolverBridge, BRIDGE_NAME)
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView,
+                        request: WebResourceRequest
+                    ): Boolean {
+                        val host = runCatching { request.url.host }.getOrNull().orEmpty()
+                        val siteHost = runCatching { URI(siteUrl).host }.getOrNull().orEmpty()
+                        return request.isForMainFrame && host != siteHost
+                    }
+
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        view.evaluateJavascript(resolverScript, null)
+                        resolverReady = true
+                    }
+                }
+                loadUrl("$siteUrl/")
+            }.also { resolverWebView = it }
+        } catch (e: Exception) {
+            Logger.log("MKissa could not start a WebView: ${e.message}")
+            null
+        }
+    }
 
     private suspend fun resolveSourceUrls(
         showId: String,
@@ -314,12 +363,12 @@ class MKissaProvider : NativeAnimeParser() {
         episodeString: String
     ): List<KissaSource> {
         val context = App.context ?: return emptyList()
+        val startedAt = System.currentTimeMillis()
         return suspendCancellableCoroutine { cont ->
-            val handler = Handler(Looper.getMainLooper())
+            val handler = resolverHandler
             val finished = AtomicBoolean(false)
             val sawCaptcha = AtomicBoolean(false)
             val apiError = AtomicReference<String?>(null)
-            var webView: WebView? = null
 
             fun buildError(): Exception {
                 return if (sawCaptcha.get()) {
@@ -334,7 +383,8 @@ class MKissaProvider : NativeAnimeParser() {
 
             fun finish(result: List<KissaSource>?, error: Exception?) {
                 if (!finished.compareAndSet(false, true)) return
-                handler.post { webView?.destroy() }
+                resolverCallback = null
+                Logger.log("MKissa resolver finished in ${System.currentTimeMillis() - startedAt}ms")
                 if (error != null) {
                     Logger.log("MKissa stream resolve error: ${error.message}")
                     cont.resume(emptyList())
@@ -343,11 +393,11 @@ class MKissaProvider : NativeAnimeParser() {
                 }
             }
 
-            val token = UUID.randomUUID().toString()
             val path = "/anime/$showId/p-$episodeString-$translationType"
             val target = """{"showId":"$showId","episode":"$episodeString","path":"$path",""" +
-                """"apiHost":"api.mkissa.net","token":"$token"}"""
-            val bridge = MKissaBridge(token) { kind, value ->
+                """"apiHost":"api.mkissa.net"}"""
+            resolverScript = HOOK_SCRIPT.replace("__TARGET__", target)
+            resolverCallback = { kind, value ->
                 when (kind) {
                     "result" -> {
                         val parsed = runCatching {
@@ -384,50 +434,41 @@ class MKissaProvider : NativeAnimeParser() {
                     }
                 }
             }
-            val script = HOOK_SCRIPT.replace("__TARGET__", target)
             handler.post {
                 if (finished.get()) return@post
-                try {
-                    webView = WebView(context.applicationContext).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.blockNetworkImage = true
-                        settings.userAgentString = MK_UA
-                        addJavascriptInterface(bridge, BRIDGE_NAME)
-                        webViewClient = object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView,
-                                request: WebResourceRequest
-                            ): Boolean {
-                                val host = runCatching { request.url.host }.getOrNull().orEmpty()
-                                val siteHost = runCatching { URI(siteUrl).host }.getOrNull().orEmpty()
-                                return request.isForMainFrame && host != siteHost
-                            }
-
-                            override fun onPageFinished(view: WebView, url: String?) {
-                                view.evaluateJavascript(script, null)
-                            }
-                        }
-                        loadUrl("$siteUrl/")
-                    }
-                } catch (e: Exception) {
-                    finish(null, IOException("MKissa could not start a WebView: ${e.message}", e))
+                val view = ensureResolverWebView(context)
+                if (view == null) {
+                    finish(null, IOException("MKissa could not start a WebView"))
+                    return@post
                 }
+                if (resolverReady) {
+                    view.evaluateJavascript(
+                        "window.__mkissaSetTarget && window.__mkissaSetTarget($target);" +
+                            "window.__mkissaNavigate && window.__mkissaNavigate();",
+                        null
+                    )
+                }
+                handler.postDelayed({
+                    if (!finished.get()) {
+                        view.evaluateJavascript(
+                            "window.__mkissaNavigate && window.__mkissaNavigate()", null
+                        )
+                    }
+                }, 3_000L)
             }
             cont.invokeOnCancellation {
                 finished.set(true)
-                handler.post { webView?.destroy() }
+                resolverCallback = null
             }
         }
     }
 
     private class MKissaBridge(
-        private val token: String,
         private val onMessage: (kind: String, value: String) -> Unit
     ) {
         @JavascriptInterface
-        fun post(token: String, kind: String, value: String) {
-            if (token == this.token) onMessage(kind, value)
+        fun post(kind: String, value: String) {
+            onMessage(kind, value)
         }
     }
 
@@ -558,12 +599,37 @@ class MKissaProvider : NativeAnimeParser() {
 
         private val HOOK_SCRIPT = """
             (function () {
-              if (window.__mkissaHooked || window._cf_chl_opt) return;
+              if (window.__mkissaHooked || window._cf_chl_opt) {
+                if (window.__mkissaNavigate) window.__mkissaNavigate();
+                return;
+              }
               window.__mkissaHooked = true;
               var bridge = window.MKissaBridge;
               var target = __TARGET__;
               var parse = JSON.parse, stringify = JSON.stringify, done = false;
-              function post(kind, value) { bridge.post(target.token, kind, value); }
+              function post(kind, value) { bridge.post(kind, value); }
+              function navigate() {
+                if (location.pathname === target.path) return;
+                var a = document.createElement('a');
+                a.href = target.path;
+                document.body.appendChild(a);
+                a.click();
+              }
+              window.__mkissaSetTarget = function (t) { target = t; done = false; };
+              var pending = null;
+              window.__mkissaNavigate = function () {
+                if (pending) clearTimeout(pending);
+                pending = setTimeout(function () {
+                  if (location.pathname === target.path) {
+                    if (!window.__mkissaBounced) {
+                      window.__mkissaBounced = true;
+                      location.href = '/';
+                    }
+                    return;
+                  }
+                  navigate();
+                }, 150);
+              };
               function inspect(obj) {
                 if (done || !obj || typeof obj !== 'object') return;
                 var ep = obj.episode || (obj.data && obj.data.episode);
@@ -605,18 +671,7 @@ class MKissaProvider : NativeAnimeParser() {
                   post('captcha', '');
                 }
               }, 500);
-              if (location.pathname === target.path) return;
-              var timer = setInterval(function () {
-                var started = performance.getEntriesByType('resource').some(function (e) {
-                  return e.name.indexOf(target.apiHost) >= 0;
-                });
-                if (!started) return;
-                clearInterval(timer);
-                var a = document.createElement('a');
-                a.href = target.path;
-                document.body.appendChild(a);
-                a.click();
-              }, 200);
+              window.__mkissaNavigate();
             })();
         """.trimIndent()
     }
