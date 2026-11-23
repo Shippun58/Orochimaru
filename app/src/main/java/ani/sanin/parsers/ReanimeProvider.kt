@@ -20,7 +20,7 @@ class ReanimeProvider : NativeAnimeParser() {
     override fun isDubAvailableSeparately(sourceLang: Int?): Boolean = true
 
     override val defaultBaseUrl = "https://reanime.cz"
-    override fun backupBaseUrls(): List<String> = listOf("https://reanime.bz", "https://reanime.wtf")
+    override val backupBaseUrls = listOf("https://reanime.bz", "https://reanime.wtf")
     override val knownServers = listOf("Reanime")
 
     private val FLIX = "https://flixcloud.cc"
