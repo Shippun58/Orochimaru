@@ -1,6 +1,5 @@
 package ani.sanin.plugins.nuvio.runtime
 
-import ani.sanin.plugins.nuvio.NuvioHostApiRegistry
 import ani.sanin.plugins.nuvio.NuvioHostFunctions
 import ani.sanin.plugins.nuvio.NuvioManifestScraper
 import ani.sanin.plugins.nuvio.NuvioRuntimeResult
@@ -135,7 +134,7 @@ internal object NuvioRuntime {
             val item = element as? JsonObject ?: return@mapNotNull null
             val url = when (val value = item["url"]) {
                 is JsonPrimitive -> value.contentOrNull?.takeIf { it.isNotBlank() }
-                is JsonObject -> value["url"]?.stringOrNull()?.takeIf { it.isNotBlank() }
+                is JsonObject -> (value["url"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
                 else -> null
             } ?: return@mapNotNull null
             NuvioRuntimeResult(

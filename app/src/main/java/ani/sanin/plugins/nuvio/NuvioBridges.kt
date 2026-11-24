@@ -99,7 +99,7 @@ internal class NuvioFetchBridge : NuvioHostModule {
         val headers = parseHeaders(headersJson).toMutableMap()
         headers.putIfAbsent("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         headers["Cache-Control"] = "no-store"
-        val requestBuilder = Request.Builder().url(url).followRedirects(followRedirects)
+        val requestBuilder = Request.Builder().url(url)
         headers.forEach { (key, value) -> requestBuilder.header(key, value) }
         val requestBody = when (bodyKind) {
             "text" -> body.toRequestBody(null)
@@ -109,8 +109,8 @@ internal class NuvioFetchBridge : NuvioHostModule {
         requestBuilder.method(method, requestBody)
         val localClient = if (followRedirects) client else client.newBuilder().followRedirects(false).build()
         localClient.newCall(requestBuilder.build()).execute().use { response ->
-            val bytes = response.body?.bytes().orEmpty()
-            val responseHeaders = response.headers
+            val bytes: ByteArray = response.body?.bytes() ?: ByteArray(0)
+            val responseHeaders = response.headers.toMap()
                 .mapKeys { (key, _) -> key.lowercase() }
                 .mapValues { (_, value) -> truncate(value) }
             return resultJson(

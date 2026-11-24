@@ -254,30 +254,30 @@ object TmdbStreamResolver {
         val url = this.url.trim()
         if (!nuvioPlayableUrl(url)) return null
         val metadata = buildMap {
-            quality?.takeIf { it.isNotBlank() }?.let { put("quality", it) }
-            size?.takeIf { it.isNotBlank() }?.let { put("size", it) }
-            language?.takeIf { it.isNotBlank() }?.let { put("language", it) }
-            provider?.takeIf { it.isNotBlank() }?.let { put("provider", it) }
-            type?.takeIf { it.isNotBlank() }?.let { put("type", it) }
-            seeders?.let { put("seeders", it.toString()) }
-            peers?.let { put("peers", it.toString()) }
-            infoHash?.takeIf { it.isNotBlank() }?.let { put("infoHash", it) }
+            this@toPlayableLink.quality?.takeIf { it.isNotBlank() }?.let { put("quality", it) }
+            this@toPlayableLink.size?.takeIf { it.isNotBlank() }?.let { put("size", it) }
+            this@toPlayableLink.language?.takeIf { it.isNotBlank() }?.let { put("language", it) }
+            this@toPlayableLink.provider?.takeIf { it.isNotBlank() }?.let { put("provider", it) }
+            this@toPlayableLink.type?.takeIf { it.isNotBlank() }?.let { put("type", it) }
+            this@toPlayableLink.seeders?.let { put("seeders", it.toString()) }
+            this@toPlayableLink.peers?.let { put("peers", it.toString()) }
+            this@toPlayableLink.infoHash?.takeIf { it.isNotBlank() }?.let { put("infoHash", it) }
         }
         val label = listOfNotNull(
-            name?.takeIf { it.isNotBlank() },
-            provider?.takeIf { it.isNotBlank() },
-            quality?.takeIf { it.isNotBlank() },
-            language?.takeIf { it.isNotBlank() },
-        ).distinct().joinToString(" · ").ifBlank { title.ifBlank { "Nuvio" } }
+            this@toPlayableLink.name?.takeIf { it.isNotBlank() },
+            this@toPlayableLink.provider?.takeIf { it.isNotBlank() },
+            this@toPlayableLink.quality?.takeIf { it.isNotBlank() },
+            this@toPlayableLink.language?.takeIf { it.isNotBlank() },
+        ).distinct().joinToString(" · ").ifBlank { this@toPlayableLink.title.ifBlank { "Nuvio" } }
         return StreamResult.PlayableLink(
             label = label,
             url = url,
-            headers = headers.orEmpty(),
+            headers = this@toPlayableLink.headers.orEmpty(),
             host = nuvioHost(url),
             details = metadata.entries.sortedBy { it.key }.joinToString(" · ") { "${it.key}=${it.value}" }
                 .ifBlank { null },
             rawDetails = metadata["infoHash"],
-            subtitles = subtitles.orEmpty(),
+            subtitles = this@toPlayableLink.subtitles.orEmpty(),
             metadata = metadata,
         )
     }
