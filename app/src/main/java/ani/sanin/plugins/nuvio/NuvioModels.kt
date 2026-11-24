@@ -62,6 +62,7 @@ data class NuvioRuntimeResult(
     val subtitles: List<NuvioSubtitleResult>? = null,
 )
 
+@Serializable
 data class NuvioRepositoryItem(
     val manifestUrl: String,
     val name: String,

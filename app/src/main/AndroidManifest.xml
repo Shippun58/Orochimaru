@@ -201,6 +201,9 @@
             android:name=".cloudstream.CloudStreamRepoDetailActivity"
             android:parentActivityName=".settings.ExtensionsActivity" />
         <activity
+            android:name=".plugins.nuvio.NuvioRepoDetailActivity"
+            android:parentActivityName=".settings.ExtensionsActivity" />
+        <activity
             android:name=".settings.AnimeRepoDetailActivity"
             android:parentActivityName=".settings.ExtensionsActivity" />
         <activity

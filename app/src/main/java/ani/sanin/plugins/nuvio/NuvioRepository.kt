@@ -15,11 +15,10 @@ internal object NuvioRepository {
     private val client get() = Injekt.get<NetworkHelper>().client.newBuilder().cache(null).build()
 
     fun repositories(): List<NuvioRepositoryItem> = NuvioStorage.repos().map { url ->
-        val scrapers = NuvioStorage.installedMetadata().filter { it.repositoryUrl == url }
-        NuvioRepositoryItem(
+        NuvioStorage.repoMeta(url) ?: NuvioRepositoryItem(
             manifestUrl = url,
-            name = scrapers.firstOrNull()?.id?.let { url.substringAfterLast('/') } ?: url.cleanRepoLabel(),
-            scraperCount = scrapers.size,
+            name = url.cleanRepoLabel(),
+            scraperCount = NuvioStorage.installedMetadata().count { it.repositoryUrl == url },
             lastUpdated = PrefManager.getNullableCustomVal(
                 "nuvio_repo_updated_$url",
                 0L,
@@ -49,58 +48,47 @@ internal object NuvioRepository {
         json.decodeFromString<NuvioManifest>(body)
     }
 
-    suspend fun addRepository(context: Context, input: String): NuvioRepositoryItem = withContext(Dispatchers.IO) {
+    suspend fun addRepository(input: String): NuvioRepositoryItem = withContext(Dispatchers.IO) {
         val manifestUrl = resolveManifestUrl(input)
             ?: throw IllegalArgumentException("Enter a valid Nuvio repository URL")
         val manifest = fetchManifest(manifestUrl)
-        val previous = NuvioStorage.installedMetadata().associateBy { it.id }
-        var installedCount = 0
-        manifest.scrapers.filter { supportsPlatform(it) }.forEach { scraper ->
-            val code = runCatching { fetchText(sourceUrl(manifestUrl, scraper.filename)) }.getOrNull()
-            if (!code.isNullOrBlank()) {
-                val enabled = previous[scraper.id]?.enabled ?: scraper.enabled
-                NuvioStorage.install(
-                    context,
-                    nuvioManifestScraperToStored(scraper, manifestUrl, enabled),
-                    code,
-                )
-                installedCount += 1
-            }
-        }
+        val item = repositoryItem(manifestUrl, manifest)
         NuvioStorage.addRepo(manifestUrl)
-        val now = System.currentTimeMillis()
-        PrefManager.setCustomVal("nuvio_repo_updated_$manifestUrl", now)
-        NuvioRepositoryItem(
-            manifestUrl = manifestUrl,
-            name = manifest.name,
-            description = manifest.description,
-            version = manifest.version,
-            scraperCount = installedCount,
-            lastUpdated = now,
-        )
+        NuvioStorage.saveRepoMeta(item)
+        item
     }
 
-    suspend fun refreshRepository(context: Context, manifestUrl: String): NuvioRepositoryItem = withContext(Dispatchers.IO) {
+    suspend fun refreshRepository(manifestUrl: String): NuvioRepositoryItem = withContext(Dispatchers.IO) {
         val manifest = fetchManifest(manifestUrl)
-        val previous = NuvioStorage.installedMetadata().filter { it.repositoryUrl == manifestUrl }.associateBy { it.id }
-        manifest.scrapers.filter { supportsPlatform(it) }.forEach { scraper ->
-            val code = runCatching { fetchText(sourceUrl(manifestUrl, scraper.filename)) }.getOrNull()
-            if (!code.isNullOrBlank()) {
-                NuvioStorage.install(
-                    context,
-                    nuvioManifestScraperToStored(scraper, manifestUrl, previous[scraper.id]?.enabled ?: scraper.enabled),
-                    code,
-                )
-            }
-        }
+        val item = repositoryItem(manifestUrl, manifest)
+        NuvioStorage.addRepo(manifestUrl)
+        NuvioStorage.saveRepoMeta(item)
+        item
+    }
+
+    suspend fun installScraper(
+        context: Context,
+        manifestUrl: String,
+        scraper: NuvioManifestScraper,
+    ): NuvioScraper = withContext(Dispatchers.IO) {
+        val code = fetchText(sourceUrl(manifestUrl, scraper.filename))
+        if (code.isBlank()) throw IllegalStateException("Empty plugin code")
+        val enabled = NuvioStorage.installedMetadata()
+            .firstOrNull { it.id == scraper.id }?.enabled ?: scraper.enabled
+        val stored = nuvioManifestScraperToStored(scraper, manifestUrl, enabled)
+        NuvioStorage.install(context, stored, code)
+        stored.withCode(code)
+    }
+
+    private fun repositoryItem(manifestUrl: String, manifest: NuvioManifest): NuvioRepositoryItem {
         val now = System.currentTimeMillis()
         PrefManager.setCustomVal("nuvio_repo_updated_$manifestUrl", now)
-        NuvioRepositoryItem(
+        return NuvioRepositoryItem(
             manifestUrl = manifestUrl,
             name = manifest.name,
             description = manifest.description,
             version = manifest.version,
-            scraperCount = NuvioStorage.installedMetadata().count { it.repositoryUrl == manifestUrl },
+            scraperCount = manifest.scrapers.count { supportsPlatform(it) },
             lastUpdated = now,
         )
     }
@@ -126,7 +114,7 @@ internal object NuvioRepository {
         return base + filename.removePrefix("/")
     }
 
-    private fun supportsPlatform(scraper: NuvioManifestScraper): Boolean {
+    internal fun supportsPlatform(scraper: NuvioManifestScraper): Boolean {
         val disabled = scraper.disabledPlatforms.orEmpty().map { it.lowercase() }
         if (disabled.any { it == "android" || it == "mobile" || it == "all" }) return false
         val supported = scraper.supportedPlatforms.orEmpty().map { it.lowercase() }

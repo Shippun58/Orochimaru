@@ -17,13 +17,20 @@ internal object NuvioStorage {
         PrefManager.setVal(PrefName.NuvioRepos, repos() + url)
     }
 
-    fun removeRepo(context: Context, url: String) {
+    fun removeRepo(url: String) {
         PrefManager.setVal(PrefName.NuvioRepos, repos() - url)
-        installedMetadata()
-            .filter { it.repositoryUrl == url }
-            .forEach { deleteCode(context, it) }
-        saveMetadata(installedMetadata().filterNot { it.repositoryUrl == url })
+        PrefManager.removeCustomVal("nuvio_repo_meta_$url")
+        PrefManager.removeCustomVal("nuvio_repo_updated_$url")
     }
+
+    fun saveRepoMeta(item: NuvioRepositoryItem) {
+        PrefManager.setCustomVal("nuvio_repo_meta_${item.manifestUrl}", json.encodeToString(item))
+    }
+
+    fun repoMeta(url: String): NuvioRepositoryItem? =
+        PrefManager.getNullableCustomVal("nuvio_repo_meta_$url", "", String::class.java)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { json.decodeFromString<NuvioRepositoryItem>(it) }.getOrNull() }
 
     fun installedMetadata(): List<NuvioStoredScraper> =
         PrefManager.getVal<List<String>>(PrefName.NuvioInstalledScrapers)
@@ -33,11 +40,25 @@ internal object NuvioStorage {
         PrefManager.setVal(PrefName.NuvioInstalledScrapers, items.map { json.encodeToString(it) })
     }
 
-    fun installed(context: Context): List<NuvioScraper> =
-        installedMetadata().mapNotNull { stored ->
-            val code = runCatching { codeFile(context, stored).readText() }.getOrNull()
-            if (code.isNullOrBlank()) null else stored.withCode(code)
-        }
+    fun installed(context: Context): List<NuvioScraper> {
+        val order = loadOrder()
+        return installedMetadata()
+            .sortedBy { stored -> order.indexOf(stored.id).let { if (it < 0) Int.MAX_VALUE else it } }
+            .mapNotNull { stored ->
+                val code = runCatching { codeFile(context, stored).readText() }.getOrNull()
+                if (code.isNullOrBlank()) null else stored.withCode(code)
+            }
+    }
+
+    fun loadOrder(): List<String> =
+        PrefManager.getNullableCustomVal("nuvio_installed_order", "", String::class.java)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
+            ?: emptyList()
+
+    fun saveOrder(ids: List<String>) {
+        PrefManager.setCustomVal("nuvio_installed_order", json.encodeToString(ids))
+    }
 
     fun codeFile(context: Context, stored: NuvioStoredScraper): File =
         File(scrapersDir(context), "${codeKey(stored.repositoryUrl, stored.id)}.js")
@@ -46,11 +67,13 @@ internal object NuvioStorage {
         val current = installedMetadata().filterNot { it.id == stored.id }
         codeFile(context, stored).writeText(code)
         saveMetadata(current + stored)
+        saveOrder(loadOrder().filterNot { it == stored.id } + stored.id)
     }
 
     fun uninstall(context: Context, stored: NuvioStoredScraper) {
         deleteCode(context, stored)
         saveMetadata(installedMetadata().filterNot { it.id == stored.id })
+        saveOrder(loadOrder().filterNot { it == stored.id })
     }
 
     fun setEnabled(id: String, enabled: Boolean) {

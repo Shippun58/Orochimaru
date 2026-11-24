@@ -464,8 +464,8 @@ class ExtensionsActivity : AppCompatActivity() {
                 LibraryStatusTab(label = "Available Add-ons", count = 0),
             )
             ExtensionMode.NUVIO -> listOf(
-                LibraryStatusTab(label = "Installed Nuvio", count = 0),
-                LibraryStatusTab(label = "Nuvio Repositories", count = 0),
+                LibraryStatusTab(label = "Installed Plugins", count = 0),
+                LibraryStatusTab(label = "Available Plugins", count = 0),
             )
             ExtensionMode.ANIYOMI -> listOf(
                 LibraryStatusTab(label = "Installed Extensions", count = 0),
@@ -592,8 +592,8 @@ class ExtensionsActivity : AppCompatActivity() {
                 }
                 lifecycleScope.launch {
                     Logger.log("NUVIO: repository URL submitted url=$url")
-                    runCatching { NuvioRepository.addRepository(this@ExtensionsActivity, url) }
-                        .onSuccess { ani.sanin.toast("${it.name} installed (${it.scraperCount} scrapers)") }
+                    runCatching { NuvioRepository.addRepository(url) }
+                        .onSuccess { ani.sanin.toast("${it.name} added (${it.scraperCount} plugins)") }
                         .onFailure {
                             Logger.log("NUVIO: repository URL failed url=$url error=${it.message}")
                             ani.sanin.toast("Could not add repository: ${it.message}")
