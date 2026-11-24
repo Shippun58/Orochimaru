@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -23,8 +24,12 @@ import ani.sanin.settings.ExtensionsActivity
 import ani.sanin.settings.RepoCardAdapter
 import ani.sanin.settings.RepoUi
 import ani.sanin.settings.SearchQueryHandler
+import ani.sanin.settings.githubOwnerAvatar
 import ani.sanin.toast
 import ani.sanin.util.customAlertDialog
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 internal fun showNuvioSettings(context: Context, scraper: NuvioScraper) {
@@ -302,7 +307,21 @@ class NuvioAvailableFragment : Fragment(), SearchQueryHandler {
     }
 
     private fun loadItems() {
-        items = NuvioRepository.repositories().sortedBy { it.name.lowercase() }
+        val cached = NuvioRepository.repositories()
+        items = cached.sortedBy { it.name.lowercase() }
+        submitItems()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val fresh = cached.map { repo ->
+                async {
+                    runCatching { NuvioRepository.refreshRepository(repo.manifestUrl) }.getOrNull() ?: repo
+                }
+            }.awaitAll().sortedBy { it.name.lowercase() }
+            items = fresh
+            submitItems()
+        }
+    }
+
+    private fun submitItems() {
         adapter.submitList(items.map { it.toRepoUi() }.filter { it.matches(query) })
     }
 
@@ -334,7 +353,7 @@ class NuvioAvailableFragment : Fragment(), SearchQueryHandler {
 
     override fun updateContentBasedOnQuery(query: String?) {
         this.query = query.orEmpty()
-        adapter.submitList(items.map { it.toRepoUi() }.filter { it.matches(this.query) })
+        submitItems()
     }
 
     override fun notifyDataChanged() = loadItems()
@@ -348,7 +367,7 @@ class NuvioAvailableFragment : Fragment(), SearchQueryHandler {
         name = name,
         url = manifestUrl,
         count = scraperCount,
-        iconUrl = NUVIO_WATERMARK_URL,
+        iconUrl = this.iconUrl ?: githubOwnerAvatar(manifestUrl) ?: NUVIO_WATERMARK_URL,
         contentTypes = listOf("Nuvio"),
         languages = emptyList(),
         countText = "$scraperCount plugins",

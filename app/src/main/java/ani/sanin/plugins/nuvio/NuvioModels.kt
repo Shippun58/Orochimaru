@@ -17,6 +17,9 @@ data class NuvioManifest(
     val version: String,
     val description: String? = null,
     val author: String? = null,
+    val iconUrl: String? = null,
+    val icon: String? = null,
+    val logo: String? = null,
     val scrapers: List<NuvioManifestScraper> = emptyList(),
 )
 
@@ -71,6 +74,7 @@ data class NuvioRepositoryItem(
     val name: String,
     val description: String? = null,
     val version: String? = null,
+    val iconUrl: String? = null,
     val scraperCount: Int = 0,
     val lastUpdated: Long = 0L,
 )

@@ -1,6 +1,7 @@
 package ani.sanin.plugins.nuvio
 
 import android.content.Context
+import ani.sanin.settings.githubOwnerAvatar
 import ani.sanin.settings.saving.PrefManager
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ internal object NuvioRepository {
         NuvioStorage.repoMeta(url) ?: NuvioRepositoryItem(
             manifestUrl = url,
             name = url.cleanRepoLabel(),
+            iconUrl = githubOwnerAvatar(url) ?: NUVIO_WATERMARK_URL,
             scraperCount = NuvioStorage.installedMetadata().count { it.repositoryUrl == url },
             lastUpdated = PrefManager.getNullableCustomVal(
                 "nuvio_repo_updated_$url",
@@ -83,11 +85,15 @@ internal object NuvioRepository {
     private fun repositoryItem(manifestUrl: String, manifest: NuvioManifest): NuvioRepositoryItem {
         val now = System.currentTimeMillis()
         PrefManager.setCustomVal("nuvio_repo_updated_$manifestUrl", now)
+        val repoIcon = manifest.iconUrl ?: manifest.icon ?: manifest.logo
         return NuvioRepositoryItem(
             manifestUrl = manifestUrl,
             name = manifest.name,
             description = manifest.description,
             version = manifest.version,
+            iconUrl = repoIcon?.let { sourceUrl(manifestUrl, it) }
+                ?: githubOwnerAvatar(manifestUrl)
+                ?: NUVIO_WATERMARK_URL,
             scraperCount = manifest.scrapers.count { supportsPlatform(it) },
             lastUpdated = now,
         )

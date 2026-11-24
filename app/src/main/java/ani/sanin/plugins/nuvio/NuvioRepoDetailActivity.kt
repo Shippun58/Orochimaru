@@ -155,12 +155,23 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
             }
             binding.csRepoTitle.text = manifest.name
             cachedScrapers = manifest.scrapers.filter { NuvioRepository.supportsPlatform(it) }
+            val repoIcon = manifest.iconUrl ?: manifest.icon ?: manifest.logo
+            val repoIconUrl = repoIcon?.let { NuvioRepository.sourceUrl(repoUrl, it) }
+                ?: ani.sanin.settings.githubOwnerAvatar(repoUrl)
+                ?: NUVIO_WATERMARK_URL
+            SvgImageLoader.load(
+                binding.csRepoIcon,
+                repoIconUrl,
+                R.drawable.ic_extension,
+                R.drawable.ic_extension,
+            )
             NuvioStorage.saveRepoMeta(
                 NuvioRepositoryItem(
                     manifestUrl = repoUrl,
                     name = manifest.name,
                     description = manifest.description,
                     version = manifest.version,
+                    iconUrl = repoIconUrl,
                     scraperCount = cachedScrapers.size,
                     lastUpdated = System.currentTimeMillis(),
                 )
