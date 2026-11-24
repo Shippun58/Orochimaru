@@ -12,6 +12,7 @@ import ani.sanin.R
 import ani.sanin.cloudstream.CsInstalledSource
 import ani.sanin.cloudstream.CsRepos
 import ani.sanin.cloudstream.CsSource
+import ani.sanin.parsers.AnimeSources
 import ani.sanin.settings.ExtensionsActivity
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
@@ -60,6 +61,7 @@ object PluginUpdateChecker {
                 }
 
                 if (updatedPlugins.isNotEmpty()) {
+                    AnimeSources.refreshPluginSources()
                     showNotification(
                         context,
                         Notifications.CHANNEL_PLUGIN_UPDATE,

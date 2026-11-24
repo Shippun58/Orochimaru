@@ -19,6 +19,7 @@ import ani.sanin.R
 import ani.sanin.copyToClipboard
 import ani.sanin.others.LanguageMapper
 import ani.sanin.others.svg.SvgImageLoader
+import ani.sanin.parsers.AnimeSources
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.databinding.ActivityCsRepoDetailBinding
@@ -203,6 +204,7 @@ class CloudStreamRepoDetailActivity : AppCompatActivity() {
                 withContext(Dispatchers.IO) { CsRepos.install(this@CloudStreamRepoDetailActivity, repoUrl, source) }
             }
             if (result.isSuccess) {
+                AnimeSources.refreshPluginSources()
                 installedIds = CsRepos.installed(this@CloudStreamRepoDetailActivity).map { it.id }.toSet()
                 adapter.notifyDataSetChanged()
                 Toast.makeText(this@CloudStreamRepoDetailActivity, "${source.name} installed", Toast.LENGTH_SHORT).show()

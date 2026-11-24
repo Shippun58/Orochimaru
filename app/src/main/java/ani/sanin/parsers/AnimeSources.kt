@@ -1,6 +1,10 @@
 package ani.sanin.parsers
 
 import ani.sanin.Lazier
+import ani.sanin.cloudstream.CsAnimeParser
+import ani.sanin.cloudstream.CsRepos
+import ani.sanin.cloudstream.CsRuntime
+import ani.sanin.currContext
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
@@ -12,6 +16,9 @@ object AnimeSources : WatchSources() {
     var pinnedAnimeSources: List<String> = emptyList()
     var providersOrder: List<String> = emptyList()
     var isInitialized = false
+    private var pluginNames: Set<String> = emptySet()
+    private var pluginEnglishSaveNames: Set<String> = emptySet()
+    private var lastExtensions: List<AnimeExtension.Installed> = emptyList()
 
     val allNativeParsers by lazy {
         listOf(
@@ -35,7 +42,8 @@ object AnimeSources : WatchSources() {
         "AniZone", "ANV", "123Anime", "AniPM"
     )
 
-    fun isEnglishProvider(saveName: String): Boolean = saveName in englishProviderNames
+    fun isEnglishProvider(saveName: String): Boolean =
+        saveName in englishProviderNames || saveName in pluginEnglishSaveNames
 
     val orderedNativeParsers: List<NativeAnimeParser>
         get() = allNativeParsers.sortedBy { parser ->
@@ -57,11 +65,15 @@ object AnimeSources : WatchSources() {
 
     override val displayNames: List<String> get() {
         val all = list
-        val extNames = all.filter { it.name !in nativeNames && it.name != "Local" }
-            .map { it.name }
+        val currentPluginNames = all.filter { it.name in pluginNames }.map { it.name }
+        val extNames = all.filter {
+            it.name !in nativeNames && it.name !in pluginNames && it.name != "Local"
+        }.map { it.name }
         return buildList {
             if (nativeNames.isNotEmpty()) add("─── Built-in ───")
             addAll(nativeNames)
+            if (currentPluginNames.isNotEmpty()) add("─── Plugins ───")
+            addAll(currentPluginNames)
             if (extNames.isNotEmpty()) add("─── Extensions ───")
             addAll(extNames)
         }
@@ -85,31 +97,60 @@ object AnimeSources : WatchSources() {
     }
 
     private fun rebuildList(extensions: List<AnimeExtension.Installed>) {
+        lastExtensions = extensions
         val extParsers = createParsersFromExtensions(extensions)
+        val (csParsers, csLaziers) = createParsersFromCsRepos()
+        pluginNames = csLaziers.map { it.name }.toSet()
+        pluginEnglishSaveNames = csParsers.filter { it.language == "English" }
+            .map { it.saveName }.toSet()
         list = buildList {
             nativeParsers.forEach { add(Lazier({ it }, it.name)) }
+            addAll(csLaziers)
             addAll(extParsers)
             add(Lazier({ LocalAnimeParser() }, "Local"))
         }
     }
 
     fun rebuildNativeParsers() {
-        val extParsers = list.filter { it.name !in nativeNames && it.name != "Local" }
+        val pluginParsers = list.filter { it.name in pluginNames }
+        val extParsers = list.filter {
+            it.name !in nativeNames && it.name !in pluginNames && it.name != "Local"
+        }
         list = buildList {
             nativeParsers.forEach { add(Lazier({ it }, it.name)) }
+            addAll(pluginParsers)
             addAll(extParsers)
             add(Lazier({ LocalAnimeParser() }, "Local"))
         }
     }
 
+    fun refreshPluginSources() {
+        if (!isInitialized) return
+        rebuildList(lastExtensions)
+    }
+
     fun performReorderAnimeSources() {
-        val extParsers = list.filter { it.name !in nativeNames && it.name != "Local" }
+        val pluginParsers = list.filter { it.name in pluginNames }
+        val extParsers = list.filter {
+            it.name !in nativeNames && it.name !in pluginNames && it.name != "Local"
+        }
         val sortedExt = sortPinnedAnimeSources(extParsers, pinnedAnimeSources)
         list = buildList {
             nativeParsers.forEach { add(Lazier({ it }, it.name)) }
+            addAll(pluginParsers)
             addAll(sortedExt)
             add(Lazier({ LocalAnimeParser() }, "Local"))
         }
+    }
+
+    private fun createParsersFromCsRepos(): Pair<List<CsAnimeParser>, List<Lazier<BaseParser>>> {
+        val context = currContext() ?: return emptyList<CsAnimeParser>() to emptyList()
+        val parsers = CsRepos.installed(context).flatMap { source ->
+            CsRuntime.apisFor(context, source).mapIndexed { index, api ->
+                CsAnimeParser(context, source, api, index)
+            }
+        }
+        return parsers to parsers.map { parser -> Lazier({ parser }, parser.name) }
     }
 
     private fun createParsersFromExtensions(extensions: List<AnimeExtension.Installed>): List<Lazier<BaseParser>> {

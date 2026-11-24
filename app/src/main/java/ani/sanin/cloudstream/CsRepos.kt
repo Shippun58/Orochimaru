@@ -140,6 +140,7 @@ object CsRepos {
                 target.writeBytes(body)
                 temp.delete()
             }
+            CsRuntime.unload(source.id)
             val current = PrefManager.getVal<List<String>>(PrefName.CloudStreamInstalledSources)
                 .filterNot {
                     runCatching { json.decodeFromString<CsInstalledSource>(it).id }.getOrNull() == source.id
@@ -186,6 +187,7 @@ object CsRepos {
     }
 
     fun uninstall(context: Context, source: CsInstalledSource) {
+        CsRuntime.unload(source.id)
         installedFile(context, source).delete()
         val current = PrefManager.getVal<List<String>>(PrefName.CloudStreamInstalledSources)
         PrefManager.setVal(

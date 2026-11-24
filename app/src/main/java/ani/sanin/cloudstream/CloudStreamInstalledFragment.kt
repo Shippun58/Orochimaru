@@ -20,6 +20,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
 import ani.sanin.databinding.FragmentExtensionsBinding
+import ani.sanin.parsers.AnimeSources
 import ani.sanin.databinding.ItemCsSourceInstalledBinding
 import ani.sanin.settings.SearchQueryHandler
 import ani.sanin.util.FocusEffectUtil
@@ -165,6 +166,7 @@ class CloudStreamInstalledFragment : Fragment(), SearchQueryHandler {
             }
             val result = runCatching { CsRepos.install(requireContext(), repoUrl, sourceAvailable) }
             if (result.isSuccess) {
+                AnimeSources.refreshPluginSources()
                 Toast.makeText(requireContext(), "${source.name} updated", Toast.LENGTH_SHORT).show()
                 load()
             } else {
@@ -188,6 +190,7 @@ class CloudStreamInstalledFragment : Fragment(), SearchQueryHandler {
             setMessage("Remove ${source.name} from installed extensions?")
             setPosButton("Remove") {
                 CsRepos.uninstall(requireContext(), source)
+                AnimeSources.refreshPluginSources()
                 Toast.makeText(requireContext(), "${source.name} removed", Toast.LENGTH_SHORT).show()
                 load()
             }
