@@ -92,7 +92,7 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
                 setTitle("Type")
                 singleChoiceItems(options, typeFilter) { selected ->
                     typeFilter = selected
-                    binding.csRepoFilterChip.text = "Type: ${options[selected]}"
+                    binding.csRepoFilterChip.contentDescription = "Type: ${options[selected]}"
                     refreshList(cachedScrapers)
                 }
                 setNegButton("Cancel")
@@ -108,7 +108,7 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
                 setTitle("Language")
                 singleChoiceItems(options.toTypedArray(), languageFilter) { selected ->
                     languageFilter = selected
-                    binding.csRepoLangChip.text = "Language: ${options[selected]}"
+                    binding.csRepoLangChip.contentDescription = "Language: ${options[selected]}"
                     refreshList(cachedScrapers)
                 }
                 setNegButton("Cancel")
