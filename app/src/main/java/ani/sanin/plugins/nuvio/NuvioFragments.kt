@@ -231,7 +231,7 @@ class NuvioInstalledAdapter(
             }
             binding.sourceIconImageView.let { view ->
                 if (item.logo.isBlank()) {
-                    view.setImageResource(R.drawable.ic_extension)
+                    SvgImageLoader.load(view, NUVIO_WATERMARK_URL, R.drawable.ic_extension, R.drawable.ic_extension)
                 } else {
                     SvgImageLoader.load(view, item.logo, R.drawable.ic_extension, R.drawable.ic_extension)
                 }
@@ -354,5 +354,6 @@ class NuvioAvailableFragment : Fragment(), SearchQueryHandler {
         countText = "$scraperCount plugins",
         description = description,
         watermarkRes = R.drawable.ic_extension,
+        watermarkUrl = NUVIO_WATERMARK_URL,
     )
 }

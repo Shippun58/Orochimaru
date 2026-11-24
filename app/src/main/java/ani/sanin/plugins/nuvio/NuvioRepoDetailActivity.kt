@@ -61,6 +61,12 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
             return
         }
         binding.csRepoTitle.text = repoUrl.removePrefix("https://raw.githubusercontent.com/").removeSuffix("/manifest.json")
+        SvgImageLoader.load(
+            binding.csRepoIcon,
+            NUVIO_WATERMARK_URL,
+            R.drawable.ic_extension,
+            R.drawable.ic_extension,
+        )
 
         binding.csRepoBack.setOnClickListener { finish() }
         binding.csRepoCopy.setOnClickListener { copyToClipboard(repoUrl, true) }
@@ -257,7 +263,12 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
                 binding.sourceSettingsImageView.visibility = if (installed) View.VISIBLE else View.GONE
                 binding.sourceInstallImageView.alpha = if (installed) 0.35f else 1f
                 if (item.logo.isNullOrBlank()) {
-                    binding.sourceIconImageView.setImageResource(R.drawable.ic_extension)
+                    SvgImageLoader.load(
+                        binding.sourceIconImageView,
+                        NUVIO_WATERMARK_URL,
+                        R.drawable.ic_extension,
+                        R.drawable.ic_extension,
+                    )
                 } else {
                     SvgImageLoader.load(
                         binding.sourceIconImageView,

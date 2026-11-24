@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
 import ani.sanin.databinding.ItemRepoCardBinding
 import ani.sanin.getThemeColor
+import ani.sanin.others.svg.SvgImageLoader
 import ani.sanin.ui.GlassPill
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
@@ -34,6 +35,7 @@ data class RepoUi(
     val scopeLabel: String = "languages",
     val description: String? = null,
     val watermarkRes: Int? = null,
+    val watermarkUrl: String? = null,
     val watermarkLeft: Boolean = false,
     val hideCount: Boolean = false,
     val showInfoButton: Boolean = false,
@@ -108,7 +110,16 @@ class RepoCardAdapter(
             holder.binding.repoCount.visibility = View.VISIBLE
             holder.binding.repoCount.text = item.countText ?: "${item.count} $countLabel"
         }
-        holder.binding.repoWatermark.setImageResource(item.watermarkRes ?: R.drawable.ic_github)
+        if (item.watermarkUrl.isNullOrBlank()) {
+            holder.binding.repoWatermark.setImageResource(item.watermarkRes ?: R.drawable.ic_github)
+        } else {
+            SvgImageLoader.load(
+                holder.binding.repoWatermark,
+                item.watermarkUrl,
+                item.watermarkRes ?: R.drawable.ic_extension,
+                item.watermarkRes ?: R.drawable.ic_extension,
+            )
+        }
         (holder.binding.repoWatermark.layoutParams as android.widget.FrameLayout.LayoutParams).let { lp ->
             if (item.watermarkLeft) {
                 lp.gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
