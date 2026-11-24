@@ -10,11 +10,11 @@ import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
 import ani.sanin.tryWithSuspend
 import com.lagradost.cloudstream3.AnimeLoadResponse
-import com.lagradost.cloudstream3.ExtractorLink
-import com.lagradost.cloudstream3.ExtractorLinkType
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Suppress("UNUSED_PARAMETER")

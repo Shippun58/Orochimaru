@@ -46,9 +46,9 @@ object CsAnimeProtocol {
         return buildJsonArray {
             items.forEach { (url, language) ->
                 add(buildJsonObject {
-                    put("url", url)
-                    put("language", language)
-                    put("type", subtitleType(url))
+                    put("url", JsonPrimitive(url))
+                    put("language", JsonPrimitive(language))
+                    put("type", JsonPrimitive(subtitleType(url)))
                 })
             }
         }.toString()
