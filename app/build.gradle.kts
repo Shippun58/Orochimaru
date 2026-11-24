@@ -184,6 +184,7 @@ dependencies {
     implementation(libs.lottie)
     implementation(libs.shimmer)
     implementation(files("libs/AnimatedBottomBar-7fcb9af.aar"))
+    implementation(files("libs/quickjs-kt-nuvio.aar"))
     implementation(libs.qrcode.kotlin)
     implementation(libs.gesture)
 

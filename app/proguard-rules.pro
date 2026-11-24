@@ -118,6 +118,7 @@
 -keepclassmembers class org.jsoup.nodes.Document { *; }
 
 -keep,allowoptimization class app.cash.quickjs.** { public protected *; }
+-keep,allowoptimization class com.dokar.quickjs.** { public protected *; }
 
 -keep class rx.internal.util.unsafe.** { *; }
 
