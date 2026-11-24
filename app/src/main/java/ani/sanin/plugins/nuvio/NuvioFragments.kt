@@ -23,7 +23,6 @@ import ani.sanin.settings.ExtensionsActivity
 import ani.sanin.settings.RepoCardAdapter
 import ani.sanin.settings.RepoUi
 import ani.sanin.settings.SearchQueryHandler
-import ani.sanin.settings.githubOwnerAvatar
 import ani.sanin.toast
 import ani.sanin.util.customAlertDialog
 import kotlinx.serialization.json.Json
@@ -230,11 +229,12 @@ class NuvioInstalledAdapter(
                 }
             }
             binding.sourceIconImageView.let { view ->
-                if (item.logo.isNullOrBlank()) {
-                    SvgImageLoader.load(view, NUVIO_WATERMARK_URL, R.drawable.ic_extension, R.drawable.ic_extension)
+                val logoUrl = if (item.logo.isNullOrBlank()) {
+                    NUVIO_WATERMARK_URL
                 } else {
-                    SvgImageLoader.load(view, item.logo, R.drawable.ic_extension, R.drawable.ic_extension)
+                    NuvioRepository.sourceUrl(item.repositoryUrl, item.logo)
                 }
+                SvgImageLoader.load(view, logoUrl, R.drawable.ic_extension, R.drawable.ic_extension)
             }
             binding.sourceCardView.setOnClickListener { onInfo(item) }
             binding.settingsImageView.setOnClickListener { onSettings(item) }
@@ -348,7 +348,7 @@ class NuvioAvailableFragment : Fragment(), SearchQueryHandler {
         name = name,
         url = manifestUrl,
         count = scraperCount,
-        iconUrl = githubOwnerAvatar(manifestUrl),
+        iconUrl = NUVIO_WATERMARK_URL,
         contentTypes = listOf("Nuvio"),
         languages = emptyList(),
         countText = "$scraperCount plugins",
