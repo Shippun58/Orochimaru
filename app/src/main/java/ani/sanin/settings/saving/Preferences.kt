@@ -50,6 +50,8 @@ enum class PrefName(val data: Pref) {
     CloudStreamRepos(Pref(Location.General, Set::class, setOf<String>())),
     CloudStreamInstalledSources(Pref(Location.General, List::class, listOf<String>())),
     StremioInstalledAddons(Pref(Location.General, List::class, listOf<String>())),
+    NuvioRepos(Pref(Location.General, Set::class, setOf<String>())),
+    NuvioInstalledScrapers(Pref(Location.General, List::class, listOf<String>())),
     CloudStreamTypeFilter(Pref(Location.General, String::class, "All")),
     AnimeTypeFilter(Pref(Location.General, String::class, "All")),
     AnimeLangSort(Pref(Location.General, String::class, "all")),

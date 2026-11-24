@@ -36,6 +36,9 @@ import ani.sanin.media.MediaType
 import ani.sanin.navBarHeight
 import ani.sanin.notifications.ExtensionBatchInstaller
 import ani.sanin.others.AndroidBug5497Workaround
+import ani.sanin.plugins.nuvio.NuvioAvailableFragment
+import ani.sanin.plugins.nuvio.NuvioInstalledFragment
+import ani.sanin.plugins.nuvio.NuvioRepository
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.statusBarHeight
@@ -54,11 +57,13 @@ class ExtensionsActivity : AppCompatActivity() {
         ANIYOMI("Aniyomi"),
         CLOUDSTREAM("CloudStream"),
         STREMIO("Stremio"),
+        NUVIO("Nuvio"),
     }
 
     private var extensionMode = ExtensionMode.ANIYOMI
     private val cloudStreamMode get() = extensionMode == ExtensionMode.CLOUDSTREAM
     private val stremioMode get() = extensionMode == ExtensionMode.STREMIO
+    private val nuvioMode get() = extensionMode == ExtensionMode.NUVIO
 
     private var pillTabs by mutableStateOf<List<LibraryStatusTab>>(emptyList())
     private var selectedPillIndex by mutableIntStateOf(0)
@@ -131,6 +136,7 @@ class ExtensionsActivity : AppCompatActivity() {
         AndroidBug5497Workaround.assistActivity(this) { }
 
         extensionMode = when {
+            intent.getBooleanExtra(EXTRA_NUVIO_MODE, false) -> ExtensionMode.NUVIO
             intent.getBooleanExtra(EXTRA_STREMIO_MODE, false) -> ExtensionMode.STREMIO
             intent.getBooleanExtra(EXTRA_CLOUDSTREAM_MODE, false) -> ExtensionMode.CLOUDSTREAM
             else -> ExtensionMode.ANIYOMI
@@ -208,11 +214,12 @@ class ExtensionsActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_CLOUDSTREAM_MODE = "extra_cloudstream_mode"
         const val EXTRA_STREMIO_MODE = "extra_stremio_mode"
+        const val EXTRA_NUVIO_MODE = "extra_nuvio_mode"
         const val EXTRA_INSTALL_UPDATES = "extra_install_updates"
     }
 
     private fun updateSearchUiForTab(tabPosition: Int) {
-        val showSearch = stremioMode || tabPosition == 0
+        val showSearch = stremioMode || nuvioMode || tabPosition == 0
         binding.searchIconButton.visibility = if (showSearch) View.VISIBLE else View.GONE
         if (!showSearch) collapseSearchBar()
     }
@@ -312,7 +319,8 @@ class ExtensionsActivity : AppCompatActivity() {
         val next = when (extensionMode) {
             ExtensionMode.ANIYOMI -> ExtensionMode.CLOUDSTREAM
             ExtensionMode.CLOUDSTREAM -> ExtensionMode.STREMIO
-            ExtensionMode.STREMIO -> ExtensionMode.ANIYOMI
+            ExtensionMode.STREMIO -> ExtensionMode.NUVIO
+            ExtensionMode.NUVIO -> ExtensionMode.ANIYOMI
         }
         switchMode(next)
     }
@@ -378,6 +386,7 @@ class ExtensionsActivity : AppCompatActivity() {
                 ExtensionMode.ANIYOMI -> R.drawable.ic_toggle_aniyomi
                 ExtensionMode.CLOUDSTREAM -> R.drawable.ic_toggle_cloudstream
                 ExtensionMode.STREMIO -> R.drawable.ic_stremio_watermark
+                ExtensionMode.NUVIO -> R.drawable.ic_baseline_extension_24
             }
         )
         if (mode == ExtensionMode.STREMIO) {
@@ -434,6 +443,10 @@ class ExtensionsActivity : AppCompatActivity() {
                         0 -> StremioInstalledFragment()
                         else -> StremioAvailableFragment()
                     }
+                    ExtensionMode.NUVIO -> when (position) {
+                        0 -> NuvioInstalledFragment()
+                        else -> NuvioAvailableFragment()
+                    }
                     ExtensionMode.ANIYOMI -> when (position) {
                         0 -> InstalledAnimeExtensionsFragment()
                         else -> AnimeExtensionsFragment()
@@ -449,6 +462,10 @@ class ExtensionsActivity : AppCompatActivity() {
             ExtensionMode.STREMIO -> listOf(
                 LibraryStatusTab(label = "Installed Add-ons", count = 0),
                 LibraryStatusTab(label = "Available Add-ons", count = 0),
+            )
+            ExtensionMode.NUVIO -> listOf(
+                LibraryStatusTab(label = "Installed Nuvio", count = 0),
+                LibraryStatusTab(label = "Nuvio Repositories", count = 0),
             )
             ExtensionMode.ANIYOMI -> listOf(
                 LibraryStatusTab(label = "Installed Extensions", count = 0),
@@ -475,13 +492,17 @@ class ExtensionsActivity : AppCompatActivity() {
     private fun setupModeButtons() {
         binding.openSettingsButton.visibility = View.VISIBLE
         binding.openSettingsButton.setImageResource(
-            if (stremioMode) R.drawable.ic_add else R.drawable.ic_round_menu_book_24
+            if (stremioMode || nuvioMode) R.drawable.ic_add else R.drawable.ic_round_menu_book_24
         )
         binding.openSettingsButton.contentDescription =
-            if (stremioMode) "Add add-on" else getString(R.string.sort_by)
+            if (stremioMode) "Add add-on" else if (nuvioMode) "Add Nuvio repository" else getString(R.string.sort_by)
         binding.openSettingsButton.setOnClickListener {
             if (stremioMode) {
                 showAddStremioAddonDialog()
+                return@setOnClickListener
+            }
+            if (nuvioMode) {
+                showAddNuvioRepoDialog()
                 return@setOnClickListener
             }
             val repos = if (cloudStreamMode) {
@@ -540,6 +561,44 @@ class ExtensionsActivity : AppCompatActivity() {
                         )
                         refreshCurrentList()
                     }
+                }
+            }
+            setNegButton("Cancel")
+            show()
+        }
+    }
+
+    private fun showAddNuvioRepoDialog() {
+        val input = EditText(this).apply {
+            hint = "https://raw.githubusercontent.com/user/repo/main"
+            setSingleLine(true)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
+            setPadding(32, 24, 32, 24)
+            setMinWidth((280 * resources.displayMetrics.density).toInt())
+        }
+        customAlertDialog().apply {
+            setTitle("Add Nuvio repository")
+            setMessage("Enter a repository URL or manifest.json URL")
+            setCustomView(input)
+            setOnShowListener {
+                TvKeyboardUtil.setupTvInput(input)
+                input.requestFocus()
+            }
+            setPosButton("Add") {
+                val url = input.text.toString().trim()
+                if (url.isBlank()) {
+                    ani.sanin.toast("Enter a repository URL")
+                    return@setPosButton
+                }
+                lifecycleScope.launch {
+                    Logger.log("NUVIO: repository URL submitted url=$url")
+                    runCatching { NuvioRepository.addRepository(this@ExtensionsActivity, url) }
+                        .onSuccess { ani.sanin.toast("${it.name} installed (${it.scraperCount} scrapers)") }
+                        .onFailure {
+                            Logger.log("NUVIO: repository URL failed url=$url error=${it.message}")
+                            ani.sanin.toast("Could not add repository: ${it.message}")
+                        }
+                    refreshCurrentList()
                 }
             }
             setNegButton("Cancel")

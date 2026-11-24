@@ -15,7 +15,13 @@ import ani.sanin.media.Selected
 import ani.sanin.media.anime.Anime
 import ani.sanin.media.anime.ExoplayerView
 import ani.sanin.media.anime.Episode
+import ani.sanin.parsers.Subtitle
+import ani.sanin.parsers.SubtitleType
 import ani.sanin.parsers.Video
+import ani.sanin.plugins.nuvio.NuvioRuntimeResult
+import ani.sanin.plugins.nuvio.NuvioScraper
+import ani.sanin.plugins.nuvio.NuvioSubtitleResult
+import ani.sanin.plugins.nuvio.runtime.NuvioRuntime
 import eu.kanade.tachiyomi.animesource.model.Track
 import ani.sanin.parsers.VideoContainer
 import ani.sanin.parsers.VideoExtractor
@@ -171,6 +177,8 @@ object TmdbStreamResolver {
             val externalUrl: String? = null,
             val details: String? = null,
             val rawDetails: String? = null,
+            val subtitles: List<NuvioSubtitleResult> = emptyList(),
+            val metadata: Map<String, String> = emptyMap(),
         )
 
         data class Success(val links: List<PlayableLink>, val matchName: String? = null) : StreamResult()
@@ -213,6 +221,95 @@ object TmdbStreamResolver {
             StreamResult.Success(links, detail.displayTitle)
         }
     }
+
+    suspend fun resolveNuvio(
+        context: Context,
+        scraper: NuvioScraper,
+        mediaType: String,
+        mediaId: Int,
+        season: Int?,
+        episodeNumber: Int?,
+    ): StreamResult {
+        if (!scraper.enabled || !scraper.supportsType(mediaType)) {
+            return StreamResult.Error("${scraper.name} does not support $mediaType")
+        }
+        Logger.log(
+            "NUVIO: resolve scraper='${scraper.name}' id='${scraper.id}' type=$mediaType " +
+                "tmdb=$mediaId S$season E$episodeNumber"
+        )
+        val normalizedType = if (mediaType.equals("tv", ignoreCase = true)) "tv" else "movie"
+        val results = NuvioRuntime.execute(scraper, mediaId.toString(), normalizedType, season, episodeNumber)
+        val links = results.mapNotNull { it.toPlayableLink() }
+        Logger.log(
+            "NUVIO: resolve result scraper='${scraper.name}' results=${results.size} playable=${links.size}"
+        )
+        return if (links.isEmpty()) {
+            StreamResult.Error("No playable streams found in ${scraper.name}")
+        } else {
+            StreamResult.Success(links, scraper.name)
+        }
+    }
+
+    private fun NuvioRuntimeResult.toPlayableLink(): StreamResult.PlayableLink? {
+        val url = this.url.trim()
+        if (!nuvioPlayableUrl(url)) return null
+        val metadata = buildMap {
+            quality?.takeIf { it.isNotBlank() }?.let { put("quality", it) }
+            size?.takeIf { it.isNotBlank() }?.let { put("size", it) }
+            language?.takeIf { it.isNotBlank() }?.let { put("language", it) }
+            provider?.takeIf { it.isNotBlank() }?.let { put("provider", it) }
+            type?.takeIf { it.isNotBlank() }?.let { put("type", it) }
+            seeders?.let { put("seeders", it.toString()) }
+            peers?.let { put("peers", it.toString()) }
+            infoHash?.takeIf { it.isNotBlank() }?.let { put("infoHash", it) }
+        }
+        val label = listOfNotNull(
+            name?.takeIf { it.isNotBlank() },
+            provider?.takeIf { it.isNotBlank() },
+            quality?.takeIf { it.isNotBlank() },
+            language?.takeIf { it.isNotBlank() },
+        ).distinct().joinToString(" · ").ifBlank { title.ifBlank { "Nuvio" } }
+        return StreamResult.PlayableLink(
+            label = label,
+            url = url,
+            headers = headers.orEmpty(),
+            host = nuvioHost(url),
+            details = metadata.entries.sortedBy { it.key }.joinToString(" · ") { "${it.key}=${it.value}" }
+                .ifBlank { null },
+            rawDetails = metadata["infoHash"],
+            subtitles = subtitles.orEmpty(),
+            metadata = metadata,
+        )
+    }
+
+    private fun nuvioPlayableUrl(url: String): Boolean {
+        val lower = url.lowercase()
+        if (lower.startsWith("magnet:") || lower.startsWith("torrent:") || lower.endsWith(".torrent")) {
+            return false
+        }
+        return lower.startsWith("http://") || lower.startsWith("https://") ||
+            lower.startsWith("data:") || lower.contains(".m3u8") || lower.contains(".mpd")
+    }
+
+    private fun nuvioHost(url: String): String = runCatching {
+        java.net.URI(url).host.orEmpty()
+    }.getOrDefault("")
+
+    private fun nuvioSubtitles(values: List<NuvioSubtitleResult>?): List<Subtitle> =
+        values.orEmpty().mapNotNull { value ->
+            val url = value.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val type = when {
+                url.endsWith(".ass", ignoreCase = true) -> SubtitleType.ASS
+                url.endsWith(".srt", ignoreCase = true) -> SubtitleType.SRT
+                url.endsWith(".vtt", ignoreCase = true) -> SubtitleType.VTT
+                else -> SubtitleType.UNKNOWN
+            }
+            Subtitle(
+                language = value.name?.takeIf { it.isNotBlank() } ?: value.language,
+                file = FileUrl(url, value.headers.orEmpty()),
+                type = type,
+            )
+        }
 
     suspend fun resolveAuto(
         context: Context,
@@ -578,6 +675,7 @@ object TmdbStreamResolver {
         val load: LoadResponse? = null,
         val isLive: Boolean = load is LiveStreamLoadResponse,
         val stremioAddon: StremioAddon? = null,
+        val nuvioScraper: NuvioScraper? = null,
     )
 
     private val episodeShells = mutableMapOf<String, Map<String, Episode>>()
@@ -714,12 +812,14 @@ object TmdbStreamResolver {
                     drm = link.drm,
                 )
                 val audioTracks = link.audioTracks.map { Track(url = it.url, lang = audioLanguage(it)) }
+                val subtitles = nuvioSubtitles(link.subtitles)
                 object : VideoExtractor() {
                     override val server = VideoServer(name, "", mapOf("quality" to name))
                     override suspend fun extract() =
-                        VideoContainer(videos = listOf(video), audioTracks = audioTracks)
+                        VideoContainer(videos = listOf(video), subtitles = subtitles, audioTracks = audioTracks)
                 }.apply {
                     videos = listOf(video)
+                    this.subtitles = subtitles
                     this.audioTracks = audioTracks
                 }
             }
@@ -750,14 +850,16 @@ object TmdbStreamResolver {
                 }
                 val qualityMeta = groupLinks.mapNotNull { qualityFromLabel(it.label) }
                     .distinct().sortedDescending().joinToString(" · ") { "${it}p" }
+                val subtitles = groupLinks.flatMap { nuvioSubtitles(it.subtitles) }
                 object : VideoExtractor() {
                     override val server = VideoServer(
                         name, "", mapOf("quality" to qualityMeta.ifBlank { name })
                     )
                     override suspend fun extract() =
-                        VideoContainer(videos = videos, audioTracks = audioTracks)
+                        VideoContainer(videos = videos, subtitles = subtitles, audioTracks = audioTracks)
                 }.apply {
                     this.videos = videos
+                    this.subtitles = subtitles
                     this.audioTracks = audioTracks
                 }
             }
@@ -851,21 +953,25 @@ object TmdbStreamResolver {
             val episodeNum = ep.extra?.get("episode")?.toIntOrNull()
             val cached = cachedLinks(session.mediaId, session.source.name, season, episodeNum)
             val stremioAddon = session.stremioAddon
-            val result = (cached
-                ?: if (stremioAddon != null) {
+            val nuvioScraper = session.nuvioScraper
+            val result = when {
+                nuvioScraper != null ->
+                    resolveNuvio(context, nuvioScraper, session.mediaType, session.mediaId, season, episodeNum)
+                        as? StreamResult.Success
+                cached != null -> cached
+                stremioAddon != null ->
                     (resolveStremio(stremioAddon, session.mediaType, session.mediaId, session.detail, season, episodeNum)
                         as? StreamResult.Success)
                         ?.also { cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
-                } else if (session.load != null) {
+                session.load != null ->
                     (resolvePluginStreams(context, session.source, session.load, season, episodeNum)
                         as? StreamResult.Success)
-                        .also { if (it != null) cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
-                } else {
+                        ?.also { cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
+                else ->
                     (resolveStreams(context, session.source, session.detail, season, episodeNum)
                         as? StreamResult.Success)
-                        .also { if (it != null) cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
-                })
-                ?: return@withContext false
+                        ?.also { cacheLinks(session.mediaId, session.source.name, season, episodeNum, it) }
+            } ?: return@withContext false
             val extractors = buildExtractors(result.links)
             if (extractors.isEmpty()) return@withContext false
             ep.extractors = extractors.toMutableList()
@@ -891,9 +997,18 @@ object TmdbStreamResolver {
         episodesOverride: Map<String, Episode>? = null,
         load: LoadResponse? = null,
         stremioAddon: StremioAddon? = null,
+        nuvioScraper: NuvioScraper? = null,
     ): Boolean {
         val id = syntheticId(mediaId)
-        sessions[id] = SyntheticSession(mediaId, mediaType, d, source, load, stremioAddon = stremioAddon)
+        sessions[id] = SyntheticSession(
+            mediaId,
+            mediaType,
+            d,
+            source,
+            load,
+            stremioAddon = stremioAddon,
+            nuvioScraper = nuvioScraper,
+        )
         if (sessions.size > 24) {
             sessions.entries.take(sessions.size - 24).forEach { sessions.remove(it.key) }
         }

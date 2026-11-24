@@ -61,6 +61,8 @@ import ani.sanin.settings.FAQActivity
 import ani.sanin.settings.StremioAddon
 import ani.sanin.settings.StremioAddonClient
 import ani.sanin.settings.StremioAddonManager
+import ani.sanin.plugins.nuvio.NuvioScraper
+import ani.sanin.plugins.nuvio.NuvioSources
 import android.widget.LinearLayout
 import android.widget.ImageButton
 import com.google.android.material.chip.Chip
@@ -151,10 +153,13 @@ class TmdbWatchFragment : Fragment() {
     private var movieEpisodes: List<TmdbEpisode> = emptyList()
 
     private val sources by lazy { CsRepos.installed(requireContext()) }
+    private val nuvioSources by lazy { NuvioSources.installed(requireContext(), mediaType) }
 
     private var stremioSources: List<StremioAddon> = emptyList()
     private var selectedStremioIndex = -1
     private val selectedStremio get() = stremioSources.getOrNull(selectedStremioIndex)
+    private var selectedNuvioIndex = -1
+    private val selectedNuvio get() = nuvioSources.getOrNull(selectedNuvioIndex)
     private val stremioInfoOnly get() =
         selectedStremio?.let { !StremioAddonClient.supports(it, "stream", mediaType) } == true
     private val stremioExtrasOnly get() = selectedStremio?.extrasOnly == true
@@ -633,13 +638,15 @@ class TmdbWatchFragment : Fragment() {
 
         h.tmdbWatchSourceChips.removeAllViews()
         h.tmdbWatchSourceTitle.text = (when {
-            sources.isEmpty() && stremioSources.isEmpty() -> getString(R.string.tmdb_watch_no_sources)
-            selectedSourceIndex == -1 && selectedStremioIndex == -1 -> getString(R.string.tmdb_watch_auto_search)
+            sources.isEmpty() && stremioSources.isEmpty() && nuvioSources.isEmpty() ->
+                getString(R.string.tmdb_watch_no_sources)
+            selectedSourceIndex == -1 && selectedStremioIndex == -1 && selectedNuvioIndex == -1 ->
+                getString(R.string.tmdb_watch_auto_search)
             else -> getString(R.string.tmdb_watch_sources)
         }) + sourceRowFiller()
         Logger.log(
             "TMDB_STATUS: buildHeader titleLen=${h.tmdbWatchSourceTitle.text.length} " +
-                "stremioIdx=$selectedStremioIndex csIdx=$selectedSourceIndex"
+                "stremioIdx=$selectedStremioIndex csIdx=$selectedSourceIndex nuvioIdx=$selectedNuvioIndex"
         )
         sources.forEachIndexed { index, source ->
             val chip = LayoutInflater.from(requireContext()).inflate(R.layout.item_tmdb_chip, h.tmdbWatchSourceChips, false) as Chip
@@ -658,9 +665,46 @@ class TmdbWatchFragment : Fragment() {
             chip.setOnClickListener {
                 val nowChecked = chip.isChecked
                 selectedStremioIndex = -1
+                selectedNuvioIndex = -1
+                lastAutoNuvio = null
                 selectedSourceIndex = if (nowChecked) index else -1
                 saveSourcePref()
                 lastAutoSource = null
+                TmdbStreamResolver.invalidateLinks(mediaId)
+                resolveJob?.cancel()
+                resolveJob = null
+                isResolving = false
+                setSourceStatus(getString(R.string.tmdb_watch_sources))
+                refreshChips(h.tmdbWatchSourceChips)
+                centerOn(h.tmdbWatchSourceScroll, chip)
+                episodeAdapter.submitEpisodes(episodesOrMovie())
+                if (nowChecked) refreshSelected() else autoSearchOnOpen()
+            }
+            FocusEffectUtil.applyFocusListener(chip)
+            h.tmdbWatchSourceChips.addView(chip)
+        }
+        nuvioSources.forEachIndexed { index, scraper ->
+            val chip = LayoutInflater.from(requireContext()).inflate(R.layout.item_tmdb_chip, h.tmdbWatchSourceChips, false) as Chip
+            chip.id = View.generateViewId()
+            chip.text = scraper.name
+            chip.isCheckable = true
+            chip.isClickable = true
+            chip.isFocusable = true
+            chip.setTextColor(
+                androidx.core.content.ContextCompat.getColorStateList(
+                    requireContext(), ani.sanin.R.color.chip_text_color
+                )
+            )
+            chip.tag = "nuvio:$index"
+            if (selectedNuvioIndex == index) chip.isChecked = true
+            chip.setOnClickListener {
+                val nowChecked = chip.isChecked
+                selectedSourceIndex = -1
+                selectedStremioIndex = -1
+                selectedNuvioIndex = if (nowChecked) index else -1
+                saveSourcePref()
+                lastAutoSource = null
+                lastAutoNuvio = null
                 TmdbStreamResolver.invalidateLinks(mediaId)
                 resolveJob?.cancel()
                 resolveJob = null
@@ -691,6 +735,8 @@ class TmdbWatchFragment : Fragment() {
             chip.setOnClickListener {
                 val nowChecked = chip.isChecked
                 selectedSourceIndex = -1
+                selectedNuvioIndex = -1
+                lastAutoNuvio = null
                 selectedStremioIndex = if (nowChecked) index else -1
                 saveSourcePref()
                 lastAutoSource = null
@@ -1096,7 +1142,7 @@ class TmdbWatchFragment : Fragment() {
     }
 
     private fun applyDefaultProvider() {
-        if (selectedSourceIndex >= 0 || selectedStremioIndex >= 0) return
+        if (selectedSourceIndex >= 0 || selectedStremioIndex >= 0 || selectedNuvioIndex >= 0) return
         if (PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)) {
             val savedId = PrefManager.getNullableCustomVal("tmdb_source_$mediaId", null, String::class.java)
             if (!savedId.isNullOrEmpty() && applyProviderId(savedId)) return
@@ -1107,6 +1153,7 @@ class TmdbWatchFragment : Fragment() {
             ?: PrefManager.getVal<String>(PrefName.ContentSource).takeIf { it != "simkl" && it != "tmdb" }
         if (preferredId != null && applyProviderId(preferredId)) return
         if (sources.isNotEmpty()) selectedSourceIndex = 0
+        else if (nuvioSources.isNotEmpty()) selectedNuvioIndex = 0
         else if (stremioSources.isNotEmpty()) selectedStremioIndex = 0
     }
 
@@ -1120,7 +1167,15 @@ class TmdbWatchFragment : Fragment() {
         val stIdx = stremioSources.indexOfFirst { StremioAddonManager.sourceId(it) == id }
         if (stIdx >= 0) {
             selectedSourceIndex = -1
+            selectedNuvioIndex = -1
             selectedStremioIndex = stIdx
+            return true
+        }
+        val nuvioIdx = nuvioSources.indexOfFirst { NuvioSources.sourceId(it) == id }
+        if (nuvioIdx >= 0) {
+            selectedSourceIndex = -1
+            selectedStremioIndex = -1
+            selectedNuvioIndex = nuvioIdx
             return true
         }
         return false
@@ -1489,6 +1544,7 @@ class TmdbWatchFragment : Fragment() {
 
     private fun autoSearchOnOpen(isInitialOpen: Boolean = false) {
         autoSearchJob?.cancel()
+        lastAutoNuvio = null
         if (isResolving || extrasSheetActive) return
         val d = detail ?: return
         if (isInitialOpen && !consumeAutoContinue()) {
@@ -1515,27 +1571,57 @@ class TmdbWatchFragment : Fragment() {
         autoSearchJob = lifecycleScope.launch {
             val pair = try {
                 withContext(Dispatchers.IO) {
+                    val nuvioScraper = selectedNuvio
                     val stremioAddon = selectedStremio
-                    if (stremioAddon != null) {
-                        null to TmdbStreamResolver.resolveStremio(
-                            stremioAddon, mediaType, mediaId, d, season, resumeEp
-                        )
-                    } else if (sources.isEmpty()) {
-                        null to TmdbStreamResolver.StreamResult.Error(getString(R.string.tmdb_watch_no_sources))
-                    } else if (pluginMode) {
-                        val home = sources.firstOrNull {
-                            it.id == CsRuntime.pluginIdOf(pluginSourceId ?: "")
-                        }
-                        val load = pluginLoad
-                        if (home != null && load != null) {
-                            home to TmdbStreamResolver.resolvePluginStreams(
-                                requireContext(), home, load, season, resumeEp
+                    when {
+                        nuvioScraper != null -> {
+                            lastAutoNuvio = nuvioScraper
+                            null to TmdbStreamResolver.resolveNuvio(
+                                requireContext(), nuvioScraper, mediaType, mediaId, season, resumeEp
                             )
-                        } else {
-                            null to TmdbStreamResolver.StreamResult.Error("Plugin data missing")
                         }
-                    } else {
-                        TmdbStreamResolver.resolveAuto(requireContext(), sources, d, season, resumeEp)
+                        stremioAddon != null -> {
+                            null to TmdbStreamResolver.resolveStremio(
+                                stremioAddon, mediaType, mediaId, d, season, resumeEp
+                            )
+                        }
+                        sources.isEmpty() && nuvioSources.isEmpty() -> {
+                            null to TmdbStreamResolver.StreamResult.Error(getString(R.string.tmdb_watch_no_sources))
+                        }
+                        pluginMode -> {
+                            val home = sources.firstOrNull {
+                                it.id == CsRuntime.pluginIdOf(pluginSourceId ?: "")
+                            }
+                            val load = pluginLoad
+                            if (home != null && load != null) {
+                                home to TmdbStreamResolver.resolvePluginStreams(
+                                    requireContext(), home, load, season, resumeEp
+                                )
+                            } else {
+                                null to TmdbStreamResolver.StreamResult.Error("Plugin data missing")
+                            }
+                        }
+                        else -> {
+                            val csResult = TmdbStreamResolver.resolveAuto(
+                                requireContext(), sources, d, season, resumeEp
+                            )
+                            if (csResult.second is TmdbStreamResolver.StreamResult.Success || nuvioSources.isEmpty()) {
+                                csResult
+                            } else {
+                                var nuvioResult: Pair<CsInstalledSource?, TmdbStreamResolver.StreamResult>? = null
+                                for (scraper in nuvioSources) {
+                                    val result = TmdbStreamResolver.resolveNuvio(
+                                        requireContext(), scraper, mediaType, mediaId, season, resumeEp
+                                    )
+                                    if (result is TmdbStreamResolver.StreamResult.Success) {
+                                        lastAutoNuvio = scraper
+                                        nuvioResult = null to result
+                                        break
+                                    }
+                                }
+                                nuvioResult ?: csResult
+                            }
+                        }
                     }
                 }
             } finally {
@@ -1547,7 +1633,7 @@ class TmdbWatchFragment : Fragment() {
             }
             val source = pair.first
             val result = pair.second
-            lastAutoSource = source
+            lastAutoSource = if (lastAutoNuvio == null) source else null
             when (result) {
                 is TmdbStreamResolver.StreamResult.Error -> {
                     setSourceStatus(getString(R.string.tmdb_watch_sources))
@@ -1573,7 +1659,9 @@ class TmdbWatchFragment : Fragment() {
                         else "$playableCount links found via $foundName"
                     )
 
-                    TmdbStreamResolver.cacheLinks(mediaId, foundName, season, resumeEp, result)
+                    if (lastAutoNuvio == null && selectedNuvio == null) {
+                        TmdbStreamResolver.cacheLinks(mediaId, foundName, season, resumeEp, result)
+                    }
 
                     val infoOnly = playableCount == 0 && result.links.isNotEmpty() && result.links.none {
                         it.externalUrl?.startsWith("stremio://", ignoreCase = true) == true
@@ -1610,6 +1698,7 @@ class TmdbWatchFragment : Fragment() {
     }
 
     private var lastAutoSource: CsInstalledSource? = null
+    private var lastAutoNuvio: NuvioScraper? = null
 
     private var autoSearchJob: Job? = null
 
@@ -1617,11 +1706,14 @@ class TmdbWatchFragment : Fragment() {
 
     private suspend fun resolve(season: Int?, ep: Int?): TmdbStreamResolver.StreamResult {
         val d = detail ?: return TmdbStreamResolver.StreamResult.Error("No title loaded")
+        selectedNuvio?.let { scraper ->
+            return TmdbStreamResolver.resolveNuvio(requireContext(), scraper, mediaType, mediaId, season, ep)
+        }
         selectedStremio?.let { addon ->
             return TmdbStreamResolver.resolveStremio(addon, mediaType, mediaId, d, season, ep)
         }
         if (selectedSourceIndex == -1) {
-            if (sources.isEmpty()) {
+            if (sources.isEmpty() && nuvioSources.isEmpty()) {
                 return TmdbStreamResolver.StreamResult.Error(getString(R.string.tmdb_watch_no_sources))
             }
             if (pluginMode) {
@@ -1637,7 +1729,23 @@ class TmdbWatchFragment : Fragment() {
                 }
             }
             val (source, result) = TmdbStreamResolver.resolveAuto(requireContext(), sources, d, season, ep)
+            if (result is TmdbStreamResolver.StreamResult.Success || nuvioSources.isEmpty()) {
+                lastAutoSource = source
+                lastAutoNuvio = null
+                return result
+            }
+            for (scraper in nuvioSources) {
+                val nuvioResult = TmdbStreamResolver.resolveNuvio(
+                    requireContext(), scraper, mediaType, mediaId, season, ep
+                )
+                if (nuvioResult is TmdbStreamResolver.StreamResult.Success) {
+                    lastAutoSource = null
+                    lastAutoNuvio = scraper
+                    return nuvioResult
+                }
+            }
             lastAutoSource = source
+            lastAutoNuvio = null
             return result
         }
         val source = sources.getOrNull(selectedSourceIndex)
@@ -1651,8 +1759,10 @@ class TmdbWatchFragment : Fragment() {
 
     private fun currentSourceName(): String {
         selectedStremio?.let { return it.manifest.name }
+        selectedNuvio?.let { return it.name }
         return when {
-            selectedSourceIndex == -1 -> lastAutoSource?.name ?: getString(R.string.tmdb_watch_auto_search)
+            selectedSourceIndex == -1 ->
+                lastAutoSource?.name ?: lastAutoNuvio?.name ?: getString(R.string.tmdb_watch_auto_search)
             else -> sources.getOrNull(selectedSourceIndex)?.name ?: getString(R.string.tmdb_watch_auto_search)
         }
     }
@@ -1812,6 +1922,12 @@ class TmdbWatchFragment : Fragment() {
 
         selectedStremio?.let {
             val id = StremioAddonManager.sourceId(it)
+            PrefManager.setCustomVal("tmdb_source_$mediaId", id)
+            if (remember) PrefManager.setVal(PrefName.LastTmdbSource, id)
+            return
+        }
+        selectedNuvio?.let {
+            val id = NuvioSources.sourceId(it)
             PrefManager.setCustomVal("tmdb_source_$mediaId", id)
             if (remember) PrefManager.setVal(PrefName.LastTmdbSource, id)
             return

@@ -49,6 +49,17 @@ class SettingsExtrasActivity : AppCompatActivity() {
                     onClick = { startActivity(Intent(this, SettingsAddonActivity::class.java)) },
                 ),
                 SubscreenBuilder.Entry(
+                    title = "Nuvio Plugins",
+                    desc = "Nuvio JavaScript scrapers and repositories",
+                    iconRes = R.drawable.ic_baseline_extension_24,
+                    onClick = {
+                        startActivity(
+                            Intent(this, ExtensionsActivity::class.java)
+                                .putExtra(ExtensionsActivity.EXTRA_NUVIO_MODE, true)
+                        )
+                    },
+                ),
+                SubscreenBuilder.Entry(
                     title = "Cache Manager",
                     desc = "Free up storage space",
                     iconRes = R.drawable.ic_set_backup,

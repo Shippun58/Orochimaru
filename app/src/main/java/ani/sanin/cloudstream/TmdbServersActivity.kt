@@ -18,6 +18,8 @@ import ani.sanin.databinding.ItemTmdbStreamsTextBinding
 import ani.sanin.databinding.ItemTmdbServerRowBinding
 import ani.sanin.limitedAsyncMap
 import ani.sanin.loadImage
+import ani.sanin.plugins.nuvio.NuvioScraper
+import ani.sanin.plugins.nuvio.NuvioSources
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
@@ -75,6 +77,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val source: CsInstalledSource,
         val addon: StremioAddon? = null,
         val pluginLoad: LoadResponse? = null,
+        val nuvioScraper: NuvioScraper? = null,
     ) {
         var state: GroupState = GroupState.Loading
         var rank: Int = 1
@@ -438,6 +441,18 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         csSources.forEach { source ->
             groups.add(Group(source.id, source.name, source.iconUrl, source))
         }
+        NuvioSources.installed(this, mediaType).forEach { scraper ->
+            val syntheticSource = NuvioSources.synthetic(this, scraper)
+            groups.add(
+                Group(
+                    syntheticSource.id,
+                    syntheticSource.name,
+                    syntheticSource.iconUrl,
+                    syntheticSource,
+                    nuvioScraper = scraper,
+                )
+            )
+        }
         val stremio = StremioAddonManager.installed()
         stremio.forEach { addon ->
             val syntheticSource = CsInstalledSource(
@@ -799,6 +814,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             when {
                 group.pluginLoad != null -> resolvePluginGroup(group)
                 group.addon != null -> resolveStremioGroup(group, d)
+                group.nuvioScraper != null -> resolveNuvioGroup(group)
                 else -> resolveCsGroup(group)
             }
         }
@@ -931,6 +947,32 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                     android.util.Log.ERROR,
                     "TMDB_SERVERS: '${group.name}' failed: ${result.message}"
                 )
+                group.state = GroupState.Failed(result.message)
+            }
+        }
+        onResolved(group)
+    }
+
+    private suspend fun resolveNuvioGroup(group: Group) {
+        val scraper = group.nuvioScraper ?: return
+        val result = TmdbStreamResolver.resolveNuvio(
+            this,
+            scraper,
+            mediaType,
+            mediaId,
+            season,
+            epNumber,
+        )
+        when (result) {
+            is TmdbStreamResolver.StreamResult.Success -> {
+                Logger.log(
+                    "TMDB_SERVERS: '${group.name}' ok ${result.links.size} links " +
+                        "playable=${result.links.count { it.url.isNotBlank() }}"
+                )
+                group.state = GroupState.Ready(result.links, emptyList(), emptyList())
+            }
+            is TmdbStreamResolver.StreamResult.Error -> {
+                Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: '${group.name}' failed: ${result.message}")
                 group.state = GroupState.Failed(result.message)
             }
         }
@@ -1219,6 +1261,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
                     episodesOverride = overrideEpisodes,
                     load = group.pluginLoad,
                     stremioAddon = group.addon,
+                    nuvioScraper = group.nuvioScraper,
                 )
             }.getOrElse {
                 Logger.log(android.util.Log.ERROR, "TMDB_SERVERS: launch failed: ${it.message}")
