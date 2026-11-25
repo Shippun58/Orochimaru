@@ -150,7 +150,7 @@ class SettingsDialogFragment : BottomSheetDialogFragment() {
 
         binding.settingsExtensionSettings.setSafeOnClickListener {
             dismiss()
-            startActivity(Intent(activity, ExtensionsActivity::class.java))
+            startActivity(Intent(activity, PluginSystemsActivity::class.java))
         }
 
         binding.settingsSettings.setSafeOnClickListener {

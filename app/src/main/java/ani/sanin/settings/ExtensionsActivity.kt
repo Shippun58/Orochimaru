@@ -3,7 +3,6 @@ package ani.sanin.settings
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -30,7 +29,6 @@ import ani.sanin.cloudstream.CloudStreamAvailableFragment
 import ani.sanin.cloudstream.CloudStreamInstalledFragment
 import ani.sanin.cloudstream.CsRepos
 import ani.sanin.databinding.ActivityExtensionsBinding
-import ani.sanin.getThemeColor
 import ani.sanin.initActivity
 import ani.sanin.media.MediaType
 import ani.sanin.navBarHeight
@@ -142,7 +140,7 @@ class ExtensionsActivity : AppCompatActivity() {
             else -> ExtensionMode.ANIYOMI
         }
 
-        setupModeToggle()
+        binding.systemNameLabel.text = extensionMode.label
 
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         viewPager.offscreenPageLimit = 1
@@ -198,7 +196,10 @@ class ExtensionsActivity : AppCompatActivity() {
         TvKeyboardUtil.setupTvInput(binding.searchViewText)
 
         FocusEffectUtil.applyFocusListener(binding.searchIconButton)
-        LensButtonBackground.apply(binding.searchIconButton)
+        LensButtonBackground.apply(
+            binding.searchIconButton,
+            cornerRadiusPx = 18f * resources.displayMetrics.density,
+        )
         binding.searchIconButton.setOnClickListener { toggleSearchBar() }
         updateSearchUiForTab(0)
 
@@ -242,7 +243,8 @@ class ExtensionsActivity : AppCompatActivity() {
     private fun expandSearchBar() {
         if (searchExpanded) return
         searchExpanded = true
-        binding.searchIconButton.setImageResource(R.drawable.ic_round_close_24)
+        binding.searchButtonIcon.setImageResource(R.drawable.ic_round_close_24)
+        binding.searchButtonLabel.text = "Close"
         val heightPx = (56 * resources.displayMetrics.density).toInt()
         binding.searchView.visibility = View.VISIBLE
         binding.searchView.alpha = 0f
@@ -266,7 +268,8 @@ class ExtensionsActivity : AppCompatActivity() {
     private fun collapseSearchBar() {
         if (!searchExpanded) return
         searchExpanded = false
-        binding.searchIconButton.setImageResource(R.drawable.ic_round_search_24)
+        binding.searchButtonIcon.setImageResource(R.drawable.ic_round_search_24)
+        binding.searchButtonLabel.text = "Search"
         binding.searchViewText.clearFocus()
         val startHeight = binding.searchView.layoutParams.height
         val anim = ValueAnimator.ofInt(startHeight, 0).apply {
@@ -284,116 +287,6 @@ class ExtensionsActivity : AppCompatActivity() {
             })
         }
         anim.start()
-    }
-
-    private var modeToggleAnimating = false
-
-    private fun setupModeToggle() {
-        binding.modeToggle.setOnClickListener { toggleMode() }
-        binding.modeToggle.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_CENTER,
-                    KeyEvent.KEYCODE_ENTER -> {
-                        toggleMode()
-                        true
-                    }
-                    else -> false
-                }
-            } else {
-                false
-            }
-        }
-        FocusEffectUtil.applyFocusListener(binding.modeToggle)
-        binding.modeToggle.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
-            if (right - left != oldRight - oldLeft) {
-                updateToggleUI(extensionMode, animate = false)
-            }
-        }
-        updateToggleUI(extensionMode, animate = false)
-        binding.modeToggle.post { updateToggleUI(extensionMode, animate = false) }
-    }
-
-    private fun toggleMode() {
-        if (modeToggleAnimating) return
-        val next = when (extensionMode) {
-            ExtensionMode.ANIYOMI -> ExtensionMode.CLOUDSTREAM
-            ExtensionMode.CLOUDSTREAM -> ExtensionMode.STREMIO
-            ExtensionMode.STREMIO -> ExtensionMode.NUVIO
-            ExtensionMode.NUVIO -> ExtensionMode.ANIYOMI
-        }
-        switchMode(next)
-    }
-
-    private fun thumbStops(): FloatArray {
-        val track = binding.modeToggle.width.toFloat()
-        val thumb = binding.modeToggleThumb.width.toFloat()
-        if (track <= 0f || thumb <= 0f) return FloatArray(ExtensionMode.entries.size)
-        val pad = 2f * resources.displayMetrics.density
-        val slot = (track - pad * 2f) / ExtensionMode.entries.size
-        val inset = (slot - thumb) / 2f
-        return FloatArray(ExtensionMode.entries.size) { index ->
-            pad + index * slot + inset
-        }
-    }
-
-    private fun updateToggleUI(mode: ExtensionMode, animate: Boolean) {
-        binding.modeToggleLabel.text = mode.label
-        styleToggleDrawables(mode)
-        val targetX = thumbStops()[mode.ordinal]
-        if (!animate || !PrefManager.getVal<Boolean>(PrefName.AnimationsEnabled) || !PrefManager.getVal<Boolean>(PrefName.MiscUiAnimations) || binding.modeToggle.width == 0) {
-            binding.modeToggleThumb.translationX = targetX
-            return
-        }
-        modeToggleAnimating = true
-        val currentX = binding.modeToggleThumb.translationX
-        ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 300
-            interpolator = DecelerateInterpolator(1.5f)
-            addUpdateListener { anim ->
-                val t = anim.animatedValue as Float
-                binding.modeToggleThumb.translationX = currentX + (targetX - currentX) * t
-            }
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    modeToggleAnimating = false
-                    binding.modeToggleThumb.translationX = targetX
-                    binding.modeToggleLabel.text = mode.label
-                }
-            })
-            start()
-        }
-    }
-
-    private fun styleToggleDrawables(mode: ExtensionMode) {
-        val primary = getThemeColor(com.google.android.material.R.attr.colorPrimary)
-        val radius = 18 * resources.displayMetrics.density
-        val thumbRadius = 15 * resources.displayMetrics.density
-        val rounded = floatArrayOf(radius, radius, radius, radius, radius, radius, radius, radius)
-        val thumbRound = floatArrayOf(thumbRadius, thumbRadius, thumbRadius, thumbRadius, thumbRadius, thumbRadius, thumbRadius, thumbRadius)
-        binding.modeToggleFill.background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            setColor(primary)
-            cornerRadii = rounded
-        }
-        binding.modeToggleThumb.background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            setColor(android.graphics.Color.WHITE)
-            cornerRadii = thumbRound
-        }
-        binding.modeToggleThumbIcon.setImageResource(
-            when (mode) {
-                ExtensionMode.ANIYOMI -> R.drawable.ic_toggle_aniyomi
-                ExtensionMode.CLOUDSTREAM -> R.drawable.ic_toggle_cloudstream
-                ExtensionMode.STREMIO -> R.drawable.ic_stremio_watermark
-                ExtensionMode.NUVIO -> R.drawable.ic_baseline_extension_24
-            }
-        )
-        if (mode == ExtensionMode.STREMIO) {
-            binding.modeToggleThumbIcon.setColorFilter(primary)
-        } else {
-            binding.modeToggleThumbIcon.clearColorFilter()
-        }
     }
 
     fun focusPill(): Boolean = binding.extensionsPill.requestFocus()
@@ -414,18 +307,6 @@ class ExtensionsActivity : AppCompatActivity() {
                 rv?.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
             }
         }, if (attempt == 0) 150 else 100)
-    }
-
-    private fun switchMode(mode: ExtensionMode) {
-        if (extensionMode == mode) return
-        extensionMode = mode
-        updateToggleUI(mode, animate = true)
-        collapseSearchBar()
-        binding.searchViewText.setText("")
-        binding.searchViewText.clearFocus()
-        setupTabs()
-        setupModeButtons()
-        updateSearchUiForTab(0)
     }
 
     private fun setupTabs() {
@@ -490,12 +371,11 @@ class ExtensionsActivity : AppCompatActivity() {
     }
 
     private fun setupModeButtons() {
+        val addLabel = if (stremioMode) "Add add-on" else "Add repository"
         binding.openSettingsButton.visibility = View.VISIBLE
-        binding.openSettingsButton.setImageResource(
-            if (stremioMode || nuvioMode) R.drawable.ic_add else R.drawable.ic_round_menu_book_24
-        )
-        binding.openSettingsButton.contentDescription =
-            if (stremioMode) "Add add-on" else if (nuvioMode) "Add Nuvio repository" else getString(R.string.sort_by)
+        binding.openSettingsIcon.setImageResource(R.drawable.ic_round_menu_book_24)
+        binding.openSettingsLabel.text = addLabel
+        binding.openSettingsButton.contentDescription = addLabel
         binding.openSettingsButton.setOnClickListener {
             if (stremioMode) {
                 showAddStremioAddonDialog()
@@ -519,7 +399,10 @@ class ExtensionsActivity : AppCompatActivity() {
             ).show(supportFragmentManager, "add_repo")
         }
         FocusEffectUtil.applyFocusListener(binding.openSettingsButton)
-        LensButtonBackground.apply(binding.openSettingsButton)
+        LensButtonBackground.apply(
+            binding.openSettingsButton,
+            cornerRadiusPx = 18f * resources.displayMetrics.density,
+        )
     }
 
     private fun showAddStremioAddonDialog() {

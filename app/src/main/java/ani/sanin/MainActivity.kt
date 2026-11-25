@@ -69,8 +69,9 @@ import ani.sanin.profile.ProfileActivity
 import ani.sanin.profile.activity.FeedActivity
 import ani.sanin.profile.notification.NotificationActivity
 import ani.sanin.settings.AddRepositoryBottomSheet
-import ani.sanin.settings.MediaTrackerBottomSheet
 import ani.sanin.settings.ExtensionsActivity
+import ani.sanin.settings.MediaTrackerBottomSheet
+import ani.sanin.settings.PluginSystemsActivity
 import ani.sanin.settings.FirstTimeProviderDialog
 import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
@@ -1099,7 +1100,7 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this, NotificationActivity::class.java))
             },
             R.id.rightRailExtensions to {
-                startActivity(Intent(this, ExtensionsActivity::class.java))
+                startActivity(Intent(this, PluginSystemsActivity::class.java))
             },
             R.id.rightRailSettings to {
                 startActivity(Intent(this, ani.sanin.settings.SettingsActivity::class.java))
