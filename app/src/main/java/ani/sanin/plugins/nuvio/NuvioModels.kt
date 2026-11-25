@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 internal const val NUVIO_REPOSITORY_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1_000L
 
 internal const val NUVIO_WATERMARK_URL =
-    "https://copyicon.com/api/icon-svg?iconId=arcticons%3Anuvio&height=24&color=%23212121"
+    "https://copyicon.com/api/icon-svg?iconId=arcticons%3Anuvio&height=24&color=%23F2F2F2"
 
 internal fun nuvioRefreshDue(lastUpdatedEpochMs: Long, nowEpochMs: Long): Boolean =
     lastUpdatedEpochMs <= 0L || nowEpochMs - lastUpdatedEpochMs >= NUVIO_REPOSITORY_REFRESH_INTERVAL_MS
