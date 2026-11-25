@@ -51,11 +51,11 @@ import ani.sanin.util.TvKeyboardUtil
 class ExtensionsActivity : AppCompatActivity() {
     lateinit var binding: ActivityExtensionsBinding
 
-    private enum class ExtensionMode(val label: String) {
-        ANIYOMI("Aniyomi"),
-        CLOUDSTREAM("CloudStream"),
-        STREMIO("Stremio"),
-        NUVIO("Nuvio"),
+    private enum class ExtensionMode(val label: String, val logoRes: Int) {
+        ANIYOMI("Aniyomi", R.drawable.ic_toggle_aniyomi),
+        CLOUDSTREAM("CloudStream", R.drawable.ic_toggle_cloudstream),
+        STREMIO("Stremio", R.drawable.ic_stremio_watermark),
+        NUVIO("Nuvio", R.drawable.ic_nuvio_logo),
     }
 
     private var extensionMode = ExtensionMode.ANIYOMI
@@ -141,6 +141,7 @@ class ExtensionsActivity : AppCompatActivity() {
         }
 
         binding.systemNameLabel.text = extensionMode.label
+        binding.systemNameLogo.setImageResource(extensionMode.logoRes)
 
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         viewPager.offscreenPageLimit = 1
@@ -197,8 +198,8 @@ class ExtensionsActivity : AppCompatActivity() {
 
         if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.searchIconButton)
         LensButtonBackground.apply(
-            binding.searchIconButton,
-            cornerRadiusPx = 18f * resources.displayMetrics.density,
+            binding.searchLens,
+            cornerRadiusPx = 14f * resources.displayMetrics.density,
         )
         binding.searchIconButton.setOnClickListener { toggleSearchBar() }
         updateSearchUiForTab(0)
@@ -400,8 +401,8 @@ class ExtensionsActivity : AppCompatActivity() {
         }
         if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.openSettingsButton)
         LensButtonBackground.apply(
-            binding.openSettingsButton,
-            cornerRadiusPx = 18f * resources.displayMetrics.density,
+            binding.openSettingsLens,
+            cornerRadiusPx = 14f * resources.displayMetrics.density,
         )
     }
 

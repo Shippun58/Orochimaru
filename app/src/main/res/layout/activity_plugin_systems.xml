@@ -52,7 +52,7 @@
                 android:layout_marginTop="1dp"
                 android:alpha="0.5"
                 android:fontFamily="@font/poppins_semi_bold"
-                android:text="Choose a source system"
+                android:text="Choose a provider"
                 android:textColor="?attr/colorOnSurface"
                 android:textSize="12sp" />
         </LinearLayout>
