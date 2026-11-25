@@ -7,7 +7,11 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.util.TypedValue
+import android.view.KeyEvent
 import android.widget.EditText
+import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
@@ -26,6 +30,7 @@ import ani.sanin.settings.RepoUi
 import ani.sanin.settings.SearchQueryHandler
 import ani.sanin.settings.githubOwnerAvatar
 import ani.sanin.toast
+import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.customAlertDialog
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -65,30 +70,29 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
     private val binding get() = _binding!!
     private var items: List<NuvioScraper> = emptyList()
     private var query = ""
-    private var itemTouchHelper: ItemTouchHelper? = null
 
     private val adapter = NuvioInstalledAdapter(
         onInfo = { showInfo(it) },
         onSettings = { showNuvioSettings(requireContext(), it) },
         onDelete = { confirmDelete(it) },
-        onReorder = { NuvioStorage.saveOrder(it) },
-        onStartDrag = { itemTouchHelper?.startDrag(it) },
     )
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentExtensionsBinding.inflate(inflater, container, false)
         binding.allExtensionsRecyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.allExtensionsRecyclerView.adapter = adapter
-        itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+        val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN,
             0,
         ) {
+            override fun isLongPressDragEnabled() = false
+
             override fun onMove(
                 recyclerView: RecyclerView,
                 viewHolder: RecyclerView.ViewHolder,
                 target: RecyclerView.ViewHolder,
             ): Boolean {
-                adapter.move(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
+                adapter.move(viewHolder.absoluteAdapterPosition, target.absoluteAdapterPosition)
                 return true
             }
 
@@ -96,16 +100,33 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
 
             override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
                 super.onSelectedChanged(viewHolder, actionState)
-                adapter.dragging = actionState == ItemTouchHelper.ACTION_STATE_DRAG
+                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                    viewHolder?.itemView?.elevation = 8f
+                    viewHolder?.itemView?.translationZ = 8f
+                }
             }
 
             override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
                 super.clearView(recyclerView, viewHolder)
-                adapter.dragging = false
-                NuvioStorage.saveOrder(adapter.currentList.map { it.id })
+                adapter.disarmDrag()
+                viewHolder.itemView.elevation = 0f
+                viewHolder.itemView.translationZ = 0f
             }
-        }).also { it.attachToRecyclerView(binding.allExtensionsRecyclerView) }
+        })
+        itemTouchHelper.attachToRecyclerView(binding.allExtensionsRecyclerView)
+        adapter.itemTouchHelper = itemTouchHelper
+        adapter.reorderMessage = binding.reorderMessage
+        adapter.persistOrder = { ordered -> NuvioStorage.saveOrder(ordered.map { it.id }) }
         return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        val backDisarm = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = adapter.disarmDrag()
+        }
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backDisarm)
+        adapter.onDragModeChanged = { armed -> backDisarm.isEnabled = armed }
     }
 
     override fun onResume() {
@@ -128,10 +149,8 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
                 scraper.author?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
                 scraper.description.takeIf { it.isNotBlank() }?.let { append("\n\n$it") }
             })
-            setPosButton("Settings") { showNuvioSettings(requireContext(), scraper) }
-            setNeutralButton(if (scraper.enabled) "Disable" else "Enable") {
-                NuvioStorage.setEnabled(scraper.id, !scraper.enabled)
-                loadItems()
+            setPosButton(if (scraper.hasSettings) "Settings" else "Close") {
+                if (scraper.hasSettings) showNuvioSettings(requireContext(), scraper)
             }
             setNegButton("Uninstall") { confirmDelete(scraper) }
             show()
@@ -160,7 +179,6 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
     override fun notifyDataChanged() = loadItems()
 
     override fun onDestroyView() {
-        itemTouchHelper = null
         binding.allExtensionsRecyclerView.adapter = null
         super.onDestroyView()
         _binding = null
@@ -199,28 +217,46 @@ class NuvioInstalledAdapter(
     private val onInfo: (NuvioScraper) -> Unit,
     private val onSettings: (NuvioScraper) -> Unit,
     private val onDelete: (NuvioScraper) -> Unit,
-    private val onReorder: (List<String>) -> Unit,
-    private val onStartDrag: (RecyclerView.ViewHolder) -> Unit,
 ) : ListAdapter<NuvioScraper, NuvioInstalledAdapter.VH>(DIFF) {
-    var dragging = false
+    var dragActivePosition: Int? = null
+    var reorderMessage: TextView? = null
+    var itemTouchHelper: ItemTouchHelper? = null
+    var onDragModeChanged: ((Boolean) -> Unit)? = null
+    var persistOrder: ((List<NuvioScraper>) -> Unit)? = null
+
+    fun disarmDrag() {
+        dragActivePosition = null
+        reorderMessage?.visibility = View.GONE
+        persistOrder?.invoke(currentList)
+        onDragModeChanged?.invoke(false)
+        notifyDataSetChanged()
+    }
+
+    private fun tintArrows(holder: VH, active: Boolean) {
+        val typedValue = TypedValue()
+        holder.itemView.context.theme.resolveAttribute(
+            if (active) android.R.attr.colorPrimary else com.google.android.material.R.attr.colorOnSurface,
+            typedValue,
+            true,
+        )
+        holder.binding.dragUpArrow.setColorFilter(typedValue.data)
+        holder.binding.dragDownArrow.setColorFilter(typedValue.data)
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
         VH(ItemNuvioSourceInstalledBinding.inflate(LayoutInflater.from(parent.context), parent, false))
 
-    override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(getItem(position))
+    override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(getItem(position), position)
 
     fun move(from: Int, to: Int) {
         if (from == to || from < 0 || to < 0 || from >= itemCount || to >= itemCount) return
         val list = currentList.toMutableList()
-        val moved = list.removeAt(from)
-        list.add(to, moved)
+        list.add(to, list.removeAt(from))
         submitList(list)
     }
 
-    fun persistOrder() = onReorder(currentList.map { it.id })
-
     inner class VH(val binding: ItemNuvioSourceInstalledBinding) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(item: NuvioScraper) {
+        fun bind(item: NuvioScraper, position: Int) {
             binding.sourceNameTextView.text = item.name
             binding.sourceMetaTextView.text = buildString {
                 append("v${item.version}")
@@ -241,29 +277,72 @@ class NuvioInstalledAdapter(
                 }
                 SvgImageLoader.load(view, logoUrl, R.drawable.ic_extension, R.drawable.ic_extension)
             }
+            binding.settingsImageView.visibility = if (item.hasSettings) View.VISIBLE else View.GONE
             binding.sourceCardView.setOnClickListener { onInfo(item) }
             binding.settingsImageView.setOnClickListener { onSettings(item) }
             binding.deleteImageView.setOnClickListener { onDelete(item) }
-            binding.dragHandle.setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN) {
-                    onStartDrag(this)
-                    true
+            tintArrows(this, dragActivePosition == position)
+
+            binding.dragHandle.setOnClickListener {
+                val currentPosition = absoluteAdapterPosition
+                if (currentPosition == RecyclerView.NO_POSITION) return@setOnClickListener
+                if (dragActivePosition == currentPosition) {
+                    disarmDrag()
                 } else {
-                    false
+                    dragActivePosition = currentPosition
+                    reorderMessage?.visibility = View.VISIBLE
+                    onDragModeChanged?.invoke(true)
+                    tintArrows(this, true)
+                    binding.dragHandle.post { binding.dragHandle.requestFocus() }
                 }
             }
-            binding.dragUpArrow.setOnClickListener {
-                if (bindingAdapterPosition > 0) {
-                    move(bindingAdapterPosition, bindingAdapterPosition - 1)
-                    persistOrder()
+
+            itemView.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN &&
+                    dragActivePosition == absoluteAdapterPosition
+                ) {
+                    itemTouchHelper?.startDrag(this)
+                }
+                false
+            }
+
+            binding.dragHandle.setOnLongClickListener {
+                itemTouchHelper?.startDrag(this)
+                true
+            }
+
+            binding.dragHandle.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                val currentPosition = absoluteAdapterPosition
+                if (currentPosition == RecyclerView.NO_POSITION) return@setOnKeyListener false
+                if (dragActivePosition != currentPosition) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (currentPosition > 0) {
+                            dragActivePosition = currentPosition - 1
+                            move(currentPosition, currentPosition - 1)
+                        }
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (currentPosition < itemCount - 1) {
+                            dragActivePosition = currentPosition + 1
+                            move(currentPosition, currentPosition + 1)
+                        }
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        disarmDrag()
+                        false
+                    }
+                    else -> false
                 }
             }
-            binding.dragDownArrow.setOnClickListener {
-                if (bindingAdapterPosition < itemCount - 1) {
-                    move(bindingAdapterPosition, bindingAdapterPosition + 1)
-                    persistOrder()
-                }
-            }
+
+            FocusEffectUtil.applyFocusListener(binding.sourceCardView)
+            FocusEffectUtil.applyFocusListener(binding.dragHandle)
+            FocusEffectUtil.applyFocusListener(binding.settingsImageView)
+            FocusEffectUtil.applyFocusListener(binding.deleteImageView)
         }
     }
 
@@ -274,8 +353,8 @@ class NuvioInstalledAdapter(
             override fun areContentsTheSame(oldItem: NuvioScraper, newItem: NuvioScraper) =
                 oldItem.name == newItem.name &&
                     oldItem.version == newItem.version &&
-                    oldItem.enabled == newItem.enabled &&
-                    oldItem.description == newItem.description
+                    oldItem.description == newItem.description &&
+                    oldItem.hasSettings == newItem.hasSettings
         }
     }
 }

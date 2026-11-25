@@ -271,7 +271,8 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
                         append(languages.joinToString(",").uppercase())
                     }
                 }
-                binding.sourceSettingsImageView.visibility = if (installed) View.VISIBLE else View.GONE
+                binding.sourceSettingsImageView.visibility =
+                    if (installed && item.hasSettings) View.VISIBLE else View.GONE
                 binding.sourceInstallImageView.alpha = if (installed) 0.35f else 1f
                 if (item.logo.isNullOrBlank()) {
                     SvgImageLoader.load(
@@ -289,7 +290,10 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
                     )
                 }
                 binding.sourceCardView.setOnClickListener {
-                    if (installed) onSettings(item) else onInstall(item)
+                    when {
+                        !installed -> onInstall(item)
+                        item.hasSettings -> onSettings(item)
+                    }
                 }
                 binding.sourceSettingsImageView.setOnClickListener { onSettings(item) }
                 binding.sourceInstallImageView.setOnClickListener { onInstall(item) }

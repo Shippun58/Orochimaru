@@ -30,6 +30,7 @@
             android:layout_height="14dp"
             android:src="@drawable/ic_round_keyboard_arrow_up_24"
             android:scaleType="fitCenter"
+            app:tint="?attr/colorOnSurface"
             android:importantForAccessibility="no" />
 
         <ImageView
@@ -38,6 +39,7 @@
             android:layout_height="14dp"
             android:src="@drawable/ic_round_keyboard_arrow_down_24"
             android:scaleType="fitCenter"
+            app:tint="?attr/colorOnSurface"
             android:importantForAccessibility="no" />
     </LinearLayout>
 
