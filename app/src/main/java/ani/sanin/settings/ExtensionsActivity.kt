@@ -195,7 +195,7 @@ class ExtensionsActivity : AppCompatActivity() {
 
         TvKeyboardUtil.setupTvInput(binding.searchViewText)
 
-        FocusEffectUtil.applyFocusListener(binding.searchIconButton)
+        if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.searchIconButton)
         LensButtonBackground.apply(
             binding.searchIconButton,
             cornerRadiusPx = 18f * resources.displayMetrics.density,
@@ -398,7 +398,7 @@ class ExtensionsActivity : AppCompatActivity() {
                 cloudStreamMode
             ).show(supportFragmentManager, "add_repo")
         }
-        FocusEffectUtil.applyFocusListener(binding.openSettingsButton)
+        if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.openSettingsButton)
         LensButtonBackground.apply(
             binding.openSettingsButton,
             cornerRadiusPx = 18f * resources.displayMetrics.density,

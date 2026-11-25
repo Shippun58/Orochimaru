@@ -13,6 +13,7 @@ import ani.sanin.R
 import ani.sanin.cloudstream.CsRepos
 import ani.sanin.databinding.ActivityPluginSystemsBinding
 import ani.sanin.databinding.ItemPluginSystemBinding
+import ani.sanin.databinding.ItemPluginSystemHeaderBinding
 import ani.sanin.getThemeColor
 import ani.sanin.initActivity
 import ani.sanin.navBarHeight
@@ -22,18 +23,23 @@ import ani.sanin.settings.saving.PrefName
 import ani.sanin.statusBarHeight
 import ani.sanin.themes.ThemeManager
 import ani.sanin.util.FocusEffectUtil
+import ani.sanin.util.TvKeyboardUtil
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 private data class SystemCard(
     val title: String,
-    val subtitle: String,
     val iconRes: Int,
     val meta: String,
-    val tintIcon: Boolean,
+    val tintRes: Int?,
     val onClick: () -> Unit,
 )
+
+private sealed interface SystemEntry {
+    data class Header(val title: String) : SystemEntry
+    data class Card(val card: SystemCard) : SystemEntry
+}
 
 class PluginSystemsActivity : AppCompatActivity() {
     private lateinit var binding: ActivityPluginSystemsBinding
@@ -48,7 +54,7 @@ class PluginSystemsActivity : AppCompatActivity() {
         setContentView(binding.root)
         binding.systemsContainer.updatePadding(top = statusBarHeight, bottom = navBarHeight)
         binding.systemsBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
-        FocusEffectUtil.applyFocusListener(binding.systemsBack)
+        if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.systemsBack)
         binding.pluginSystemsRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.pluginSystemsRecyclerView.adapter = adapter
     }
@@ -70,37 +76,43 @@ class PluginSystemsActivity : AppCompatActivity() {
 
         adapter.submit(
             listOf(
-                SystemCard(
-                    title = "Aniyomi",
-                    subtitle = "Anime",
-                    iconRes = R.drawable.ic_toggle_aniyomi,
-                    meta = "${count(animeRepos, "repo")} · ${count(animeExtensions, "extension")}",
-                    tintIcon = false,
-                    onClick = { openExtensions(null) },
+                SystemEntry.Header("Anime"),
+                SystemEntry.Card(
+                    SystemCard(
+                        title = "Aniyomi",
+                        iconRes = R.drawable.ic_toggle_aniyomi,
+                        meta = "${count(animeRepos, "repo")} · ${count(animeExtensions, "extension")}",
+                        tintRes = null,
+                        onClick = { openExtensions(null) },
+                    ),
                 ),
-                SystemCard(
-                    title = "CloudStream Plugins",
-                    subtitle = "Movie & TV",
-                    iconRes = R.drawable.ic_toggle_cloudstream,
-                    meta = "${count(cloudStreamRepos, "repo")} · ${count(cloudStreamPlugins, "plugin")}",
-                    tintIcon = false,
-                    onClick = { openExtensions(ExtensionsActivity.EXTRA_CLOUDSTREAM_MODE) },
+                SystemEntry.Header("Movie / TV"),
+                SystemEntry.Card(
+                    SystemCard(
+                        title = "CloudStream Plugins",
+                        iconRes = R.drawable.ic_toggle_cloudstream,
+                        meta = "${count(cloudStreamRepos, "repo")} · ${count(cloudStreamPlugins, "plugin")}",
+                        tintRes = null,
+                        onClick = { openExtensions(ExtensionsActivity.EXTRA_CLOUDSTREAM_MODE) },
+                    ),
                 ),
-                SystemCard(
-                    title = "Nuvio",
-                    subtitle = "Plugins",
-                    iconRes = R.drawable.ic_baseline_extension_24,
-                    meta = "${count(nuvioRepos, "repo")} · ${count(nuvioPlugins, "plugin")}",
-                    tintIcon = true,
-                    onClick = { openExtensions(ExtensionsActivity.EXTRA_NUVIO_MODE) },
+                SystemEntry.Card(
+                    SystemCard(
+                        title = "Nuvio",
+                        iconRes = R.drawable.ic_nuvio_logo,
+                        meta = "${count(nuvioRepos, "repo")} · ${count(nuvioPlugins, "plugin")}",
+                        tintRes = null,
+                        onClick = { openExtensions(ExtensionsActivity.EXTRA_NUVIO_MODE) },
+                    ),
                 ),
-                SystemCard(
-                    title = "Stremio",
-                    subtitle = "Add-ons",
-                    iconRes = R.drawable.ic_stremio_watermark,
-                    meta = "${count(stremioAddons, "addon")} · $stremioEnabled enabled",
-                    tintIcon = false,
-                    onClick = { openExtensions(ExtensionsActivity.EXTRA_STREMIO_MODE) },
+                SystemEntry.Card(
+                    SystemCard(
+                        title = "Stremio",
+                        iconRes = R.drawable.ic_stremio_watermark,
+                        meta = "${count(stremioAddons, "addon")} · $stremioEnabled enabled",
+                        tintRes = com.google.android.material.R.attr.colorOnSurface,
+                        onClick = { openExtensions(ExtensionsActivity.EXTRA_STREMIO_MODE) },
+                    ),
                 ),
             ),
         )
@@ -120,41 +132,69 @@ class PluginSystemsActivity : AppCompatActivity() {
 
 private class SystemCardAdapter(
     private val onClick: (SystemCard) -> Unit,
-) : RecyclerView.Adapter<SystemCardAdapter.ViewHolder>() {
-    private var cards: List<SystemCard> = emptyList()
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private var entries: List<SystemEntry> = emptyList()
 
-    fun submit(items: List<SystemCard>) {
-        cards = items
+    fun submit(items: List<SystemEntry>) {
+        entries = items
         notifyDataSetChanged()
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder =
-        ViewHolder(ItemPluginSystemBinding.inflate(LayoutInflater.from(parent.context), parent, false))
-
-    override fun getItemCount(): Int = cards.size
-
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(cards[position])
+    override fun getItemViewType(position: Int): Int = when (entries[position]) {
+        is SystemEntry.Header -> VIEW_TYPE_HEADER
+        is SystemEntry.Card -> VIEW_TYPE_CARD
     }
 
-    inner class ViewHolder(
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return if (viewType == VIEW_TYPE_HEADER) {
+            HeaderViewHolder(ItemPluginSystemHeaderBinding.inflate(inflater, parent, false))
+        } else {
+            CardViewHolder(ItemPluginSystemBinding.inflate(inflater, parent, false))
+        }
+    }
+
+    override fun getItemCount(): Int = entries.size
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val entry = entries[position]) {
+            is SystemEntry.Header -> (holder as HeaderViewHolder).bind(entry)
+            is SystemEntry.Card -> (holder as CardViewHolder).bind(entry.card)
+        }
+    }
+
+    private class HeaderViewHolder(
+        private val binding: ItemPluginSystemHeaderBinding,
+    ) : RecyclerView.ViewHolder(binding.root) {
+        fun bind(entry: SystemEntry.Header) {
+            binding.root.text = entry.title
+        }
+    }
+
+    private inner class CardViewHolder(
         private val binding: ItemPluginSystemBinding,
     ) : RecyclerView.ViewHolder(binding.root) {
         fun bind(card: SystemCard) {
             binding.systemIcon.setImageResource(card.iconRes)
-            binding.systemIcon.imageTintList = if (card.tintIcon) {
-                ColorStateList.valueOf(binding.root.context.getThemeColor(com.google.android.material.R.attr.colorPrimary))
-            } else {
-                null
+            binding.systemIcon.imageTintList = card.tintRes?.let {
+                ColorStateList.valueOf(binding.root.context.getThemeColor(it))
             }
             binding.systemTitle.text = card.title
-            binding.systemSubtitle.text = card.subtitle
             binding.systemMeta.text = card.meta
             binding.root.setOnClickListener { onClick(card) }
-            FocusEffectUtil.applyFocusListener(
-                binding.root,
-                cornerRadiusPx = 16 * binding.root.resources.displayMetrics.density,
-            )
+            if (TvKeyboardUtil.isTv(binding.root.context)) {
+                FocusEffectUtil.applyFocusListener(
+                    binding.root,
+                    cornerRadiusPx = 16 * binding.root.resources.displayMetrics.density,
+                )
+            } else {
+                binding.root.onFocusChangeListener = null
+            }
         }
+    }
+
+    private companion object {
+        const val VIEW_TYPE_HEADER = 0
+        const val VIEW_TYPE_CARD = 1
     }
 }
