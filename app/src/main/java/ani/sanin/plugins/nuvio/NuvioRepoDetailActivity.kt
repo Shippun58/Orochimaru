@@ -20,6 +20,7 @@ import ani.sanin.databinding.ActivityCsRepoDetailBinding
 import ani.sanin.databinding.ItemCsSourceBinding
 import ani.sanin.initActivity
 import ani.sanin.others.svg.SvgImageLoader
+import ani.sanin.plugins.nuvio.runtime.NuvioRuntime
 import ani.sanin.statusBarHeight
 import ani.sanin.themes.ThemeManager
 import ani.sanin.util.FocusEffectUtil
@@ -219,7 +220,10 @@ class NuvioRepoDetailActivity : AppCompatActivity() {
 
     private fun openSettings(scraper: NuvioManifestScraper) {
         val installed = NuvioStorage.installed(this).firstOrNull { it.id == scraper.id } ?: return
-        showNuvioSettings(this, installed)
+        lifecycleScope.launch {
+            val layout = runCatching { NuvioRuntime.settingsLayout(installed) }.getOrDefault("[]")
+            showNuvioSettings(this@NuvioRepoDetailActivity, installed, layout)
+        }
     }
 
     private fun install(scraper: NuvioManifestScraper) {

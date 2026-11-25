@@ -2,14 +2,22 @@ package ani.sanin.plugins.nuvio
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
 import android.os.Bundle
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.util.TypedValue
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.util.TypedValue
-import android.view.KeyEvent
+import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
@@ -24,6 +32,7 @@ import ani.sanin.copyToClipboard
 import ani.sanin.databinding.FragmentExtensionsBinding
 import ani.sanin.databinding.ItemNuvioSourceInstalledBinding
 import ani.sanin.others.svg.SvgImageLoader
+import ani.sanin.plugins.nuvio.runtime.NuvioRuntime
 import ani.sanin.settings.ExtensionsActivity
 import ani.sanin.settings.RepoCardAdapter
 import ani.sanin.settings.RepoUi
@@ -36,29 +45,137 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
-internal fun showNuvioSettings(context: Context, scraper: NuvioScraper) {
-    val input = EditText(context).apply {
-        hint = "{}"
-        setText(NuvioStorage.loadSettings(scraper.id))
-        setSingleLine(false)
-        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
-        setPadding(32, 24, 32, 24)
-        setMinWidth((320 * context.resources.displayMetrics.density).toInt())
+internal fun showNuvioSettings(context: Context, scraper: NuvioScraper, layoutJson: String) {
+    val json = Json { ignoreUnknownKeys = true }
+    val layout = runCatching { json.parseToJsonElement(layoutJson) as? JsonArray }.getOrNull()
+        ?: JsonArray(emptyList())
+    if (layout.isEmpty()) {
+        toast("${scraper.name} has no configurable settings")
+        return
     }
-    context.customAlertDialog().apply {
-        setTitle("${scraper.name} settings")
-        setMessage("JSON settings passed as SCRAPER_SETTINGS")
-        setCustomView(input)
-        setPosButton("Save") {
-            val value = input.text.toString().ifBlank { "{}" }
-            val valid = runCatching { Json.parseToJsonElement(value) }.isSuccess
-            if (!valid) {
-                toast("Invalid JSON")
-            } else {
-                NuvioStorage.saveSettings(scraper.id, value)
-                toast("Settings saved")
+    val saved = runCatching {
+        json.parseToJsonElement(NuvioStorage.loadSettings(scraper.id)) as? JsonObject
+    }.getOrNull() ?: JsonObject(emptyMap())
+    val values = saved.toMutableMap()
+    val density = context.resources.displayMetrics.density
+
+    fun stringValue(value: JsonElement?): String? = (value as? JsonPrimitive)?.content
+    fun boolValue(value: JsonElement?): Boolean = stringValue(value)?.toBoolean() ?: false
+
+    fun makeLabel(text: String) = TextView(context).apply {
+        this.text = text
+        textSize = 14f
+        setTypeface(typeface, Typeface.BOLD)
+    }
+
+    fun makeDescription(text: String) = TextView(context).apply {
+        this.text = text
+        textSize = 12f
+        alpha = 0.72f
+    }
+
+    val container = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding((20 * density).toInt(), (8 * density).toInt(), (20 * density).toInt(), (8 * density).toInt())
+    }
+    val scroll = ScrollView(context).apply { addView(container) }
+
+    fun addField(view: View, topDp: Int = 12) {
+        val params = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        )
+        params.topMargin = (topDp * density).toInt()
+        container.addView(view, params)
+    }
+
+    layout.forEach { element ->
+        val field = element as? JsonObject ?: return@forEach
+        val type = stringValue(field["type"]) ?: "info"
+        val key = stringValue(field["key"]).orEmpty()
+        val label = stringValue(field["label"]).orEmpty()
+        val description = stringValue(field["description"])
+        when (type) {
+            "header" -> addField(makeLabel(label).apply {
+                textSize = 16f
+            }, 16)
+            "info" -> addField(makeDescription(label), 10)
+            "text" -> {
+                addField(makeLabel(label))
+                val defaultValue = stringValue(field["defaultValue"]).orEmpty()
+                val isPassword = boolValue(field["isPassword"])
+                val input = EditText(context).apply {
+                    hint = stringValue(field["placeholder"]).orEmpty()
+                    setText(stringValue(values[key]) ?: defaultValue)
+                    if (isPassword) {
+                        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    }
+                }
+                input.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                    override fun afterTextChanged(s: Editable?) {
+                        values[key] = JsonPrimitive(s?.toString().orEmpty())
+                    }
+                })
+                addField(input, 4)
+                description?.let { addField(makeDescription(it), 2) }
             }
+            "select" -> {
+                addField(makeLabel(label))
+                val options = field["options"] as? JsonArray ?: JsonArray(emptyList())
+                val labels = options.map { option ->
+                    stringValue((option as? JsonObject)?.get("label")).orEmpty()
+                }.toTypedArray()
+                val optionValues = options.map { option ->
+                    stringValue((option as? JsonObject)?.get("value")).orEmpty()
+                }
+                var selectedIndex = optionValues.indexOf(stringValue(values[key]))
+                    .takeIf { it >= 0 }
+                    ?: optionValues.indexOf(stringValue(field["defaultValue"])).let { if (it < 0) 0 else it }
+                val button = Button(context).apply {
+                    isAllCaps = false
+                    text = labels.getOrNull(selectedIndex).takeUnless { it.isNullOrBlank() } ?: "Select option"
+                }
+                button.setOnClickListener {
+                    context.customAlertDialog().apply {
+                        setTitle(label)
+                        singleChoiceItems(labels, selectedIndex) { selected ->
+                            selectedIndex = selected
+                            optionValues.getOrNull(selected)?.let { values[key] = JsonPrimitive(it) }
+                            button.text = labels.getOrNull(selected) ?: "Select option"
+                        }
+                        setNegButton("Cancel")
+                        show()
+                    }
+                }
+                addField(button, 4)
+                description?.let { addField(makeDescription(it), 2) }
+            }
+            "toggle" -> {
+                val toggle = Switch(context).apply {
+                    text = label
+                    isChecked = values[key]?.let { boolValue(it) }
+                        ?: boolValue(field["defaultValue"])
+                }
+                toggle.setOnCheckedChangeListener { _, checked -> values[key] = JsonPrimitive(checked) }
+                addField(toggle, 8)
+                description?.let { addField(makeDescription(it), 2) }
+            }
+        }
+    }
+
+    context.customAlertDialog().apply {
+        setTitle("${scraper.name} Settings")
+        setCustomView(scroll)
+        setPosButton("Save") {
+            NuvioStorage.saveSettings(scraper.id, JsonObject(values).toString())
+            toast("Settings saved")
         }
         setNegButton("Cancel")
         show()
@@ -73,7 +190,7 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
 
     private val adapter = NuvioInstalledAdapter(
         onInfo = { showInfo(it) },
-        onSettings = { showNuvioSettings(requireContext(), it) },
+        onSettings = { openSettings(it) },
         onDelete = { confirmDelete(it) },
     )
 
@@ -139,6 +256,13 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
         adapter.submitList(items.filter { it.matches(query) })
     }
 
+    private fun openSettings(scraper: NuvioScraper) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val layout = runCatching { NuvioRuntime.settingsLayout(scraper) }.getOrDefault("[]")
+            if (isAdded) showNuvioSettings(requireContext(), scraper, layout)
+        }
+    }
+
     private fun showInfo(scraper: NuvioScraper) {
         requireContext().customAlertDialog().apply {
             setTitle(scraper.name)
@@ -150,7 +274,7 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
                 scraper.description.takeIf { it.isNotBlank() }?.let { append("\n\n$it") }
             })
             setPosButton(if (scraper.hasSettings) "Settings" else "Close") {
-                if (scraper.hasSettings) showNuvioSettings(requireContext(), scraper)
+                if (scraper.hasSettings) openSettings(scraper)
             }
             setNegButton("Uninstall") { confirmDelete(scraper) }
             show()

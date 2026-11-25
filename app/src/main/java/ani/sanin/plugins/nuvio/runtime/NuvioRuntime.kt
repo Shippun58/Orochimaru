@@ -1,6 +1,5 @@
 package ani.sanin.plugins.nuvio.runtime
 
-import ani.sanin.plugins.nuvio.NuvioHostFunctions
 import ani.sanin.plugins.nuvio.NuvioManifestScraper
 import ani.sanin.plugins.nuvio.NuvioRuntimeResult
 import ani.sanin.plugins.nuvio.NuvioScraper
@@ -60,17 +59,26 @@ internal object NuvioRuntime {
         withContext(pluginDispatcher) {
             withTimeout(NUVIO_TIMEOUT_MS) {
                 val deferred = CompletableDeferred<String>()
-                val registry = NuvioHostApiRegistry().apply {
-                    addModule(NuvioHostFunctions(scraper.id, "{}", "{}") { deferred.complete(it) })
+                val registry = NuvioHostApiRegistry.create(
+                    scraperId = scraper.id,
+                    settingsJson = "{}",
+                    callArgsJson = "{}",
+                    onResult = { deferred.complete(it) },
+                    includeCallBindings = false,
+                )
+                try {
+                    quickJs(pluginDispatcher) {
+                        configure()
+                        registry.registerAll(this)
+                        evaluate<Any?>(NuvioJsBindings.staticPolyfillCode)
+                        evaluate<Any?>(wrapModule(scraper.code))
+                        evaluate<Any?>(NuvioJsBindings.staticSettingsCallCode)
+                    }
+                    runCatching { deferred.await() }.getOrDefault("[]")
+                } catch (error: Throwable) {
+                    Logger.log("NUVIO: settings layout failed for ${scraper.id}: ${error.message}")
+                    "[]"
                 }
-                quickJs(pluginDispatcher) {
-                    configure()
-                    registry.registerAll(this)
-                    evaluate<Any?>(NuvioJsBindings.staticPolyfillCode)
-                    evaluate<Any?>(wrapModule(scraper.code))
-                    evaluate<Any?>("(async function(){ var fn=(typeof module !== 'undefined' && module.exports && module.exports.onSettings) || globalThis.onSettings; if(typeof fn==='function') { __capture_result(JSON.stringify(await fn() || [])); } else { __capture_result('[]'); } })();")
-                }
-                runCatching { deferred.await() }.getOrDefault("[]")
             }
         }
     }

@@ -46,6 +46,23 @@ internal object NuvioJsBindings {
             })();
         """.trimIndent()
 
+    val staticSettingsCallCode: String = """
+            (async function() {
+                try {
+                    var onSettings = (typeof module !== 'undefined' && module.exports && module.exports.onSettings) || globalThis.onSettings;
+                    if (typeof onSettings === 'function') {
+                        var layout = await onSettings();
+                        __capture_result(JSON.stringify(layout || []));
+                    } else {
+                        __capture_result("[]");
+                    }
+                } catch (e) {
+                    console.error("onSettings error:", e && e.message ? e.message : e);
+                    __capture_result("[]");
+                }
+            })();
+        """.trimIndent()
+
     private fun timerPolyfill() = """
         var __plugin_timer_id = 0;
         var __plugin_timers = Object.create(null);
