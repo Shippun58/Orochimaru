@@ -79,7 +79,7 @@ class PluginSystemsActivity : AppCompatActivity() {
                 SystemEntry.Header("Anime"),
                 SystemEntry.Card(
                     SystemCard(
-                        title = "Aniyomi",
+                        title = "Aniyomi Extensions",
                         iconRes = R.drawable.ic_toggle_aniyomi,
                         meta = "${count(animeRepos, "repo")} · ${count(animeExtensions, "extension")}",
                         tintRes = null,
@@ -98,7 +98,7 @@ class PluginSystemsActivity : AppCompatActivity() {
                 ),
                 SystemEntry.Card(
                     SystemCard(
-                        title = "Nuvio",
+                        title = "Nuvio Plugins",
                         iconRes = R.drawable.ic_nuvio_logo,
                         meta = "${count(nuvioRepos, "repo")} · ${count(nuvioPlugins, "plugin")}",
                         tintRes = null,
@@ -107,7 +107,7 @@ class PluginSystemsActivity : AppCompatActivity() {
                 ),
                 SystemEntry.Card(
                     SystemCard(
-                        title = "Stremio",
+                        title = "Stremio Add-ons",
                         iconRes = R.drawable.ic_stremio_watermark,
                         meta = "${count(stremioAddons, "addon")} · $stremioEnabled enabled",
                         tintRes = com.google.android.material.R.attr.colorOnSurface,

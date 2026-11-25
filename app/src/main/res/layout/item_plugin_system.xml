@@ -9,7 +9,6 @@
     android:clickable="true"
     android:elevation="6dp"
     android:focusable="true"
-    android:focusableInTouchMode="true"
     android:foreground="@drawable/fg_plugin_system_ripple"
     android:gravity="center_vertical"
     android:orientation="horizontal"
