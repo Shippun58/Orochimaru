@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
+import android.view.Gravity
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -20,6 +21,8 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
@@ -29,6 +32,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
 import ani.sanin.copyToClipboard
+import ani.sanin.getThemeColor
 import ani.sanin.databinding.FragmentExtensionsBinding
 import ani.sanin.databinding.ItemNuvioSourceInstalledBinding
 import ani.sanin.others.svg.SvgImageLoader
@@ -138,8 +142,25 @@ internal fun showNuvioSettings(context: Context, scraper: NuvioScraper, layoutJs
                 var selectedIndex = optionValues.indexOf(stringValue(values[key]))
                     .takeIf { it >= 0 }
                     ?: optionValues.indexOf(stringValue(field["defaultValue"])).let { if (it < 0) 0 else it }
+                val onSurface = context.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+                val arrow = ContextCompat.getDrawable(context, R.drawable.ic_round_arrow_drop_down_24)
+                    ?.mutate()
+                    ?.apply { DrawableCompat.setTint(this, onSurface) }
                 val button = Button(context).apply {
                     isAllCaps = false
+                    stateListAnimator = null
+                    background = ContextCompat.getDrawable(context, R.drawable.bg_nuvio_select)
+                    setTextColor(onSurface)
+                    textSize = 14f
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    setPadding(
+                        (16 * density).toInt(),
+                        (12 * density).toInt(),
+                        (16 * density).toInt(),
+                        (12 * density).toInt(),
+                    )
+                    compoundDrawablePadding = (8 * density).toInt()
+                    setCompoundDrawablesWithIntrinsicBounds(null, null, arrow, null)
                     text = labels.getOrNull(selectedIndex).takeUnless { it.isNullOrBlank() } ?: "Select option"
                 }
                 button.setOnClickListener {
