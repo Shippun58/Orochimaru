@@ -28,23 +28,24 @@
 
         <ImageView
             android:id="@+id/homeRowUpArrow"
-            android:layout_width="18dp"
-            android:layout_height="16dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:clickable="false"
             android:focusable="false"
             android:importantForAccessibility="no"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_round_keyboard_arrow_up_24" />
+            android:src="@drawable/ic_round_drag_handle_24" />
 
         <ImageView
             android:id="@+id/homeRowDownArrow"
-            android:layout_width="18dp"
-            android:layout_height="16dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:clickable="false"
             android:focusable="false"
             android:importantForAccessibility="no"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_round_keyboard_arrow_down_24" />
+            android:src="@drawable/ic_round_drag_handle_24"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout

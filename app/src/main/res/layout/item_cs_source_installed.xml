@@ -26,18 +26,19 @@
 
         <ImageView
             android:id="@+id/dragUpArrow"
-            android:layout_width="16dp"
-            android:layout_height="14dp"
-            android:src="@drawable/ic_round_keyboard_arrow_up_24"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_round_drag_handle_24"
             android:scaleType="fitCenter"
             android:importantForAccessibility="no" />
 
         <ImageView
             android:id="@+id/dragDownArrow"
-            android:layout_width="16dp"
-            android:layout_height="14dp"
-            android:src="@drawable/ic_round_keyboard_arrow_down_24"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_round_drag_handle_24"
             android:scaleType="fitCenter"
+            android:visibility="gone"
             android:importantForAccessibility="no" />
     </LinearLayout>
 
