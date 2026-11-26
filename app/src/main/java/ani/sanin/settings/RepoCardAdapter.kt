@@ -13,6 +13,8 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.bridge.AnimeBridgeStore
+import ani.sanin.bridge.AnimeBridgeUi
 import ani.sanin.databinding.ItemRepoCardBinding
 import ani.sanin.getThemeColor
 import ani.sanin.others.svg.SvgImageLoader
@@ -73,6 +75,7 @@ class RepoCardAdapter(
     private val onExitTop: (() -> Boolean)? = null,
     private val actionLabel: String = "Browse",
     private val onConfigure: ((RepoUi) -> Unit)? = null,
+    private val onBridge: ((RepoUi) -> Unit)? = null,
     private val onToggle: ((RepoUi, Boolean) -> Unit)? = null,
     private val onReorder: ((Int, Int) -> Unit)? = null,
 ) : ListAdapter<RepoUi, RepoCardAdapter.VH>(DIFF) {
@@ -370,6 +373,26 @@ class RepoCardAdapter(
                             false
                         }
                         else -> false
+                    }
+                }
+            }
+        }
+
+        val bridgeAction = onBridge
+        with(holder.binding.repoBridgeButton) {
+            visibility = if (bridgeAction != null) View.VISIBLE else View.GONE
+            if (bridgeAction != null) {
+                AnimeBridgeUi.bind(this, AnimeBridgeStore.STREMIO, item.url)
+                setOnClickListener { bridgeAction.invoke(item) }
+                setOnKeyListener { _, keyCode, event ->
+                    if (event.action != KeyEvent.ACTION_DOWN) {
+                        false
+                    } else {
+                        when (keyCode) {
+                            KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoBridgeButton }
+                            KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoBridgeButton }
+                            else -> false
+                        }
                     }
                 }
             }

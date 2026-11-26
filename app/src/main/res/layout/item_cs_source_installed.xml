@@ -85,22 +85,22 @@
         android:layout_marginEnd="10dp"
         android:src="@drawable/ic_round_sync_24"
         android:focusable="true"
-        android:nextFocusRight="@+id/deleteImageView"
+        android:nextFocusRight="@+id/bridgeImageView"
         android:nextFocusLeft="@id/dragHandle"
         app:tint="?attr/colorOnBackground"
         tools:ignore="ContentDescription" />
 
     <ImageView
-        android:id="@+id/deleteImageView"
+        android:id="@+id/bridgeImageView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical"
-        android:layout_weight="0"
         android:layout_marginEnd="10dp"
-        android:src="@drawable/ic_round_delete_24"
+        android:layout_weight="0"
+        android:src="@drawable/format_link_24"
         android:focusable="true"
-        android:nextFocusRight="@+id/settingsImageView"
         android:nextFocusLeft="@id/updateImageView"
+        android:nextFocusRight="@+id/settingsImageView"
         app:tint="?attr/colorOnBackground"
         tools:ignore="ContentDescription" />
 
@@ -113,8 +113,22 @@
         android:layout_weight="0"
         android:src="@drawable/ic_baseline_tune_24"
         android:focusable="true"
-        android:nextFocusLeft="@id/deleteImageView"
+        android:nextFocusLeft="@id/bridgeImageView"
+        android:nextFocusRight="@id/deleteImageView"
+        app:tint="?attr/colorOnBackground"
+        tools:ignore="ContentDescription" />
+
+    <ImageView
+        android:id="@+id/deleteImageView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="0"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/ic_round_delete_24"
+        android:focusable="true"
         android:nextFocusRight="@id/sourceCardView"
+        android:nextFocusLeft="@id/settingsImageView"
         app:tint="?attr/colorOnBackground"
         tools:ignore="ContentDescription" />
 </LinearLayout>

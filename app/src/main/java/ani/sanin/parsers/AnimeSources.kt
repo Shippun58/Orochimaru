@@ -1,10 +1,16 @@
 package ani.sanin.parsers
 
 import ani.sanin.Lazier
+import ani.sanin.bridge.AnimeBridgeStore
+import ani.sanin.bridge.BridgedNuvioAnimeParser
+import ani.sanin.bridge.BridgedStremioAnimeParser
 import ani.sanin.cloudstream.CsAnimeParser
 import ani.sanin.cloudstream.CsRepos
 import ani.sanin.cloudstream.CsRuntime
 import ani.sanin.currContext
+import ani.sanin.plugins.nuvio.NuvioRepository
+import ani.sanin.plugins.nuvio.NuvioSources
+import ani.sanin.settings.StremioAddonManager
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
@@ -17,6 +23,7 @@ object AnimeSources : WatchSources() {
     var providersOrder: List<String> = emptyList()
     var isInitialized = false
     private var pluginNames: Set<String> = emptySet()
+    private var bridgeNames: Set<String> = emptySet()
     private var pluginEnglishSaveNames: Set<String> = emptySet()
     private var lastExtensions: List<AnimeExtension.Installed> = emptyList()
 
@@ -66,14 +73,18 @@ object AnimeSources : WatchSources() {
     override val displayNames: List<String> get() {
         val all = list
         val currentPluginNames = all.filter { it.name in pluginNames }.map { it.name }
+        val currentBridgeNames = all.filter { it.name in bridgeNames }.map { it.name }
         val extNames = all.filter {
-            it.name !in nativeNames && it.name !in pluginNames && it.name != "Local"
+            it.name !in nativeNames && it.name !in pluginNames &&
+                it.name !in bridgeNames && it.name != "Local"
         }.map { it.name }
         return buildList {
             if (nativeNames.isNotEmpty()) add("─── Built-in ───")
             addAll(nativeNames)
             if (currentPluginNames.isNotEmpty()) add("─── Plugins ───")
             addAll(currentPluginNames)
+            if (currentBridgeNames.isNotEmpty()) add("─── Bridged ───")
+            addAll(currentBridgeNames)
             if (extNames.isNotEmpty()) add("─── Extensions ───")
             addAll(extNames)
         }
@@ -100,12 +111,17 @@ object AnimeSources : WatchSources() {
         lastExtensions = extensions
         val extParsers = createParsersFromExtensions(extensions)
         val (csParsers, csLaziers) = createParsersFromCsRepos()
+        val (bridgeParsers, bridgeLaziers) = createParsersFromBridgedProviders()
         pluginNames = csLaziers.map { it.name }.toSet()
-        pluginEnglishSaveNames = csParsers.filter { it.language == "English" }
-            .map { it.saveName }.toSet()
+        bridgeNames = bridgeLaziers.map { it.name }.toSet()
+        pluginEnglishSaveNames = (
+            csParsers.filter { it.language == "English" }.map { it.saveName } +
+                bridgeParsers.filter { it.language == "English" }.map { it.saveName }
+            ).toSet()
         list = buildList {
             nativeParsers.forEach { add(Lazier({ it }, it.name)) }
             addAll(csLaziers)
+            addAll(bridgeLaziers)
             addAll(extParsers)
             add(Lazier({ LocalAnimeParser() }, "Local"))
         }
@@ -113,12 +129,15 @@ object AnimeSources : WatchSources() {
 
     fun rebuildNativeParsers() {
         val pluginParsers = list.filter { it.name in pluginNames }
+        val bridgeParsers = list.filter { it.name in bridgeNames }
         val extParsers = list.filter {
-            it.name !in nativeNames && it.name !in pluginNames && it.name != "Local"
+            it.name !in nativeNames && it.name !in pluginNames &&
+                it.name !in bridgeNames && it.name != "Local"
         }
         list = buildList {
             nativeParsers.forEach { add(Lazier({ it }, it.name)) }
             addAll(pluginParsers)
+            addAll(bridgeParsers)
             addAll(extParsers)
             add(Lazier({ LocalAnimeParser() }, "Local"))
         }
@@ -131,13 +150,16 @@ object AnimeSources : WatchSources() {
 
     fun performReorderAnimeSources() {
         val pluginParsers = list.filter { it.name in pluginNames }
+        val bridgeParsers = list.filter { it.name in bridgeNames }
         val extParsers = list.filter {
-            it.name !in nativeNames && it.name !in pluginNames && it.name != "Local"
+            it.name !in nativeNames && it.name !in pluginNames &&
+                it.name !in bridgeNames && it.name != "Local"
         }
         val sortedExt = sortPinnedAnimeSources(extParsers, pinnedAnimeSources)
         list = buildList {
             nativeParsers.forEach { add(Lazier({ it }, it.name)) }
             addAll(pluginParsers)
+            addAll(bridgeParsers)
             addAll(sortedExt)
             add(Lazier({ LocalAnimeParser() }, "Local"))
         }
@@ -145,11 +167,30 @@ object AnimeSources : WatchSources() {
 
     private fun createParsersFromCsRepos(): Pair<List<CsAnimeParser>, List<Lazier<BaseParser>>> {
         val context = currContext() ?: return emptyList<CsAnimeParser>() to emptyList()
-        val parsers = CsRepos.installed(context).flatMap { source ->
-            CsRuntime.apisFor(context, source).mapIndexed { index, api ->
-                CsAnimeParser(context, source, api, index)
+        val parsers = CsRepos.installed(context)
+            .filter { AnimeBridgeStore.isBridged(AnimeBridgeStore.CLOUDSTREAM, it.id) }
+            .flatMap { source ->
+                CsRuntime.apisFor(context, source).mapIndexed { index, api ->
+                    CsAnimeParser(context, source, api, index)
+                }
             }
-        }
+        return parsers to parsers.map { parser -> Lazier({ parser }, parser.name) }
+    }
+
+    private fun createParsersFromBridgedProviders(): Pair<List<BaseParser>, List<Lazier<BaseParser>>> {
+        val context = currContext() ?: return emptyList<BaseParser>() to emptyList()
+        val nuvioParsers = NuvioRepository.installed(context)
+            .filter {
+                it.enabled && AnimeBridgeStore.isBridged(
+                    AnimeBridgeStore.NUVIO,
+                    NuvioSources.sourceId(it),
+                )
+            }
+            .map { scraper -> BridgedNuvioAnimeParser(context, scraper) }
+        val stremioParsers = StremioAddonManager.installed()
+            .filter { AnimeBridgeStore.isBridged(AnimeBridgeStore.STREMIO, it.transportUrl) }
+            .map { addon -> BridgedStremioAnimeParser(addon) }
+        val parsers = nuvioParsers + stremioParsers
         return parsers to parsers.map { parser -> Lazier({ parser }, parser.name) }
     }
 

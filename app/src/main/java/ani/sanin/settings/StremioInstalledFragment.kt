@@ -11,6 +11,8 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import ani.sanin.bridge.AnimeBridgeStore
+import ani.sanin.bridge.AnimeBridgeUi
 import ani.sanin.databinding.FragmentExtensionsBinding
 import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
@@ -26,6 +28,7 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
         onExitTop = { (activity as? ExtensionsActivity)?.focusPill() == true },
         actionLabel = "Uninstall",
         onConfigure = ::openConfiguration,
+        onBridge = ::confirmBridge,
         onToggle = ::toggleEnabled,
         onReorder = ::moveAddon,
     )
@@ -115,6 +118,15 @@ class StremioInstalledFragment : Fragment(), SearchQueryHandler {
         }.onFailure {
             Toast.makeText(requireContext(), "Could not open configuration", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun confirmBridge(card: RepoUi) {
+        AnimeBridgeUi.confirm(
+            requireContext(),
+            AnimeBridgeStore.STREMIO,
+            card.url,
+            card.name,
+        ) { submitFiltered() }
     }
 
     private fun toggleEnabled(card: RepoUi, enabled: Boolean) {

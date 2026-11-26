@@ -19,6 +19,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.bridge.AnimeBridgeStore
+import ani.sanin.bridge.AnimeBridgeUi
 import ani.sanin.databinding.FragmentExtensionsBinding
 import ani.sanin.parsers.AnimeSources
 import ani.sanin.databinding.ItemCsSourceInstalledBinding
@@ -39,6 +41,7 @@ class CloudStreamInstalledFragment : Fragment(), SearchQueryHandler {
     private val adapter = InstalledAdapter(
         onDelete = { source -> confirmDelete(source) },
         onSettings = { source -> openSettings(source) },
+        onBridge = { source -> confirmBridge(source) },
         onUpdate = { item -> updateSource(item) }
     )
     private var installedItems: List<InstalledItem> = emptyList()
@@ -184,6 +187,15 @@ class CloudStreamInstalledFragment : Fragment(), SearchQueryHandler {
         startActivity(CloudStreamSettingsActivity.intent(requireContext(), source.id))
     }
 
+    private fun confirmBridge(source: CsInstalledSource) {
+        AnimeBridgeUi.confirm(
+            requireContext(),
+            AnimeBridgeStore.CLOUDSTREAM,
+            source.id,
+            source.name,
+        ) { adapter.notifyDataSetChanged() }
+    }
+
     private fun confirmDelete(source: CsInstalledSource) {
         requireContext().customAlertDialog().apply {
             setTitle("Remove extension")
@@ -222,6 +234,7 @@ class CloudStreamInstalledFragment : Fragment(), SearchQueryHandler {
     class InstalledAdapter(
         private val onDelete: (CsInstalledSource) -> Unit,
         private val onSettings: (CsInstalledSource) -> Unit,
+        private val onBridge: (CsInstalledSource) -> Unit,
         private val onUpdate: (InstalledItem) -> Unit
     ) : ListAdapter<InstalledItem, InstalledAdapter.VH>(DIFF) {
 
@@ -282,6 +295,12 @@ class CloudStreamInstalledFragment : Fragment(), SearchQueryHandler {
 
             holder.binding.deleteImageView.setOnClickListener { onDelete(source) }
             holder.binding.settingsImageView.setOnClickListener { onSettings(source) }
+            holder.binding.bridgeImageView.setOnClickListener { onBridge(source) }
+            AnimeBridgeUi.bind(
+                holder.binding.bridgeImageView,
+                AnimeBridgeStore.CLOUDSTREAM,
+                source.id,
+            )
 
             val hasUpdate = item.hasUpdate
             holder.binding.updateImageView.isVisible = hasUpdate

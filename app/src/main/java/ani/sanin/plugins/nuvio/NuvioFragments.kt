@@ -31,6 +31,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.bridge.AnimeBridgeStore
+import ani.sanin.bridge.AnimeBridgeUi
 import ani.sanin.copyToClipboard
 import ani.sanin.getThemeColor
 import ani.sanin.databinding.FragmentExtensionsBinding
@@ -212,6 +214,7 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
     private val adapter = NuvioInstalledAdapter(
         onInfo = { showInfo(it) },
         onSettings = { openSettings(it) },
+        onBridge = { confirmBridge(it) },
         onDelete = { confirmDelete(it) },
     )
 
@@ -302,6 +305,15 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
         }
     }
 
+    private fun confirmBridge(scraper: NuvioScraper) {
+        AnimeBridgeUi.confirm(
+            requireContext(),
+            AnimeBridgeStore.NUVIO,
+            NuvioSources.sourceId(scraper),
+            scraper.name,
+        ) { adapter.notifyDataSetChanged() }
+    }
+
     private fun confirmDelete(scraper: NuvioScraper) {
         requireContext().customAlertDialog().apply {
             setTitle("Uninstall plugin?")
@@ -361,6 +373,7 @@ class NuvioInstalledFragment : Fragment(), SearchQueryHandler {
 class NuvioInstalledAdapter(
     private val onInfo: (NuvioScraper) -> Unit,
     private val onSettings: (NuvioScraper) -> Unit,
+    private val onBridge: (NuvioScraper) -> Unit,
     private val onDelete: (NuvioScraper) -> Unit,
 ) : ListAdapter<NuvioScraper, NuvioInstalledAdapter.VH>(DIFF) {
     var dragActivePosition: Int? = null
@@ -425,6 +438,12 @@ class NuvioInstalledAdapter(
             binding.settingsImageView.visibility = if (item.hasSettings) View.VISIBLE else View.GONE
             binding.sourceCardView.setOnClickListener { onInfo(item) }
             binding.settingsImageView.setOnClickListener { onSettings(item) }
+            binding.bridgeImageView.setOnClickListener { onBridge(item) }
+            AnimeBridgeUi.bind(
+                binding.bridgeImageView,
+                AnimeBridgeStore.NUVIO,
+                NuvioSources.sourceId(item),
+            )
             binding.deleteImageView.setOnClickListener { onDelete(item) }
             tintArrows(this, dragActivePosition == position)
 
@@ -487,6 +506,7 @@ class NuvioInstalledAdapter(
             FocusEffectUtil.applyFocusListener(binding.sourceCardView)
             FocusEffectUtil.applyFocusListener(binding.dragHandle)
             FocusEffectUtil.applyFocusListener(binding.settingsImageView)
+            FocusEffectUtil.applyFocusListener(binding.bridgeImageView)
             FocusEffectUtil.applyFocusListener(binding.deleteImageView)
         }
     }

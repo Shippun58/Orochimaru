@@ -68,6 +68,8 @@ enum class PrefName(val data: Pref) {
     SelectedTracker(Pref(Location.Protected, Int::class, 0)),
 
     AnimeSourcesOrder(Pref(Location.General, List::class, listOf<String>())),
+    AnimeBridgeSources(Pref(Location.General, Set::class, setOf<String>())),
+    AnimeCloudStreamUnbridged(Pref(Location.General, Set::class, setOf<String>())),
     ProvidersOrder(Pref(Location.General, List::class, listOf<String>())),
     EnabledProviders(Pref(Location.General, Set::class, setOf<String>())),
     SortedAnimeSH(Pref(Location.General, List::class, listOf<SearchHistory>())),
