@@ -24,6 +24,7 @@ object LensButtonBackground {
         tint: Int? = null,
         cornerRadiusPx: Float? = null,
         flat: Boolean = false,
+        ripple: Boolean = true,
     ): Drawable {
         val dark = isNight(context)
         val alpha = fillAlpha ?: if (dark) 0.70f else 0.68f
@@ -65,7 +66,7 @@ object LensButtonBackground {
                     outline
                 )
             }
-            return RippleDrawable(rippleColor, drawable, null)
+            return if (ripple) RippleDrawable(rippleColor, drawable, null) else drawable
         }
 
         val rim = intArrayOf(
@@ -88,13 +89,19 @@ object LensButtonBackground {
         val layer = LayerDrawable(arrayOf(rimDrawable, fillDrawable))
         layer.setLayerInset(1, inset, inset, inset, inset)
 
-        return RippleDrawable(rippleColor, layer, null)
+        return if (ripple) RippleDrawable(rippleColor, layer, null) else layer
     }
 
-    fun apply(view: View, fillAlpha: Float? = null, tint: Int? = null, cornerRadiusPx: Float? = null) {
+    fun apply(
+        view: View,
+        fillAlpha: Float? = null,
+        tint: Int? = null,
+        cornerRadiusPx: Float? = null,
+        ripple: Boolean = true,
+    ) {
         val flat = tint != null &&
             (((tint ushr 24) and 0xFF) / 255f) <= 0.20f
-        view.background = make(view.context, fillAlpha, tint, cornerRadiusPx, flat)
+        view.background = make(view.context, fillAlpha, tint, cornerRadiusPx, flat, ripple)
 
         if (!isNight(view.context)) {
             view.elevation = 3f * view.resources.displayMetrics.density

@@ -199,7 +199,8 @@ class ExtensionsActivity : AppCompatActivity() {
         if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.searchIconButton)
         LensButtonBackground.apply(
             binding.searchLens,
-            cornerRadiusPx = 14f * resources.displayMetrics.density,
+            cornerRadiusPx = 20f * resources.displayMetrics.density,
+            ripple = false,
         )
         binding.searchIconButton.setOnClickListener { toggleSearchBar() }
         updateSearchUiForTab(0)
@@ -402,7 +403,8 @@ class ExtensionsActivity : AppCompatActivity() {
         if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.openSettingsButton)
         LensButtonBackground.apply(
             binding.openSettingsLens,
-            cornerRadiusPx = 14f * resources.displayMetrics.density,
+            cornerRadiusPx = 20f * resources.displayMetrics.density,
+            ripple = false,
         )
     }
 
