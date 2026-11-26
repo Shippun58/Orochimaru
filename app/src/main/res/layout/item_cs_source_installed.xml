@@ -21,7 +21,7 @@
         android:orientation="vertical"
         android:gravity="center"
         android:focusable="true"
-        android:nextFocusRight="@+id/updateImageView"
+        android:nextFocusRight="@+id/updateTextView"
         android:nextFocusLeft="@id/sourceCardView">
 
         <ImageView
@@ -76,59 +76,40 @@
             tools:text="v1.0.8 • anime • en" />
     </LinearLayout>
 
-    <ImageView
-        android:id="@+id/updateImageView"
+    <TextView
+        android:id="@+id/updateTextView"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="28dp"
         android:layout_gravity="center_vertical"
+        android:layout_marginEnd="6dp"
         android:layout_weight="0"
-        android:layout_marginEnd="10dp"
-        android:src="@drawable/ic_round_sync_24"
+        android:background="@drawable/bg_lens_pill"
+        android:clickable="true"
         android:focusable="true"
-        android:nextFocusRight="@+id/bridgeImageView"
+        android:fontFamily="@font/poppins_bold"
+        android:gravity="center"
         android:nextFocusLeft="@id/dragHandle"
-        app:tint="?attr/colorOnBackground"
-        tools:ignore="ContentDescription" />
+        android:nextFocusRight="@+id/overflowImageView"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:text="Update"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
     <ImageView
-        android:id="@+id/bridgeImageView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:id="@+id/overflowImageView"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
         android:layout_gravity="center_vertical"
-        android:layout_marginEnd="10dp"
+        android:layout_marginEnd="4dp"
         android:layout_weight="0"
-        android:src="@drawable/format_link_24"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="More options"
         android:focusable="true"
-        android:nextFocusLeft="@id/updateImageView"
-        android:nextFocusRight="@+id/settingsImageView"
-        app:tint="?attr/colorOnBackground"
-        tools:ignore="ContentDescription" />
-
-    <ImageView
-        android:id="@+id/settingsImageView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:layout_marginEnd="10dp"
-        android:layout_weight="0"
-        android:src="@drawable/ic_baseline_tune_24"
-        android:focusable="true"
-        android:nextFocusLeft="@id/bridgeImageView"
-        android:nextFocusRight="@id/deleteImageView"
-        app:tint="?attr/colorOnBackground"
-        tools:ignore="ContentDescription" />
-
-    <ImageView
-        android:id="@+id/deleteImageView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:layout_weight="0"
-        android:layout_marginEnd="10dp"
-        android:src="@drawable/ic_round_delete_24"
-        android:focusable="true"
+        android:nextFocusLeft="@id/updateTextView"
         android:nextFocusRight="@id/sourceCardView"
-        android:nextFocusLeft="@id/settingsImageView"
-        app:tint="?attr/colorOnBackground"
-        tools:ignore="ContentDescription" />
+        android:padding="4dp"
+        app:srcCompat="@drawable/ic_round_dots_vertical_24"
+        app:tint="?attr/colorOnBackground" />
 </LinearLayout>

@@ -13,8 +13,6 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
-import ani.sanin.bridge.AnimeBridgeStore
-import ani.sanin.bridge.AnimeBridgeUi
 import ani.sanin.databinding.ItemRepoCardBinding
 import ani.sanin.getThemeColor
 import ani.sanin.others.svg.SvgImageLoader
@@ -75,7 +73,6 @@ class RepoCardAdapter(
     private val onExitTop: (() -> Boolean)? = null,
     private val actionLabel: String = "Browse",
     private val onConfigure: ((RepoUi) -> Unit)? = null,
-    private val onBridge: ((RepoUi) -> Unit)? = null,
     private val onToggle: ((RepoUi, Boolean) -> Unit)? = null,
     private val onReorder: ((Int, Int) -> Unit)? = null,
 ) : ListAdapter<RepoUi, RepoCardAdapter.VH>(DIFF) {
@@ -252,34 +249,12 @@ class RepoCardAdapter(
                 styleBrowse(hasFocus)
             }
 
-            setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) {
-                    false
-                } else {
-                    when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1)
-                        KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1)
-                        else -> false
-                    }
-                }
-            }
         }
 
         with(holder.binding.repoInfoButton) {
             visibility = if (item.showInfoButton) View.VISIBLE else View.GONE
             contentDescription = "Info ${item.name}"
             setOnClickListener { onLongClick(item) }
-            setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) {
-                    false
-                } else {
-                    when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoInfoButton }
-                        KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoInfoButton }
-                        else -> false
-                    }
-                }
-            }
         }
 
         holder.binding.repoCardRoot.alpha = if (item.enabled) 1f else 0.45f
@@ -290,17 +265,6 @@ class RepoCardAdapter(
             jumpDrawablesToCurrentState()
             contentDescription = if (item.enabled) "Disable ${item.name}" else "Enable ${item.name}"
             setOnClickListener { onToggle?.invoke(item, !item.enabled) }
-            setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) {
-                    false
-                } else {
-                    when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoEnableToggle }
-                        KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoEnableToggle }
-                        else -> false
-                    }
-                }
-            }
         }
 
         with(holder.binding.repoDragHandle) {
@@ -352,7 +316,7 @@ class RepoCardAdapter(
                                 }
                                 true
                             } else {
-                                moveBrowseFocus(holder, -1) { it.binding.repoDragHandle }
+                                false
                             }
                         }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -363,7 +327,7 @@ class RepoCardAdapter(
                                 }
                                 true
                             } else {
-                                moveBrowseFocus(holder, 1) { it.binding.repoDragHandle }
+                                false
                             }
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -373,26 +337,6 @@ class RepoCardAdapter(
                             false
                         }
                         else -> false
-                    }
-                }
-            }
-        }
-
-        val bridgeAction = onBridge
-        with(holder.binding.repoBridgeButton) {
-            visibility = if (bridgeAction != null) View.VISIBLE else View.GONE
-            if (bridgeAction != null) {
-                AnimeBridgeUi.bind(this, AnimeBridgeStore.STREMIO, item.url)
-                setOnClickListener { bridgeAction.invoke(item) }
-                setOnKeyListener { _, keyCode, event ->
-                    if (event.action != KeyEvent.ACTION_DOWN) {
-                        false
-                    } else {
-                        when (keyCode) {
-                            KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoBridgeButton }
-                            KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoBridgeButton }
-                            else -> false
-                        }
                     }
                 }
             }
@@ -428,17 +372,6 @@ class RepoCardAdapter(
             }
             setOnClickListener {
                 onConfigure?.invoke(item)
-            }
-            setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) {
-                    false
-                } else {
-                    when (keyCode) {
-                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBrowseFocus(holder, 1) { it.binding.repoSettingsButton }
-                        KeyEvent.KEYCODE_DPAD_UP -> moveBrowseFocus(holder, -1) { it.binding.repoSettingsButton }
-                        else -> false
-                    }
-                }
             }
         }
 

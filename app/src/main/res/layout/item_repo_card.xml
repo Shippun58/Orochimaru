@@ -82,6 +82,8 @@
                 android:scaleY="0.75"
                 android:contentDescription="Enable or disable add-on"
                 android:focusable="true"
+                android:nextFocusRight="@+id/repoInfoButton"
+                android:nextFocusDown="@+id/repoSettingsButton"
                 android:visibility="gone" />
 
             <ImageView
@@ -92,6 +94,9 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Add-on info"
                 android:focusable="true"
+                android:nextFocusLeft="@+id/repoEnableToggle"
+                android:nextFocusRight="@+id/repoDragHandle"
+                android:nextFocusDown="@+id/repoBrowseButton"
                 android:padding="6dp"
                 android:visibility="gone"
                 app:srcCompat="@drawable/ic_round_info_24"
@@ -105,6 +110,8 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Reorder add-on"
                 android:focusable="true"
+                android:nextFocusLeft="@+id/repoInfoButton"
+                android:nextFocusDown="@+id/repoBrowseButton"
                 android:padding="6dp"
                 android:visibility="gone"
                 app:srcCompat="@drawable/ic_round_drag_handle_24"
@@ -147,24 +154,14 @@
         android:orientation="horizontal">
 
         <ImageView
-            android:id="@+id/repoBridgeButton"
-            android:layout_width="48dp"
-            android:layout_height="match_parent"
-            android:layout_marginEnd="8dp"
-            android:contentDescription="Bridge to anime mode"
-            android:focusable="true"
-            android:padding="12dp"
-            android:visibility="gone"
-            app:srcCompat="@drawable/format_link_24"
-            app:tint="?attr/colorPrimary" />
-
-        <ImageView
             android:id="@+id/repoSettingsButton"
             android:layout_width="48dp"
             android:layout_height="match_parent"
             android:layout_marginEnd="8dp"
             android:contentDescription="Configure add-on"
             android:focusable="true"
+            android:nextFocusRight="@+id/repoBrowseButton"
+            android:nextFocusUp="@+id/repoDragHandle"
             android:padding="12dp"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_round_settings_24"
@@ -177,6 +174,8 @@
             android:layout_weight="1"
             android:background="@drawable/bg_repo_browse_button"
             android:focusable="true"
+            android:nextFocusLeft="@+id/repoSettingsButton"
+            android:nextFocusUp="@+id/repoDragHandle"
             android:fontFamily="@font/poppins_bold"
             android:text="Browse"
             android:textAllCaps="false"
