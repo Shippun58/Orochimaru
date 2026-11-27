@@ -72,7 +72,7 @@ object AnimeBridgeServerMapper {
             }.toMutableMap()
             VideoServer(
                 name = uniqueName(label, usedNames),
-                embed = "",
+                embed = FileUrl(""),
                 extraData = data,
                 preloadedVideos = videos,
             )
