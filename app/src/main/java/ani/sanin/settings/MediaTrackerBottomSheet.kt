@@ -466,6 +466,7 @@ class MediaTrackerBottomSheet : BottomSheetDialogFragment() {
         }
 
         fun showAnimeCataloguePicker() {
+            AnimeSources.refreshIfBridgeChanged()
             val savedTracker = PrefManager.getVal<Int>(PrefName.SelectedTracker)
             val trackerName = if (savedTracker == 1) "MAL" else "AniList"
             val trackerId = if (savedTracker == 1) "mal" else "anilist"

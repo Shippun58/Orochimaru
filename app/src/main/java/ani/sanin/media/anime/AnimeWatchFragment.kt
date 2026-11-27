@@ -261,6 +261,7 @@ class AnimeWatchFragment : Fragment() {
                 binding.mediaInfoProgressBar.visibility = progress
 
                 if (!loaded) {
+                    AnimeSources.refreshIfBridgeChanged()
                     model.watchSources = if (media.isAdult) HAnimeSources else AnimeSources
                     val lastSourceIndex = model.watchSources!!.list.lastIndex
                     if (media.selected!!.sourceIndex !in 0..lastSourceIndex) {
@@ -860,6 +861,15 @@ class AnimeWatchFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         Logger.log("Watch: onResume")
+        if (loaded && AnimeSources.refreshIfBridgeChanged()) {
+            val selected = if (::media.isInitialized) media.selected else null
+            if (selected != null && selected.sourceIndex !in AnimeSources.list.indices) {
+                selected.sourceIndex = 0
+                selected.server = null
+                model.saveSelected(media.id, selected)
+            }
+            if (::headerAdapter.isInitialized) headerAdapter.notifyDataSetChanged()
+        }
         binding.mediaInfoProgressBar.visibility = progress
         binding.mediaSourceRecycler.layoutManager?.onRestoreInstanceState(state)
 

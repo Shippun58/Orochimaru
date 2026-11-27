@@ -26,6 +26,7 @@ object AnimeSources : WatchSources() {
     private var bridgeNames: Set<String> = emptySet()
     private var pluginEnglishSaveNames: Set<String> = emptySet()
     private var lastExtensions: List<AnimeExtension.Installed> = emptyList()
+    private var bridgeSnapshot: Set<String> = emptySet()
 
     val allNativeParsers by lazy {
         listOf(
@@ -125,9 +126,11 @@ object AnimeSources : WatchSources() {
             addAll(extParsers)
             add(Lazier({ LocalAnimeParser() }, "Local"))
         }
+        bridgeSnapshot = AnimeBridgeStore.snapshot()
     }
 
     fun rebuildNativeParsers() {
+        if (refreshIfBridgeChanged()) return
         val pluginParsers = list.filter { it.name in pluginNames }
         val bridgeParsers = list.filter { it.name in bridgeNames }
         val extParsers = list.filter {
@@ -148,7 +151,14 @@ object AnimeSources : WatchSources() {
         rebuildList(lastExtensions)
     }
 
+    fun refreshIfBridgeChanged(): Boolean {
+        if (!isInitialized || AnimeBridgeStore.snapshot() == bridgeSnapshot) return false
+        rebuildList(lastExtensions)
+        return true
+    }
+
     fun performReorderAnimeSources() {
+        if (refreshIfBridgeChanged()) return
         val pluginParsers = list.filter { it.name in pluginNames }
         val bridgeParsers = list.filter { it.name in bridgeNames }
         val extParsers = list.filter {
@@ -168,7 +178,7 @@ object AnimeSources : WatchSources() {
     private fun createParsersFromCsRepos(): Pair<List<CsAnimeParser>, List<Lazier<BaseParser>>> {
         val context = currContext() ?: return emptyList<CsAnimeParser>() to emptyList()
         val parsers = CsRepos.installed(context)
-            .filter { AnimeBridgeStore.isBridged(AnimeBridgeStore.CLOUDSTREAM, it.id) }
+            .filter { AnimeBridgeStore.isBridged(AnimeBridgeStore.CLOUDSTREAM, it.id.substringBefore('#')) }
             .flatMap { source ->
                 CsRuntime.apisFor(context, source).mapIndexed { index, api ->
                     CsAnimeParser(context, source, api, index)

@@ -61,6 +61,7 @@ object AnimeCatalogueHome {
     fun savedSourceId(): String = PrefManager.getVal(PrefName.AnimeCatalogueSource)
 
     suspend fun loadRows(sourceId: String): List<CatalogueRow> {
+        AnimeSources.refreshIfBridgeChanged()
         Logger.log("Catalogue: loadRows('$sourceId')")
         if (!isCatalogueSource(sourceId)) {
             Logger.log("Catalogue: '$sourceId' is not a catalogue source")

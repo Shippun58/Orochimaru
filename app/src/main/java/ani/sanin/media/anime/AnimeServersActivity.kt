@@ -181,6 +181,7 @@ class AnimeServersActivity : AppCompatActivity() {
         launchFlag = intent.getBooleanExtra(ARG_LAUNCH, true)
         prevEp = intent.getStringExtra(ARG_PREV)
         savedServerArg = intent.getStringExtra(ARG_SERVER)
+        AnimeSources.refreshIfBridgeChanged()
         sources = if (media?.isAdult == true) HAnimeSources else AnimeSources
         downloadMode = intent.getBooleanExtra(ARG_IS_DOWNLOAD, false)
 
