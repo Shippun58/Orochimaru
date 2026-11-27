@@ -22,39 +22,150 @@ private const val TMDB_LINK_PREFIX = "tmdb:"
 object AnimeBridgeServerMapper {
     const val PRELOADED = "bridgePreloaded"
     const val SERVER_NAME = "bridgeServerName"
+    const val INFO = "bridgeInfo"
+    const val STREAM = "bridgeStream"
+    const val LABEL = "bridgeLabel"
+    const val HOST = "bridgeHost"
+    const val EXTERNAL = "bridgeExternalUrl"
+    const val DETAILS = "bridgeDetails"
 
-    fun fromPlayableLinks(links: List<TmdbStreamResolver.StreamResult.PlayableLink>): List<VideoServer> =
-        TmdbStreamResolver.buildExtractors(links).mapNotNull { extractor ->
+    private val DUB_RX = Regex("\\b(dub|dubbed|dublado|dublada)\\b", RegexOption.IGNORE_CASE)
+    private val SUB_RX = Regex("\\b(sub|subbed|subtitled|legendado|legendada)\\b", RegexOption.IGNORE_CASE)
+
+    fun fromPlayableLinks(links: List<TmdbStreamResolver.StreamResult.PlayableLink>): List<VideoServer> {
+        val usedNames = HashSet<String>()
+        val infos = links.mapNotNull { link ->
+            if (link.url.isNotBlank()) return@mapNotNull null
+            if (link.externalUrl.isNullOrBlank() && link.details.isNullOrBlank()) return@mapNotNull null
+            val label = link.label.ifBlank { link.host.ifBlank { "Info" } }
+            val data = buildMap {
+                put(INFO, "1")
+                put(LABEL, label)
+                link.host.takeIf { it.isNotBlank() }?.let { put(HOST, it) }
+                link.details?.takeIf { it.isNotBlank() }?.let { put(DETAILS, it) }
+                link.rawDetails?.takeIf { it.isNotBlank() }?.let { put("rawDetails", it) }
+                link.externalUrl?.takeIf { it.isNotBlank() }?.let { put(EXTERNAL, it) }
+            }
+            VideoServer(
+                name = uniqueName(label, usedNames),
+                embed = FileUrl(link.externalUrl.orEmpty()),
+                extraData = data,
+            )
+        }
+
+        val streams = links.mapNotNull { link ->
+            if (link.url.isBlank()) return@mapNotNull null
+            val extractor = TmdbStreamResolver.buildExtractors(listOf(link)).firstOrNull()
+                ?: return@mapNotNull null
             val videos = extractor.videos.filter { it.file.url.isNotBlank() }
             if (videos.isEmpty()) return@mapNotNull null
-            val data = extractor.server.extraData?.toMutableMap() ?: mutableMapOf()
-            data[PRELOADED] = "1"
-            data[SERVER_NAME] = extractor.server.name
-            encodeAnimeSubtitles(extractor.subtitles)?.let { data["subtitles"] = it }
-            encodeAnimeTracks(extractor.audioTracks)?.let { data["audioTracks"] = it }
+            val label = link.label.ifBlank { link.host.ifBlank { "Stream" } }
+            val data = buildMap {
+                put(PRELOADED, "1")
+                put(STREAM, "1")
+                put(LABEL, label)
+                put(SERVER_NAME, label)
+                link.host.takeIf { it.isNotBlank() }?.let { put(HOST, it) }
+                link.details?.takeIf { it.isNotBlank() }?.let { put(DETAILS, it) }
+                encodeAnimeSubtitles(extractor.subtitles)?.let { put("subtitles", it) }
+                encodeAnimeTracks(extractor.audioTracks)?.let { put("audioTracks", it) }
+            }.toMutableMap()
             VideoServer(
-                name = extractor.server.name,
-                embed = extractor.server.embed,
+                name = uniqueName(label, usedNames),
+                embed = "",
                 extraData = data,
                 preloadedVideos = videos,
             )
         }
+
+        return infos + streams
+    }
+
+    fun filterByAudio(
+        links: List<TmdbStreamResolver.StreamResult.PlayableLink>,
+        preferDub: Boolean,
+    ): List<TmdbStreamResolver.StreamResult.PlayableLink> {
+        if (links.isEmpty()) return links
+        val tagged = links.map { it to audioTag(it) }
+        val desired = tagged.filter { it.second == preferDub }
+        if (desired.isEmpty()) return links
+        return tagged.filter { it.second == null || it.second == preferDub }.map { it.first }
+    }
+
+    private fun audioTag(link: TmdbStreamResolver.StreamResult.PlayableLink): Boolean? {
+        if (link.url.isBlank()) return null
+        val hay = listOfNotNull(
+            link.label,
+            link.host,
+            link.details,
+            link.rawDetails,
+            link.metadata.entries.joinToString(" ") { "${it.key} ${it.value}" },
+        ).joinToString(" ")
+        val dub = DUB_RX.containsMatchIn(hay)
+        val sub = SUB_RX.containsMatchIn(hay)
+        return when {
+            dub && !sub -> true
+            sub && !dub -> false
+            else -> null
+        }
+    }
+
+    private fun uniqueName(name: String, used: MutableSet<String>): String {
+        val base = name.ifBlank { "Server" }
+        if (used.add(base.lowercase())) return base
+        var index = 2
+        while (!used.add("$base $index".lowercase())) index++
+        return "$base $index"
+    }
 
     fun extractor(server: VideoServer): VideoExtractor = PreloadedVideoExtractor(server)
 
     fun isPreloaded(server: VideoServer): Boolean =
         server.extraData?.get(PRELOADED) == "1"
 
+    fun isInfo(server: VideoServer): Boolean =
+        server.extraData?.get(INFO) == "1"
+
+    fun isStream(server: VideoServer): Boolean =
+        server.extraData?.get(STREAM) == "1"
+
     fun displayName(server: VideoServer): String? =
         server.extraData?.get(SERVER_NAME)?.takeIf { it.isNotBlank() }
 
+    fun label(server: VideoServer): String? =
+        server.extraData?.get(LABEL)?.takeIf { it.isNotBlank() }
+
+    fun streamHost(server: VideoServer): String? =
+        server.extraData?.get(HOST)?.takeIf { it.isNotBlank() }
+
     fun details(server: VideoServer): String? =
-        server.extraData?.get("details")?.takeIf { it.isNotBlank() }
+        server.extraData?.get(DETAILS)?.takeIf { it.isNotBlank() }
+            ?: server.extraData?.get("details")?.takeIf { it.isNotBlank() }
+
+    fun externalUrl(server: VideoServer): String? =
+        server.extraData?.get(EXTERNAL)?.takeIf { it.isNotBlank() }
+
+    fun infoLink(server: VideoServer): TmdbStreamResolver.StreamResult.PlayableLink? {
+        if (!isInfo(server)) return null
+        val label = label(server) ?: server.name
+        return TmdbStreamResolver.StreamResult.PlayableLink(
+            label = label,
+            url = "",
+            host = streamHost(server) ?: "External",
+            externalUrl = externalUrl(server),
+            details = details(server),
+        )
+    }
 }
 
 abstract class TmdbBridgedAnimeParser : AnimeParser() {
     override val hostUrl: String = "https://www.themoviedb.org/"
     override val language: String = "English"
+
+    override fun isDubAvailableSeparately(sourceLang: Int?): Boolean = true
+
+    override fun isDisplayOnlyServer(server: VideoServer): Boolean =
+        AnimeBridgeServerMapper.isInfo(server)
 
     protected abstract suspend fun resolveStreams(
         tmdbId: Int,
@@ -127,12 +238,16 @@ abstract class TmdbBridgedAnimeParser : AnimeParser() {
         return resolveStreams(tmdbId, season, episode).toVideoServers()
     }
 
-    override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor =
-        AnimeBridgeServerMapper.extractor(server)
+    override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor? =
+        if (AnimeBridgeServerMapper.isInfo(server)) null
+        else AnimeBridgeServerMapper.extractor(server)
 
     private fun TmdbStreamResolver.StreamResult.toVideoServers(): List<VideoServer> =
         when (this) {
-            is TmdbStreamResolver.StreamResult.Success -> AnimeBridgeServerMapper.fromPlayableLinks(links)
+            is TmdbStreamResolver.StreamResult.Success ->
+                AnimeBridgeServerMapper.fromPlayableLinks(
+                    AnimeBridgeServerMapper.filterByAudio(links, selectDub)
+                )
             is TmdbStreamResolver.StreamResult.Error -> emptyList()
         }
 }

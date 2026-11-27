@@ -56,6 +56,8 @@ abstract class AnimeParser : BaseParser() {
 
     open val allowsPreloading = true
 
+    open fun isDisplayOnlyServer(server: VideoServer): Boolean = false
+
     open suspend fun loadByVideoServers(
         episodeUrl: String,
         extra: Map<String, String>?,
@@ -66,7 +68,9 @@ abstract class AnimeParser : BaseParser() {
         tryWithSuspend(true) {
             val timeoutMs =
                 PrefManager.getVal<Int>(PrefName.ServerLoadTimeoutSeconds).coerceIn(10, 30) * 1000L
-            (servers ?: loadVideoServers(episodeUrl, extra, sEpisode)).limitedAsyncMap(concurrency = 4) {
+            (servers ?: loadVideoServers(episodeUrl, extra, sEpisode))
+                .filterNot { isDisplayOnlyServer(it) }
+                .limitedAsyncMap(concurrency = 4) {
                 withTimeoutOrNull(timeoutMs) {
                     getVideoExtractor(it)?.apply {
                         tryWithSuspend(true) {
@@ -87,6 +91,7 @@ abstract class AnimeParser : BaseParser() {
     ): VideoExtractor? {
         return tryWithSuspend(post) {
             val servers = loadVideoServers(episodeUrl, extra, sEpisode)
+                .filterNot { isDisplayOnlyServer(it) }
 
             val target = servers.find { it.name == serverName }
                 ?: servers.find { it.isPreferred }

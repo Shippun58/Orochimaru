@@ -10,6 +10,7 @@ import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
 import ani.sanin.tryWithSuspend
 import com.lagradost.cloudstream3.AnimeLoadResponse
+import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
@@ -37,6 +38,11 @@ class CsAnimeParser(
     override val hostUrl: String = api.mainUrl.takeIf { it.isNotBlank() && it != "NONE" } ?: source.url
     override val language: String = if (source.lang.equals("en", ignoreCase = true)) "English" else source.lang
     override val iconUrl: String? = source.iconUrl
+
+    override fun isDubAvailableSeparately(sourceLang: Int?): Boolean = true
+
+    override fun isDisplayOnlyServer(server: VideoServer): Boolean =
+        AnimeBridgeServerMapper.isInfo(server)
 
     override suspend fun search(query: String): List<ShowResponse> {
         val paged = tryWithSuspend(true) { api.search(query, 1)?.items }
@@ -69,7 +75,15 @@ class CsAnimeParser(
         val response = tryWithSuspend(true) { api.load(link) } ?: return emptyList()
         val episodes = when (response) {
             is TvSeriesLoadResponse -> response.episodes
-            is AnimeLoadResponse -> response.episodes.values.flatten()
+            is AnimeLoadResponse -> {
+                val preferred = if (selectDub) DubStatus.Dubbed else DubStatus.Subbed
+                val preferredEpisodes = response.episodes[preferred].orEmpty()
+                if (preferredEpisodes.isNotEmpty()) {
+                    preferredEpisodes
+                } else {
+                    response.episodes.values.flatten()
+                }
+            }
             else -> return emptyList()
         }
 
@@ -111,7 +125,8 @@ class CsAnimeParser(
         val playable = TmdbStreamResolver.extractorLinksToPlayableLinks(links.filter { link ->
             link.type != ExtractorLinkType.TORRENT && link.type != ExtractorLinkType.MAGNET
         })
-        return AnimeBridgeServerMapper.fromPlayableLinks(playable).map { server ->
+        val filtered = AnimeBridgeServerMapper.filterByAudio(playable, selectDub)
+        return AnimeBridgeServerMapper.fromPlayableLinks(filtered).map { server ->
             val data = server.extraData?.toMutableMap() ?: mutableMapOf()
             if (subtitleData != null && !data.containsKey("subtitles")) {
                 data["subtitles"] = subtitleData
@@ -121,5 +136,6 @@ class CsAnimeParser(
     }
 
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor? =
-        AnimeBridgeServerMapper.extractor(server)
+        if (AnimeBridgeServerMapper.isInfo(server)) null
+        else AnimeBridgeServerMapper.extractor(server)
 }

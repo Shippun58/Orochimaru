@@ -280,7 +280,7 @@ private object RailRepo {
             }
             target = t
             val preferDub = media.selected?.preferDub ?: PrefManager.getVal(PrefName.PreferDub)
-            if (sourceIndex != currentSourceIndex && parser.isDubAvailableSeparately()) {
+            if (parser.isDubAvailableSeparately()) {
                 parser.selectDub = preferDub
             }
             servers = withTimeoutOrNull(60_000) {
@@ -1118,8 +1118,51 @@ class ServerRailController(
                     rows.add(Row.Header("No servers in ${group.name}", null))
                     return
                 }
-                if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
-                    state.servers.forEach { server ->
+                val infos = state.servers.filter { AnimeBridgeServerMapper.isInfo(it) }
+                val playables = state.servers.filterNot { AnimeBridgeServerMapper.isInfo(it) }
+                infos.forEach { server ->
+                    AnimeBridgeServerMapper.infoLink(server)?.let { rows.add(Row.Info(it, null)) }
+                }
+                if (playables.isEmpty()) {
+                    if (infos.isEmpty()) rows.add(Row.Header("No servers in ${group.name}", null))
+                    return
+                }
+                if (playables.any { AnimeBridgeServerMapper.isStream(it) }) {
+                    fun addStream(server: VideoServer) {
+                        val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                            ?: return
+                        if (group.extractionDone && ex.videos.isEmpty()) return
+                        ex.videos.forEachIndexed { idx, _ ->
+                            rows.add(
+                                Row.Video(
+                                    group, ex, idx,
+                                    isFirst = idx == 0,
+                                    isLast = idx == ex.videos.lastIndex,
+                                    server = server,
+                                )
+                            )
+                        }
+                    }
+                    val grouping = PrefManager.getVal<Boolean>(
+                        PrefName.GroupServersByHostAndLanguageTags
+                    ) && playables.size > 1
+                    val byHost = if (grouping) {
+                        playables.groupBy { server ->
+                            AnimeBridgeServerMapper.streamHost(server)
+                                ?: AnimeBridgeServerMapper.label(server)
+                                ?: server.name
+                        }
+                    } else null
+                    if (byHost != null && byHost.size > 1) {
+                        byHost.forEach { (host, servers) ->
+                            rows.add(Row.Header(host, null))
+                            servers.forEach { addStream(it) }
+                        }
+                    } else {
+                        playables.forEach { addStream(it) }
+                    }
+                } else if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
+                    playables.forEach { server ->
                         val ex = group.extractors.firstOrNull { it.server.name == server.name }
                         val hasVideos = ex?.videos?.isNotEmpty() == true
                         if (group.extractionDone && !hasVideos) {
@@ -1149,7 +1192,7 @@ class ServerRailController(
                         }
                     }
                 } else {
-                    state.servers.forEach { server ->
+                    playables.forEach { server ->
                         val ex = group.extractors.firstOrNull { it.server.name == server.name }
                             ?: return@forEach
                         if (group.extractionDone && ex.videos.isEmpty()) {
@@ -1992,22 +2035,37 @@ class ServerRailController(
                 showTopRim = row.isFirst,
                 selected = selected,
             )
-            b.urlQuality.text =
-                video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
+            val bridgeStream = row.server?.takeIf { AnimeBridgeServerMapper.isStream(it) }
+            val bridgeLabel = bridgeStream?.let { AnimeBridgeServerMapper.label(it) }
+            val (bridgeTitle, bridgeHint) = bridgeLabel?.let { splitStreamLabel(it) }
+                ?: (null to null)
+            b.urlQuality.text = bridgeTitle
+                ?: video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
             b.urlQuality.textSize = 15f
             b.urlQuality.alpha = 1f
             b.urlQuality.setTypeface(null, android.graphics.Typeface.NORMAL)
             b.urlQuality.setTextColor(
                 b.root.context.getThemeColor(com.google.android.material.R.attr.colorSecondary)
             )
-            val note = listOfNotNull(
-                when (video?.format) {
-                    VideoType.M3U8 -> "M3U8"
-                    VideoType.DASH -> "DASH"
-                    else -> null
-                },
-                video?.extraNote?.takeIf { it.isNotBlank() },
-            ).joinToString(" · ")
+            val format = when (video?.format) {
+                VideoType.M3U8 -> "M3U8"
+                VideoType.DASH -> "DASH"
+                else -> null
+            }
+            val note = if (bridgeStream != null) {
+                val detail = AnimeBridgeServerMapper.details(bridgeStream)
+                    ?.let { multiLineNote(it) }
+                    ?: bridgeHint
+                listOfNotNull(
+                    AnimeBridgeServerMapper.streamHost(bridgeStream),
+                    detail,
+                ).joinToString("\n")
+            } else {
+                listOfNotNull(
+                    format,
+                    video?.extraNote?.takeIf { it.isNotBlank() },
+                ).joinToString(" · ")
+            }
             if (note.isBlank()) {
                 b.urlNote.isVisible = false
             } else {

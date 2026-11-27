@@ -298,6 +298,11 @@ class AnimeWatchFragment : Fragment() {
                             Logger.log(Log.WARN, "Watch: offline detected, switching to source idx ${model.watchSources!!.list.lastIndex}")
                             media.selected!!.sourceIndex = model.watchSources!!.list.lastIndex
                         }
+                        model.watchSources?.get(media.selected!!.sourceIndex)?.let { parser ->
+                            if (parser.isDubAvailableSeparately()) {
+                                parser.selectDub = media.selected!!.preferDub
+                            }
+                        }
 
                         model.loadEpisodes(media, media.selected!!.sourceIndex)
                         if (!offline && !isLocal) {
@@ -494,6 +499,9 @@ class AnimeWatchFragment : Fragment() {
         model.saveSelected(media.id, selected)
         media.selected = selected
         val parser = model.watchSources?.get(i)!!
+        if (parser.isDubAvailableSeparately()) {
+            parser.selectDub = selected.preferDub
+        }
         if (PrefManager.getVal<Boolean>(PrefName.SmartSourcePersistence)) {
             PrefManager.setVal(PrefName.LastAnimeSource, parser.name)
         }

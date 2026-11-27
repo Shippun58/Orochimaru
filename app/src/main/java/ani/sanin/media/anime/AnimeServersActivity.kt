@@ -24,6 +24,7 @@ import ani.sanin.themes.ThemeManager
 import ani.sanin.databinding.ActivityTmdbServersBinding
 import ani.sanin.databinding.ItemTmdbServerRowBinding
 import ani.sanin.databinding.ItemTmdbStreamsGroupBinding
+import ani.sanin.databinding.ItemTmdbStreamsSubheadBinding
 import ani.sanin.databinding.ItemTmdbStreamsTextBinding
 import ani.sanin.getThemeColor
 import ani.sanin.loadImage
@@ -85,6 +86,12 @@ class AnimeServersActivity : AppCompatActivity() {
             val isFirst: Boolean,
             val isLast: Boolean,
             val server: VideoServer? = null,
+        ) : Row()
+        data class Subhead(val text: String) : Row()
+        data class Info(
+            val label: String,
+            val details: String?,
+            val externalUrl: String?,
         ) : Row()
         data class Text(val text: String) : Row()
     }
@@ -569,6 +576,8 @@ class AnimeServersActivity : AppCompatActivity() {
         is Row.Head -> "h:${row.group.index}"
         is Row.Server -> "s:${row.group.index}:${row.server.name}"
         is Row.Video -> "v:${row.group.index}:${row.extractor.server.name}:${row.videoIdx}"
+        is Row.Subhead -> null
+        is Row.Info -> "i:${row.label}:${row.externalUrl}"
         is Row.Text -> null
     }
 
@@ -605,15 +614,25 @@ class AnimeServersActivity : AppCompatActivity() {
                 is GroupState.Ready -> {
                     if (state.servers.isEmpty()) {
                         rows.add(Row.Text("Nothing found in ${group.name}"))
-                    } else if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
-                        state.servers.forEach { server ->
-                            val ex = group.extractors.firstOrNull { it.server.name == server.name }
-                            val hasVideos = ex?.videos?.isNotEmpty() == true
-                            if (group.extractionDone && !hasVideos) {
-                                return@forEach
-                            }
-                            rows.add(Row.Server(group, server))
-                            if (hasVideos) {
+                    } else {
+                        val infos = state.servers.filter { AnimeBridgeServerMapper.isInfo(it) }
+                        val playables = state.servers.filterNot { AnimeBridgeServerMapper.isInfo(it) }
+                        infos.forEach { server ->
+                            rows.add(
+                                Row.Info(
+                                    label = AnimeBridgeServerMapper.label(server) ?: server.name,
+                                    details = AnimeBridgeServerMapper.details(server),
+                                    externalUrl = AnimeBridgeServerMapper.externalUrl(server),
+                                )
+                            )
+                        }
+                        if (playables.isEmpty()) {
+                            if (infos.isEmpty()) rows.add(Row.Text("Nothing found in ${group.name}"))
+                        } else if (playables.any { AnimeBridgeServerMapper.isStream(it) }) {
+                            fun addStream(server: VideoServer) {
+                                val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                                    ?: return
+                                if (group.extractionDone && ex.videos.isEmpty()) return
                                 ex.videos.forEachIndexed { idx, _ ->
                                     rows.add(
                                         Row.Video(
@@ -625,23 +644,62 @@ class AnimeServersActivity : AppCompatActivity() {
                                     )
                                 }
                             }
-                        }
-                    } else {
-                        state.servers.forEach { server ->
-                            val ex = group.extractors.firstOrNull { it.server.name == server.name }
-                                ?: return@forEach
-                            if (group.extractionDone && ex.videos.isEmpty()) {
-                                return@forEach
+                            val grouping = PrefManager.getVal<Boolean>(
+                                PrefName.GroupServersByHostAndLanguageTags
+                            ) && playables.size > 1
+                            val byHost = if (grouping) {
+                                playables.groupBy { server ->
+                                    AnimeBridgeServerMapper.streamHost(server)
+                                        ?: AnimeBridgeServerMapper.label(server)
+                                        ?: server.name
+                                }
+                            } else null
+                            if (byHost != null && byHost.size > 1) {
+                                byHost.forEach { (host, servers) ->
+                                    rows.add(Row.Subhead(host))
+                                    servers.forEach { addStream(it) }
+                                }
+                            } else {
+                                playables.forEach { addStream(it) }
                             }
-                            ex.videos.forEachIndexed { idx, _ ->
-                                rows.add(
-                                    Row.Video(
-                                        group, ex, idx,
-                                        isFirst = idx == 0,
-                                        isLast = idx == ex.videos.lastIndex,
-                                        server = server,
+                        } else if (PrefManager.getVal<Boolean>(PrefName.GroupServersByHostAndLanguageTags)) {
+                            playables.forEach { server ->
+                                val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                                val hasVideos = ex?.videos?.isNotEmpty() == true
+                                if (group.extractionDone && !hasVideos) {
+                                    return@forEach
+                                }
+                                rows.add(Row.Server(group, server))
+                                if (hasVideos) {
+                                    ex.videos.forEachIndexed { idx, _ ->
+                                        rows.add(
+                                            Row.Video(
+                                                group, ex, idx,
+                                                isFirst = idx == 0,
+                                                isLast = idx == ex.videos.lastIndex,
+                                                server = server,
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            playables.forEach { server ->
+                                val ex = group.extractors.firstOrNull { it.server.name == server.name }
+                                    ?: return@forEach
+                                if (group.extractionDone && ex.videos.isEmpty()) {
+                                    return@forEach
+                                }
+                                ex.videos.forEachIndexed { idx, _ ->
+                                    rows.add(
+                                        Row.Video(
+                                            group, ex, idx,
+                                            isFirst = idx == 0,
+                                            isLast = idx == ex.videos.lastIndex,
+                                            server = server,
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                     }
@@ -657,6 +715,22 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private val serverAudioRx = Regex("\\b(sub|dub|softsub|hardsub)\\b", RegexOption.IGNORE_CASE)
     private val serverQualityRx = Regex("\\b(\\d{3,4}\\s*p|auto|unknown)\\b", RegexOption.IGNORE_CASE)
+
+    private fun splitStreamLabel(label: String): Pair<String, String?> {
+        val idx = label.indexOf(" · ")
+        return if (idx > 0) label.substring(0, idx) to label.substring(idx + 3)
+        else label to null
+    }
+
+    private fun multiLineNote(text: String?): String? {
+        val cleaned = text?.replace('\u200b', ' ')?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: return null
+        val lines = cleaned.split(Regex("\n|\\s*[·•|]\\s*"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        return if (lines.isEmpty()) null else lines.joinToString("\n")
+    }
 
 
     private fun splitServerTitle(name: String): Triple<String, String?, String?> {
@@ -761,9 +835,7 @@ class AnimeServersActivity : AppCompatActivity() {
             group.episode = target
             val preferDub = m.selected?.preferDub
                 ?: PrefManager.getVal(PrefName.PreferDub)
-            if (group.index != (m.selected?.sourceIndex ?: -1) &&
-                group.parser.isDubAvailableSeparately()
-            ) {
+            if (group.parser.isDubAvailableSeparately()) {
                 Logger.log("ANIME_SERVERS: '${group.name}' dub=$preferDub applied to parser")
                 group.parser.selectDub = preferDub
             }
@@ -1240,6 +1312,8 @@ class AnimeServersActivity : AppCompatActivity() {
             is Row.Head -> 0
             is Row.Server -> 1
             is Row.Video -> 1
+            is Row.Info -> 1
+            is Row.Subhead -> 3
             is Row.Text -> 2
         }
 
@@ -1251,6 +1325,7 @@ class AnimeServersActivity : AppCompatActivity() {
             return when (viewType) {
                 0 -> HeadVH(ItemTmdbStreamsGroupBinding.inflate(inf, parent, false))
                 1 -> ItemVH(ItemTmdbServerRowBinding.inflate(inf, parent, false))
+                3 -> SubheadVH(ItemTmdbStreamsSubheadBinding.inflate(inf, parent, false))
                 else -> TextVH(ItemTmdbStreamsTextBinding.inflate(inf, parent, false))
             }
         }
@@ -1293,6 +1368,7 @@ class AnimeServersActivity : AppCompatActivity() {
 
         private fun isFocusableRow(row: Row): Boolean = when (row) {
             is Row.Head, is Row.Video -> true
+            is Row.Info -> row.externalUrl != null
             else -> false
         }
 
@@ -1329,6 +1405,8 @@ class AnimeServersActivity : AppCompatActivity() {
                     row.group, row.extractor, row.videoIdx,
                     row.isFirst, row.isLast, row.server,
                 )
+                is Row.Info -> (holder as ItemVH).bindInfo(row)
+                is Row.Subhead -> (holder as SubheadVH).bind(row.text)
                 is Row.Text -> (holder as TextVH).bind(row.text)
             }
         }
@@ -1455,8 +1533,12 @@ class AnimeServersActivity : AppCompatActivity() {
                     bottomRounded = isLast,
                     showTopRim = isFirst,
                 )
-                binding.urlQuality.text =
-                    video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
+                val bridgeStream = server?.takeIf { AnimeBridgeServerMapper.isStream(it) }
+                val bridgeLabel = bridgeStream?.let { AnimeBridgeServerMapper.label(it) }
+                val (bridgeTitle, bridgeHint) = bridgeLabel?.let { splitStreamLabel(it) }
+                    ?: (null to null)
+                binding.urlQuality.text = bridgeTitle
+                    ?: video?.quality?.takeIf { it > 0 }?.let { "${it}p" } ?: "Auto"
                 binding.urlQuality.textSize = 15f
                 binding.urlQuality.alpha = 1f
                 binding.urlQuality.setTextColor(
@@ -1464,21 +1546,32 @@ class AnimeServersActivity : AppCompatActivity() {
                         com.google.android.material.R.attr.colorSecondary
                     )
                 )
-                val note = listOfNotNull(
-                    when (video?.format) {
-                        VideoType.M3U8 -> "M3U8"
-                        VideoType.DASH -> "DASH"
-                        else -> null
-                    },
-                    video?.extraNote?.takeIf { it.isNotBlank() },
-                ).joinToString(" · ")
+                val format = when (video?.format) {
+                    VideoType.M3U8 -> "M3U8"
+                    VideoType.DASH -> "DASH"
+                    else -> null
+                }
+                val note = if (bridgeStream != null) {
+                    val detail = AnimeBridgeServerMapper.details(bridgeStream)
+                        ?.let { multiLineNote(it) }
+                        ?: bridgeHint
+                    listOfNotNull(
+                        AnimeBridgeServerMapper.streamHost(bridgeStream),
+                        detail,
+                    ).joinToString("\n")
+                } else {
+                    listOfNotNull(
+                        format,
+                        video?.extraNote?.takeIf { it.isNotBlank() },
+                    ).joinToString(" · ")
+                }
                 if (note.isBlank()) {
                     binding.urlNote.isVisible = false
                 } else {
                     binding.urlNote.text = note
                     binding.urlNote.isVisible = true
                 }
-                val audio = if (server != null && AnimeBridgeServerMapper.displayName(server) == null) {
+                val audio = if (server != null && !AnimeBridgeServerMapper.isStream(server)) {
                     (splitServerTitle(server.name).third?.uppercase())
                         ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
                 } else null
@@ -1510,6 +1603,60 @@ class AnimeServersActivity : AppCompatActivity() {
                     0,
                 )
             }
+
+            fun bindInfo(row: Row.Info) {
+                GlassPill.applyServerRowCard(binding.root, cornerRadiusDp = 14f, showTopRim = true)
+                binding.urlQuality.text = row.label
+                binding.urlQuality.textSize = 15f
+                binding.urlQuality.alpha = 1f
+                binding.urlQuality.setTextColor(
+                    binding.root.context.getThemeColor(
+                        com.google.android.material.R.attr.colorSecondary
+                    )
+                )
+                val note = multiLineNote(row.details)
+                if (note.isNullOrBlank()) {
+                    binding.urlNote.isVisible = false
+                } else {
+                    binding.urlNote.text = note
+                    binding.urlNote.isVisible = true
+                }
+                binding.urlAudio.isVisible = false
+                binding.urlTag.isVisible = false
+                binding.urlSize.isVisible = false
+                binding.urlSub.isVisible = false
+                binding.urlDownload.isVisible = false
+                val url = row.externalUrl
+                if (url != null) {
+                    binding.root.setOnClickListener {
+                        runCatching {
+                            startActivity(
+                                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            )
+                        }
+                    }
+                    itemView.isFocusable = true
+                    itemView.isClickable = true
+                } else {
+                    binding.root.setOnClickListener(null)
+                    itemView.isFocusable = false
+                    itemView.isClickable = false
+                }
+                setRowMargins(12, 4)
+            }
+        }
+
+        private inner class SubheadVH(val binding: ItemTmdbStreamsSubheadBinding) :
+            RecyclerView.ViewHolder(binding.root) {
+
+            init {
+                itemView.isFocusable = false
+                itemView.isClickable = false
+            }
+
+            fun bind(text: String) {
+                binding.tmdbStreamsSubHead.text = text
+            }
         }
 
         private inner class TextVH(val binding: ItemTmdbStreamsTextBinding) :
@@ -1526,8 +1673,15 @@ class AnimeServersActivity : AppCompatActivity() {
         }
     }
 
-    private fun stateSummary(state: GroupState.Ready): String =
-        if (state.servers.isEmpty()) "Empty" else "${state.servers.size} servers"
+    private fun stateSummary(state: GroupState.Ready): String {
+        if (state.servers.isEmpty()) return "Empty"
+        val infos = state.servers.count { AnimeBridgeServerMapper.isInfo(it) }
+        val links = state.servers.size - infos
+        return buildList {
+            if (links > 0) add("$links servers")
+            if (infos > 0) add("$infos info")
+        }.joinToString(" · ")
+    }
 
     private fun sizeLabel(sizeMb: Double): String =
         if (sizeMb >= 1024) {
