@@ -1,8 +1,15 @@
 package ani.sanin.parsers
 
 import ani.sanin.FileUrl
+import ani.sanin.Mapper
 import eu.kanade.tachiyomi.animesource.model.TimeStamp
 import eu.kanade.tachiyomi.animesource.model.Track
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import java.io.Serializable
 
 abstract class VideoExtractor : Serializable {
@@ -15,7 +22,8 @@ abstract class VideoExtractor : Serializable {
     val isPreferred: Boolean
         get() = server.video?.preferred == true ||
             videos.any { it.preferred } ||
-            server.extraVideos?.any { it.preferred } == true
+            server.extraVideos?.any { it.preferred } == true ||
+            server.preloadedVideos?.any { it.preferred } == true
 
     abstract suspend fun extract(): VideoContainer
 
@@ -34,17 +42,103 @@ abstract class VideoExtractor : Serializable {
     open suspend fun onVideoStopped(video: Video?) {}
 }
 
+class PreloadedVideoExtractor(override val server: VideoServer) : VideoExtractor() {
+    override suspend fun extract(): VideoContainer {
+        val videos = server.preloadedVideos.orEmpty()
+        val data = server.extraData.orEmpty()
+        return VideoContainer(
+            videos = videos,
+            subtitles = parseAnimeSubtitles(data["subtitles"]),
+            audioTracks = parseAnimeTracks(data["audioTracks"]),
+        )
+    }
+}
+
+internal fun encodeAnimeSubtitles(subtitles: List<Subtitle>): String? {
+    if (subtitles.isEmpty()) return null
+    return buildJsonArray {
+        subtitles.forEach { subtitle ->
+            add(buildJsonObject {
+                put("url", JsonPrimitive(subtitle.file.url))
+                put("language", JsonPrimitive(subtitle.language))
+                put("type", JsonPrimitive(when (subtitle.type) {
+                    SubtitleType.ASS -> "ass"
+                    SubtitleType.SRT -> "srt"
+                    else -> "vtt"
+                }))
+                if (subtitle.file.headers.isNotEmpty()) {
+                    put("headers", buildJsonObject {
+                        subtitle.file.headers.forEach { (key, value) -> put(key, JsonPrimitive(value)) }
+                    })
+                }
+            })
+        }
+    }.toString()
+}
+
+internal fun parseAnimeSubtitles(jsonStr: String?): List<Subtitle> {
+    if (jsonStr.isNullOrBlank()) return emptyList()
+    return try {
+        val array = Mapper.json.parseToJsonElement(jsonStr) as? JsonArray ?: return emptyList()
+        array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val url = (obj["url"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            val language = (obj["language"] as? JsonPrimitive)?.contentOrNull ?: "Unknown"
+            val type = when ((obj["type"] as? JsonPrimitive)?.contentOrNull?.lowercase()) {
+                "ass", "ssa" -> SubtitleType.ASS
+                "srt" -> SubtitleType.SRT
+                else -> SubtitleType.VTT
+            }
+            val headers = (obj["headers"] as? JsonObject)?.entries?.mapNotNull { (key, value) ->
+                (value as? JsonPrimitive)?.contentOrNull?.let { key to it }
+            }?.toMap().orEmpty()
+            Subtitle(language = language, file = FileUrl(url, headers), type = type)
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+internal fun encodeAnimeTracks(tracks: List<Track>): String? {
+    if (tracks.isEmpty()) return null
+    return buildJsonArray {
+        tracks.forEach { track ->
+            add(buildJsonObject {
+                put("url", JsonPrimitive(track.url))
+                put("lang", JsonPrimitive(track.lang))
+            })
+        }
+    }.toString()
+}
+
+internal fun parseAnimeTracks(jsonStr: String?): List<Track> {
+    if (jsonStr.isNullOrBlank()) return emptyList()
+    return try {
+        val array = Mapper.json.parseToJsonElement(jsonStr) as? JsonArray ?: return emptyList()
+        array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val url = (obj["url"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            val lang = (obj["lang"] as? JsonPrimitive)?.contentOrNull ?: "Unknown"
+            Track(url = url, lang = lang)
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
 data class VideoServer(
     val name: String,
     val embed: FileUrl,
     val extraData: Map<String, String>? = null,
     val video: eu.kanade.tachiyomi.animesource.model.Video? = null,
     val offline: Boolean = false,
-    val extraVideos: List<eu.kanade.tachiyomi.animesource.model.Video>? = null
+    val extraVideos: List<eu.kanade.tachiyomi.animesource.model.Video>? = null,
+    val preloadedVideos: List<Video>? = null
 ) : Serializable {
 
     val isPreferred: Boolean
-        get() = video?.preferred == true || extraVideos?.any { it.preferred } == true
+        get() = video?.preferred == true || extraVideos?.any { it.preferred } == true ||
+            preloadedVideos?.any { it.preferred } == true
 
     constructor(name: String, embedUrl: String, extraData: Map<String, String>? = null)
             : this(name, FileUrl(embedUrl), extraData)

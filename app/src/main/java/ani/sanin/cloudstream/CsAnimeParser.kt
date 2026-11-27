@@ -2,9 +2,9 @@ package ani.sanin.cloudstream
 
 import android.content.Context
 import ani.sanin.FileUrl
+import ani.sanin.bridge.AnimeBridgeServerMapper
 import ani.sanin.parsers.AnimeParser
 import ani.sanin.parsers.Episode as AnimeEpisode
-import ani.sanin.parsers.NativeVideoExtractor
 import ani.sanin.parsers.ShowResponse
 import ani.sanin.parsers.VideoExtractor
 import ani.sanin.parsers.VideoServer
@@ -108,29 +108,18 @@ class CsAnimeParser(
         }
 
         val subtitleData = CsAnimeProtocol.encodeSubtitles(subtitles.map { it.url to it.lang })
-        return links.filter { link ->
+        val playable = TmdbStreamResolver.extractorLinksToPlayableLinks(links.filter { link ->
             link.type != ExtractorLinkType.TORRENT && link.type != ExtractorLinkType.MAGNET
-        }.map { extractorLink ->
-            val extraData = CsAnimeProtocol.decodeMap(extractorLink.extractorData).toMutableMap()
-            if (subtitleData != null && !extraData.containsKey("subtitles")) {
-                extraData["subtitles"] = subtitleData
+        })
+        return AnimeBridgeServerMapper.fromPlayableLinks(playable).map { server ->
+            val data = server.extraData?.toMutableMap() ?: mutableMapOf()
+            if (subtitleData != null && !data.containsKey("subtitles")) {
+                data["subtitles"] = subtitleData
             }
-            if (extractorLink.referer.isNotBlank() && !extraData.containsKey("referer")) {
-                extraData["referer"] = extractorLink.referer
-            }
-            when (extractorLink.type) {
-                ExtractorLinkType.M3U8 -> if (!extraData.containsKey("videoType")) extraData["videoType"] = "m3u8"
-                ExtractorLinkType.DASH -> if (!extraData.containsKey("videoType")) extraData["videoType"] = "dash"
-                else -> Unit
-            }
-            VideoServer(
-                name = extractorLink.name.ifBlank { extractorLink.source.ifBlank { name } },
-                embed = FileUrl(extractorLink.url, extractorLink.getAllHeaders()),
-                extraData = extraData
-            )
+            server.copy(extraData = data)
         }
     }
 
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor? =
-        NativeVideoExtractor(server)
+        AnimeBridgeServerMapper.extractor(server)
 }

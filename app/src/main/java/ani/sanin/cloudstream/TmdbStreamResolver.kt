@@ -452,22 +452,7 @@ object TmdbStreamResolver {
         if (!ok || links.isEmpty()) {
             return StreamResult.Error("${api.name}: loadLinks ok=$ok links=${links.size}")
         }
-        val seen = HashSet<String>()
-        val playable = links.mapNotNull { link ->
-            val url = link.url
-            if (url.isBlank() || !seen.add(url)) return@mapNotNull null
-            val quality = Qualities.getStringByInt(link.quality).ifBlank { link.name }
-            val drmInfo = drmForLink(link)
-            StreamResult.PlayableLink(
-                label = quality,
-                url = url,
-                referer = link.referer.takeIf { it.isNotBlank() },
-                headers = link.headers,
-                drm = drmInfo,
-                audioTracks = link.audioTracks,
-                host = link.name,
-            )
-        }
+        val playable = extractorLinksToPlayableLinks(links)
         return StreamResult.Success(playable, load.name)
     }
 
@@ -592,22 +577,7 @@ object TmdbStreamResolver {
             return ApiResolve(emptyList(), "${api.name}: loadLinks ok=$ok links=${links.size}")
         }
 
-        val seen = HashSet<String>()
-        val playable = links.mapNotNull { link ->
-            val url = link.url
-            if (url.isBlank() || !seen.add(url)) return@mapNotNull null
-            val quality = Qualities.getStringByInt(link.quality).ifBlank { link.name }
-            val drmInfo = drmForLink(link)
-            StreamResult.PlayableLink(
-                label = quality,
-                url = url,
-                referer = link.referer.takeIf { it.isNotBlank() },
-                headers = link.headers,
-                drm = drmInfo,
-                audioTracks = link.audioTracks,
-                host = link.name,
-            )
-        }
+        val playable = extractorLinksToPlayableLinks(links)
         return ApiResolve(playable, "ok", match?.name)
     }
 
@@ -707,6 +677,35 @@ object TmdbStreamResolver {
 
     fun invalidateLinks(mediaId: Int, sourceName: String) {
         linksCache.keys.removeAll { it.startsWith("$mediaId|$sourceName|") }
+    }
+
+    fun extractorLinksToPlayableLinks(links: List<ExtractorLink>): List<StreamResult.PlayableLink> {
+        val seen = HashSet<String>()
+        return links.mapNotNull { link ->
+            val url = link.url
+            if (url.isBlank() || !seen.add(url)) return@mapNotNull null
+            val quality = Qualities.getStringByInt(link.quality).ifBlank { link.name }
+            val metadata = CsAnimeProtocol.decodeMap(link.extractorData).toMutableMap().apply {
+                if (!containsKey("quality")) put("quality", quality)
+                if (!containsKey("name") && link.name.isNotBlank()) put("name", link.name)
+                if (!containsKey("source") && link.source.isNotBlank()) put("source", link.source)
+                if (!containsKey("type")) put("type", link.type.name)
+            }
+            val details = metadata.entries.sortedBy { it.key }
+                .joinToString(" · ") { "${it.key}=${it.value}" }
+                .takeIf { it.isNotBlank() }
+            StreamResult.PlayableLink(
+                label = quality,
+                url = url,
+                referer = link.referer.takeIf { it.isNotBlank() },
+                headers = link.headers,
+                drm = drmForLink(link),
+                audioTracks = link.audioTracks,
+                host = link.name,
+                details = details,
+                metadata = metadata,
+            )
+        }
     }
 
     private fun qualityFromLabel(label: String): Int? =
@@ -810,11 +809,16 @@ object TmdbStreamResolver {
                     format = videoTypeFor(link.url),
                     file = FileUrl(link.url, headers),
                     drm = link.drm,
+                    extraNote = link.details,
                 )
                 val audioTracks = link.audioTracks.map { Track(url = it.url, lang = audioLanguage(it)) }
                 val subtitles = nuvioSubtitles(link.subtitles)
+                val serverData = buildMap {
+                    put("quality", name)
+                    link.details?.takeIf { it.isNotBlank() }?.let { put("details", it) }
+                }
                 object : VideoExtractor() {
-                    override val server = VideoServer(name, "", mapOf("quality" to name))
+                    override val server = VideoServer(name, "", serverData)
                     override suspend fun extract() =
                         VideoContainer(videos = listOf(video), subtitles = subtitles, audioTracks = audioTracks)
                 }.apply {
@@ -843,6 +847,7 @@ object TmdbStreamResolver {
                         format = videoTypeFor(link.url),
                         file = FileUrl(link.url, headers),
                         drm = link.drm,
+                        extraNote = link.details,
                     )
                 }
                 val audioTracks = groupLinks.flatMap { link ->
@@ -850,11 +855,15 @@ object TmdbStreamResolver {
                 }
                 val qualityMeta = groupLinks.mapNotNull { qualityFromLabel(it.label) }
                     .distinct().sortedDescending().joinToString(" · ") { "${it}p" }
+                val detailsMeta = groupLinks.mapNotNull { it.details?.takeIf { text -> text.isNotBlank() } }
+                    .distinct().joinToString(" · ")
                 val subtitles = groupLinks.flatMap { nuvioSubtitles(it.subtitles) }
+                val serverData = buildMap {
+                    put("quality", qualityMeta.ifBlank { name })
+                    if (detailsMeta.isNotBlank()) put("details", detailsMeta)
+                }
                 object : VideoExtractor() {
-                    override val server = VideoServer(
-                        name, "", mapOf("quality" to qualityMeta.ifBlank { name })
-                    )
+                    override val server = VideoServer(name, "", serverData)
                     override suspend fun extract() =
                         VideoContainer(videos = videos, subtitles = subtitles, audioTracks = audioTracks)
                 }.apply {

@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.bridge.AnimeBridgeServerMapper
 import ani.sanin.cloudstream.CsInstalledSource
 import ani.sanin.cloudstream.CsRepos
 import ani.sanin.cloudstream.Rpdb
@@ -1124,11 +1125,12 @@ class ServerRailController(
                         if (group.extractionDone && !hasVideos) {
                             return@forEach
                         }
+                        val bridgeName = AnimeBridgeServerMapper.displayName(server)
                         val (_, _, parsedAudio) = splitServerTitle(server.name)
                         rows.add(
                             Row.Header(
-                                cleanServerName(server.name),
-                                parsedAudio?.uppercase()
+                                bridgeName ?: cleanServerName(server.name),
+                                if (bridgeName != null) null else parsedAudio?.uppercase()
                                     ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }
                                         ?.uppercase(),
                             )
@@ -2020,7 +2022,7 @@ class ServerRailController(
                 b.urlTag.alpha = 1f
                 b.urlTag.isVisible = true
             } else {
-                val audio = if (row.server != null) {
+                val audio = if (row.server != null && AnimeBridgeServerMapper.displayName(row.server) == null) {
                     splitServerTitle(row.server.name).third?.uppercase()
                         ?: row.server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
                 } else null

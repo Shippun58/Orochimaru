@@ -62,7 +62,7 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
 
         }
 
-        val subtitles = parseSubtitles(server.extraData?.get("subtitles"))
+        val subtitles = parseAnimeSubtitles(server.extraData?.get("subtitles"))
         val timestamps = parseTimestamps(server.extraData)
 
         return VideoContainer(videos, subtitles, timestamps = timestamps)
@@ -271,29 +271,5 @@ class NativeVideoExtractor(override val server: VideoServer) : VideoExtractor() 
 
     private fun warmGet(url: String, headers: Map<String, String>) {
         okHttpClient.newCall(buildRequest(url, headers)).execute().use { }
-    }
-
-    private fun parseSubtitles(jsonStr: String?): List<Subtitle> {
-        if (jsonStr.isNullOrBlank()) return emptyList()
-        return try {
-            val array = Mapper.json.parseToJsonElement(jsonStr) as? JsonArray ?: return emptyList()
-            array.mapNotNull { element ->
-                val obj = element as? JsonObject ?: return@mapNotNull null
-                val subUrl = (obj["url"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
-                val lang = (obj["language"] as? JsonPrimitive)?.contentOrNull ?: "Unknown"
-                val typeStr = (obj["type"] as? JsonPrimitive)?.contentOrNull
-                val type = when (typeStr?.lowercase()) {
-                    "ass", "ssa" -> SubtitleType.ASS
-                    "srt" -> SubtitleType.SRT
-                    else -> SubtitleType.VTT
-                }
-                val headers = (obj["headers"] as? JsonObject)?.entries?.mapNotNull { (key, value) ->
-                    (value as? JsonPrimitive)?.contentOrNull?.let { key to it }
-                }?.toMap().orEmpty()
-                Subtitle(language = lang, file = FileUrl(subUrl, headers), type = type)
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
     }
 }

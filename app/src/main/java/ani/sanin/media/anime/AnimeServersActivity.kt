@@ -15,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import ani.sanin.R
+import ani.sanin.bridge.AnimeBridgeServerMapper
 import ani.sanin.download.DownloadManager
 import ani.sanin.download.enqueue
 import ani.sanin.ui.GlassPill
@@ -619,6 +620,7 @@ class AnimeServersActivity : AppCompatActivity() {
                                             group, ex, idx,
                                             isFirst = idx == 0,
                                             isLast = idx == ex.videos.lastIndex,
+                                            server = server,
                                         )
                                     )
                                 }
@@ -1411,8 +1413,9 @@ class AnimeServersActivity : AppCompatActivity() {
 
             fun bindServer(group: Group, server: VideoServer, isFirstServer: Boolean) {
                 binding.root.background = null
+                val bridgeName = AnimeBridgeServerMapper.displayName(server)
                 val (cleanName, _, parsedAudio) = splitServerTitle(server.name)
-                binding.urlQuality.text = cleanName.ifBlank { server.name }
+                binding.urlQuality.text = bridgeName ?: cleanName.ifBlank { server.name }
                 binding.urlQuality.textSize = 14f
                 binding.urlQuality.alpha = 0.6f
                 binding.urlQuality.setTextColor(
@@ -1420,7 +1423,7 @@ class AnimeServersActivity : AppCompatActivity() {
                         com.google.android.material.R.attr.colorOnSurface
                     )
                 )
-                val audio = parsedAudio?.uppercase()
+                val audio = if (bridgeName != null) null else parsedAudio?.uppercase()
                     ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
                 binding.urlNote.isVisible = false
                 binding.urlAudio.isVisible = false
@@ -1475,7 +1478,7 @@ class AnimeServersActivity : AppCompatActivity() {
                     binding.urlNote.text = note
                     binding.urlNote.isVisible = true
                 }
-                val audio = if (server != null) {
+                val audio = if (server != null && AnimeBridgeServerMapper.displayName(server) == null) {
                     (splitServerTitle(server.name).third?.uppercase())
                         ?: server.extraData?.get("audio")?.takeIf { it.isNotBlank() }?.uppercase()
                 } else null
