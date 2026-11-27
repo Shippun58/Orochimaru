@@ -1,5 +1,6 @@
 package ani.sanin.parsers
 
+import ani.sanin.App
 import ani.sanin.Lazier
 import ani.sanin.bridge.AnimeBridgeStore
 import ani.sanin.bridge.BridgedNuvioAnimeParser
@@ -27,6 +28,7 @@ object AnimeSources : WatchSources() {
     private var pluginEnglishSaveNames: Set<String> = emptySet()
     private var lastExtensions: List<AnimeExtension.Installed> = emptyList()
     private var bridgeSnapshot: Set<String> = emptySet()
+    private var cloudStreamParserCount = 0
 
     val allNativeParsers by lazy {
         listOf(
@@ -113,6 +115,7 @@ object AnimeSources : WatchSources() {
         val extParsers = createParsersFromExtensions(extensions)
         val (csParsers, csLaziers) = createParsersFromCsRepos()
         val (bridgeParsers, bridgeLaziers) = createParsersFromBridgedProviders()
+        cloudStreamParserCount = csParsers.size
         pluginNames = csLaziers.map { it.name }.toSet()
         bridgeNames = bridgeLaziers.map { it.name }.toSet()
         pluginEnglishSaveNames = (
@@ -152,10 +155,21 @@ object AnimeSources : WatchSources() {
     }
 
     fun refreshIfBridgeChanged(): Boolean {
-        if (!isInitialized || AnimeBridgeStore.snapshot() == bridgeSnapshot) return false
+        if (!isInitialized) return false
+        val bridgeChanged = AnimeBridgeStore.snapshot() != bridgeSnapshot
+        val needsCloudStreamReload = cloudStreamParserCount == 0 && hasBridgedCloudStream()
+        if (!bridgeChanged && !needsCloudStreamReload) return false
         rebuildList(lastExtensions)
         return true
     }
+
+    private fun hasBridgedCloudStream(): Boolean {
+        val context = sourcesContext() ?: return false
+        return runCatching { CsRepos.installed(context) }.getOrDefault(emptyList())
+            .any { AnimeBridgeStore.isBridged(AnimeBridgeStore.CLOUDSTREAM, it.id.substringBefore('#')) }
+    }
+
+    private fun sourcesContext() = currContext() ?: App.instance
 
     fun performReorderAnimeSources() {
         if (refreshIfBridgeChanged()) return
@@ -176,7 +190,7 @@ object AnimeSources : WatchSources() {
     }
 
     private fun createParsersFromCsRepos(): Pair<List<CsAnimeParser>, List<Lazier<BaseParser>>> {
-        val context = currContext() ?: return emptyList<CsAnimeParser>() to emptyList()
+        val context = sourcesContext() ?: return emptyList<CsAnimeParser>() to emptyList()
         val parsers = CsRepos.installed(context)
             .filter { AnimeBridgeStore.isBridged(AnimeBridgeStore.CLOUDSTREAM, it.id.substringBefore('#')) }
             .flatMap { source ->
@@ -188,7 +202,7 @@ object AnimeSources : WatchSources() {
     }
 
     private fun createParsersFromBridgedProviders(): Pair<List<BaseParser>, List<Lazier<BaseParser>>> {
-        val context = currContext() ?: return emptyList<BaseParser>() to emptyList()
+        val context = sourcesContext() ?: return emptyList<BaseParser>() to emptyList()
         val nuvioParsers = NuvioRepository.installed(context)
             .filter {
                 it.enabled && AnimeBridgeStore.isBridged(
