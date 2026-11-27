@@ -1,12 +1,15 @@
 package ani.sanin.settings
 
 import android.app.NotificationManager
-import android.view.MotionEvent
 import android.content.Context
-import android.graphics.Color
+import android.content.Intent
+import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -15,38 +18,53 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import ani.sanin.R
+import ani.sanin.bridge.AnimeBridgeStore
+import ani.sanin.bridge.AnimeBridgeUi
+import ani.sanin.cloudstream.CloudStreamSettingsActivity
+import ani.sanin.cloudstream.CsInstalledSource
+import ani.sanin.cloudstream.CsRepos
 import ani.sanin.connections.crashlytics.CrashlyticsInterface
 import ani.sanin.databinding.FragmentExtensionsBinding
 import ani.sanin.others.LanguageMapper.Companion.getLanguageName
+import ani.sanin.others.svg.SvgImageLoader
 import ani.sanin.parsers.AnimeSources
+import ani.sanin.plugins.nuvio.NUVIO_WATERMARK_URL
+import ani.sanin.plugins.nuvio.NuvioRepository
+import ani.sanin.plugins.nuvio.NuvioScraper
+import ani.sanin.plugins.nuvio.NuvioSources
+import ani.sanin.plugins.nuvio.NuvioStorage
+import ani.sanin.plugins.nuvio.NuvioStoredScraper
+import ani.sanin.plugins.nuvio.runtime.NuvioRuntime
+import ani.sanin.plugins.nuvio.showNuvioSettings
 import ani.sanin.settings.extensionprefs.AnimeSourcePreferencesFragment
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.snackString
+import ani.sanin.util.FocusEffectUtil
 import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
-import ani.sanin.util.FocusEffectUtil
-
+import com.bumptech.glide.Glide
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputLayout
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import rx.android.schedulers.AndroidSchedulers
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -58,127 +76,14 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
     private lateinit var extensionsRecyclerView: RecyclerView
     private val skipIcons: Boolean = PrefManager.getVal(PrefName.SkipExtensionIcons)
     private val animeExtensionManager: AnimeExtensionManager = Injekt.get()
+    private var installedExtensions: List<AnimeExtension.Installed> = emptyList()
+    private var allRows: List<InstalledRow> = emptyList()
+    private var query = ""
+    private var rowLoadJob: Job? = null
     private val extensionsAdapter = AnimeExtensionsAdapter(
-        { pkg ->
-            val name = pkg.name
-            val changeUIVisibility: (Boolean) -> Unit = { show ->
-                val activity = requireActivity() as ExtensionsActivity
-                activity.findViewById<ViewPager2>(R.id.viewPager).isVisible = show
-                activity.findViewById<TabLayout>(R.id.tabLayout).isVisible = show
-                activity.findViewById<TextInputLayout>(R.id.searchView).isVisible = show
-                activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
-            }
-            var itemSelected = false
-            val allSettings = pkg.sources.filterIsInstance<ConfigurableAnimeSource>()
-            if (allSettings.isNotEmpty()) {
-                var selectedSetting = allSettings[0]
-                if (allSettings.size > 1) {
-                    val names = allSettings.map { getLanguageName(it.lang) }
-                        .toTypedArray()
-                    var selectedIndex = 0
-                    requireContext().customAlertDialog().apply {
-                        setTitle("Select a Source")
-                        singleChoiceItems(names, selectedIndex) { which ->
-                            itemSelected = true
-                            selectedIndex = which
-                            selectedSetting = allSettings[selectedIndex]
-
-                            val fragment =
-                                AnimeSourcePreferencesFragment().getInstance(selectedSetting) {
-                                    changeUIVisibility(true)
-                                }
-                            parentFragmentManager.beginTransaction()
-                                .apply { if (AnimUtils.enabled(PrefName.TransitionAnimations)) setCustomAnimations(R.anim.slide_up, R.anim.slide_down) }
-                                .replace(R.id.fragmentExtensionsContainer, fragment)
-                                .addToBackStack(null)
-                                .commit()
-                        }
-                        onDismiss {
-                            if (!itemSelected) {
-                                changeUIVisibility(true)
-                            }
-                        }
-                        show()
-                    }
-                } else {
-
-                    val fragment =
-                        AnimeSourcePreferencesFragment().getInstance(selectedSetting) {
-                            changeUIVisibility(true)
-                        }
-                    parentFragmentManager.beginTransaction()
-                        .apply { if (AnimUtils.enabled(PrefName.TransitionAnimations)) setCustomAnimations(R.anim.slide_up, R.anim.slide_down) }
-                        .replace(R.id.fragmentExtensionsContainer, fragment)
-                        .addToBackStack(null)
-                        .commit()
-
-                }
-
-                changeUIVisibility(false)
-            } else {
-                Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT)
-                    .show()
-            }
-        },
-        { pkg ->
-            if (isAdded) {
-                animeExtensionManager.uninstallExtension(pkg.pkgName)
-                snackString("Extension uninstalled")
-            }
-        }, { pkg ->
-            if (isAdded) {
-                val context = requireContext()
-                val notificationManager =
-                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-                if (pkg.hasUpdate) {
-                    animeExtensionManager.updateExtension(pkg)
-                        .observeOn(AndroidSchedulers.mainThread())
-                        .subscribe(
-                            { installStep ->
-                                val builder = NotificationCompat.Builder(
-                                    context,
-                                    Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                )
-                                    .setSmallIcon(R.drawable.ic_round_sync_24)
-                                    .setContentTitle("Updating extension")
-                                    .setContentText("Step: $installStep")
-                                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                                notificationManager.notify(1, builder.build())
-                            },
-                            { error ->
-                                Injekt.get<CrashlyticsInterface>().logException(error)
-                                Logger.log(error)
-                                val builder = NotificationCompat.Builder(
-                                    context,
-                                    Notifications.CHANNEL_DOWNLOADER_ERROR
-                                )
-                                    .setSmallIcon(R.drawable.ic_round_info_24)
-                                    .setContentTitle("Update failed: ${error.message}")
-                                    .setContentText("Error: ${error.message}")
-                                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                                notificationManager.notify(1, builder.build())
-                                snackString("Update failed: ${error.message}")
-                            },
-                            {
-                                val builder = NotificationCompat.Builder(
-                                    context,
-                                    Notifications.CHANNEL_DOWNLOADER_PROGRESS
-                                )
-                                    .setSmallIcon(R.drawable.ic_circle_check)
-                                    .setContentTitle("Update complete")
-                                    .setContentText("The extension has been successfully updated.")
-                                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                                notificationManager.notify(1, builder.build())
-                                snackString("Extension updated")
-                            }
-                        )
-                } else {
-                    snackString("No update available")
-                }
-
-            }
-        }, skipIcons
+        onUpdateClicked = { row -> updateRow(row) },
+        onOverflowClicked = { anchor, row -> showRowMenu(anchor, row) },
+        skipIcons = skipIcons
     )
 
     override fun onCreateView(
@@ -236,12 +141,6 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
         touchHelper.attachToRecyclerView(extensionsRecyclerView)
         extensionsAdapter.itemTouchHelper = touchHelper
         extensionsAdapter.reorderMessage = binding.reorderMessage
-
-        lifecycleScope.launch {
-            animeExtensionManager.installedExtensionsFlow.collect { extensions ->
-                extensionsAdapter.updateData(sortToAnimeSourcesList(extensions))
-            }
-        }
         return binding.root
     }
 
@@ -254,36 +153,413 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
         }
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backDisarm)
         extensionsAdapter.onDragModeChanged = { armed -> backDisarm.isEnabled = armed }
+        viewLifecycleOwner.lifecycleScope.launch {
+            animeExtensionManager.installedExtensionsFlow.collect { extensions ->
+                refreshRows(extensions)
+            }
+        }
     }
 
-    private fun sortToAnimeSourcesList(inpt: List<AnimeExtension.Installed>): List<AnimeExtension.Installed> {
-        val sourcesMap = inpt.associateBy { it.name }
-        val orderedSources = AnimeSources.pinnedAnimeSources.mapNotNull { name ->
-            sourcesMap[name]
+    override fun onResume() {
+        super.onResume()
+        if (_binding != null) {
+            refreshRows(animeExtensionManager.installedExtensionsFlow.value)
         }
-        return orderedSources + inpt.filter { !AnimeSources.pinnedAnimeSources.contains(it.name) }
+    }
+
+    private fun refreshRows(extensions: List<AnimeExtension.Installed> = installedExtensions) {
+        installedExtensions = extensions
+        if (!isAdded || view == null) return
+        val context = context ?: return
+        rowLoadJob?.cancel()
+        rowLoadJob = viewLifecycleOwner.lifecycleScope.launch {
+            val rows = withContext(Dispatchers.IO) { buildRows(context, extensions) }
+            allRows = sortRows(rows)
+            applyFilter()
+        }
+    }
+
+    private fun buildRows(
+        context: Context,
+        extensions: List<AnimeExtension.Installed>
+    ): List<InstalledRow> {
+        val extensionRows = extensions.map { extension ->
+            InstalledRow(
+                key = "extension:${extension.pkgName}",
+                name = extension.name,
+                meta = extension.versionText(),
+                icon = extension.icon,
+                iconUrl = null,
+                extension = extension
+            )
+        }
+        val cloudStreamRows = CsRepos.installed(context)
+            .filter {
+                AnimeBridgeStore.isBridged(AnimeBridgeStore.CLOUDSTREAM, it.id)
+            }
+            .map { source ->
+                InstalledRow(
+                    key = "cloudstream:${source.id}",
+                    name = source.name,
+                    meta = "v${source.version} • ${source.type} • ${source.lang}",
+                    icon = null,
+                    iconUrl = source.iconUrl,
+                    cloudStream = source
+                )
+            }
+        val nuvioRows = NuvioRepository.installed(context)
+            .filter {
+                it.enabled && AnimeBridgeStore.isBridged(
+                    AnimeBridgeStore.NUVIO,
+                    NuvioSources.sourceId(it)
+                )
+            }
+            .map { scraper ->
+                val logo = scraper.logo
+                InstalledRow(
+                    key = "nuvio:${NuvioSources.sourceId(scraper)}",
+                    name = scraper.name,
+                    meta = scraper.versionText(),
+                    icon = null,
+                    iconUrl = if (logo.isNullOrBlank()) {
+                        NUVIO_WATERMARK_URL
+                    } else {
+                        NuvioRepository.sourceUrl(scraper.repositoryUrl, logo)
+                    },
+                    nuvio = scraper
+                )
+            }
+        val stremioRows = StremioAddonManager.installed()
+            .filter { AnimeBridgeStore.isBridged(AnimeBridgeStore.STREMIO, it.transportUrl) }
+            .map { addon ->
+                InstalledRow(
+                    key = "stremio:${addon.transportUrl}",
+                    name = addon.manifest.name,
+                    meta = addon.versionText(),
+                    icon = null,
+                    iconUrl = addon.manifest.logo,
+                    stremio = addon
+                )
+            }
+        return extensionRows + cloudStreamRows + nuvioRows + stremioRows
+    }
+
+    private fun sortRows(rows: List<InstalledRow>): List<InstalledRow> {
+        val pinned = AnimeSources.pinnedAnimeSources
+        val ordered = ArrayList<InstalledRow>(rows.size)
+        val used = HashSet<String>()
+        pinned.forEach { name ->
+            rows.filter { it.name == name && it.key !in used }.forEach { row ->
+                ordered.add(row)
+                used.add(row.key)
+            }
+        }
+        rows.filter { !it.bridged && it.key !in used }.forEach { row ->
+            ordered.add(row)
+            used.add(row.key)
+        }
+        rows.filter { it.bridged && it.key !in used }.forEach { row ->
+            ordered.add(row)
+            used.add(row.key)
+        }
+        return ordered
+    }
+
+    private fun applyFilter() {
+        if (_binding == null) return
+        extensionsAdapter.updateData(allRows.filter { it.matches(query) })
+    }
+
+    private fun showRowMenu(anchor: View, row: InstalledRow) {
+        val popup = PopupMenu(anchor.context, anchor)
+        popup.setForceShowIcon(true)
+        popup.menu.add(Menu.NONE, MENU_SETTINGS, 0, "Settings")
+            .setIcon(R.drawable.ic_round_settings_24)
+        popup.menu.add(Menu.NONE, MENU_UNINSTALL, 1, "Uninstall")
+            .setIcon(R.drawable.ic_round_delete_24)
+        if (row.bridged) {
+            popup.menu.add(Menu.NONE, MENU_REMOVE_BRIDGE, 2, "Remove bridge")
+                .setIcon(R.drawable.ic_places_bridge)
+        }
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MENU_SETTINGS -> openSettings(row)
+                MENU_UNINSTALL -> uninstall(row)
+                MENU_REMOVE_BRIDGE -> removeBridge(row)
+                else -> return@setOnMenuItemClickListener false
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun openSettings(row: InstalledRow) {
+        val extension = row.extension
+        if (extension != null) {
+            openExtensionSettings(extension)
+            return
+        }
+        val cloudStream = row.cloudStream
+        if (cloudStream != null) {
+            startActivity(CloudStreamSettingsActivity.intent(requireContext(), cloudStream.id))
+            return
+        }
+        val nuvio = row.nuvio
+        if (nuvio != null) {
+            openNuvioSettings(nuvio)
+            return
+        }
+        val stremio = row.stremio
+        if (stremio != null) {
+            openStremioSettings(stremio)
+        }
+    }
+
+    private fun openExtensionSettings(pkg: AnimeExtension.Installed) {
+        val changeUIVisibility: (Boolean) -> Unit = { show ->
+            val activity = requireActivity() as ExtensionsActivity
+            activity.findViewById<ViewPager2>(R.id.viewPager).isVisible = show
+            activity.findViewById<TabLayout>(R.id.tabLayout).isVisible = show
+            activity.findViewById<TextInputLayout>(R.id.searchView).isVisible = show
+            activity.findViewById<FrameLayout>(R.id.fragmentExtensionsContainer).isGone = show
+        }
+        var itemSelected = false
+        val allSettings = pkg.sources.filterIsInstance<ConfigurableAnimeSource>()
+        if (allSettings.isNotEmpty()) {
+            var selectedSetting = allSettings[0]
+            if (allSettings.size > 1) {
+                val names = allSettings.map { getLanguageName(it.lang) }
+                    .toTypedArray()
+                var selectedIndex = 0
+                requireContext().customAlertDialog().apply {
+                    setTitle("Select a Source")
+                    singleChoiceItems(names, selectedIndex) { which ->
+                        itemSelected = true
+                        selectedIndex = which
+                        selectedSetting = allSettings[selectedIndex]
+
+                        val fragment =
+                            AnimeSourcePreferencesFragment().getInstance(selectedSetting) {
+                                changeUIVisibility(true)
+                            }
+                        parentFragmentManager.beginTransaction()
+                            .apply {
+                                if (AnimUtils.enabled(PrefName.TransitionAnimations)) {
+                                    setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+                                }
+                            }
+                            .replace(R.id.fragmentExtensionsContainer, fragment)
+                            .addToBackStack(null)
+                            .commit()
+                    }
+                    onDismiss {
+                        if (!itemSelected) {
+                            changeUIVisibility(true)
+                        }
+                    }
+                    show()
+                }
+            } else {
+                val fragment =
+                    AnimeSourcePreferencesFragment().getInstance(selectedSetting) {
+                        changeUIVisibility(true)
+                    }
+                parentFragmentManager.beginTransaction()
+                    .apply {
+                        if (AnimUtils.enabled(PrefName.TransitionAnimations)) {
+                            setCustomAnimations(R.anim.slide_up, R.anim.slide_down)
+                        }
+                    }
+                    .replace(R.id.fragmentExtensionsContainer, fragment)
+                    .addToBackStack(null)
+                    .commit()
+            }
+            changeUIVisibility(false)
+        } else {
+            Toast.makeText(requireContext(), "Source is not configurable", Toast.LENGTH_SHORT)
+                .show()
+        }
+    }
+
+    private fun openNuvioSettings(scraper: NuvioScraper) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val layout = runCatching { NuvioRuntime.settingsLayout(scraper) }.getOrDefault("[]")
+            if (isAdded) {
+                showNuvioSettings(requireContext(), scraper, layout)
+            }
+        }
+    }
+
+    private fun openStremioSettings(addon: StremioAddon) {
+        val url = StremioAddonManager.toRepoUi(addon).configUrl
+        if (url == null) {
+            Toast.makeText(
+                requireContext(),
+                "${addon.manifest.name} is not configurable",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            Toast.makeText(requireContext(), "Could not open configuration", Toast.LENGTH_SHORT)
+                .show()
+        }
+    }
+
+    private fun uninstall(row: InstalledRow) {
+        if (!isAdded) return
+        val context = requireContext()
+        val extension = row.extension
+        val cloudStream = row.cloudStream
+        val nuvio = row.nuvio
+        val stremio = row.stremio
+        when {
+            extension != null -> {
+                animeExtensionManager.uninstallExtension(extension.pkgName)
+                snackString("Extension uninstalled")
+            }
+            cloudStream != null -> {
+                CsRepos.uninstall(context, cloudStream)
+                AnimeSources.refreshPluginSources()
+                Toast.makeText(context, "${cloudStream.name} uninstalled", Toast.LENGTH_SHORT)
+                    .show()
+            }
+            nuvio != null -> {
+                NuvioStorage.uninstall(context, nuvio.toStored())
+                AnimeSources.refreshPluginSources()
+                Toast.makeText(context, "${nuvio.name} uninstalled", Toast.LENGTH_SHORT).show()
+            }
+            stremio != null -> {
+                StremioAddonManager.uninstall(stremio.transportUrl)
+                AnimeSources.refreshPluginSources()
+                Toast.makeText(
+                    context,
+                    "${stremio.manifest.name} uninstalled",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        refreshRows()
+    }
+
+    private fun removeBridge(row: InstalledRow) {
+        val kind = row.bridgeKind ?: return
+        val id = row.bridgeId ?: return
+        AnimeBridgeUi.confirm(requireContext(), kind, id, row.name) {
+            refreshRows()
+        }
+    }
+
+    private fun updateRow(row: InstalledRow) {
+        val pkg = row.extension ?: return
+        if (!isAdded) return
+        val context = requireContext()
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (pkg.hasUpdate) {
+            animeExtensionManager.updateExtension(pkg)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(
+                    { installStep ->
+                        val builder = NotificationCompat.Builder(
+                            context,
+                            Notifications.CHANNEL_DOWNLOADER_PROGRESS
+                        )
+                            .setSmallIcon(R.drawable.ic_round_sync_24)
+                            .setContentTitle("Updating extension")
+                            .setContentText("Step: $installStep")
+                            .setPriority(NotificationCompat.PRIORITY_LOW)
+                        notificationManager.notify(1, builder.build())
+                    },
+                    { error ->
+                        Injekt.get<CrashlyticsInterface>().logException(error)
+                        Logger.log(error)
+                        val builder = NotificationCompat.Builder(
+                            context,
+                            Notifications.CHANNEL_DOWNLOADER_ERROR
+                        )
+                            .setSmallIcon(R.drawable.ic_round_info_24)
+                            .setContentTitle("Update failed: ${error.message}")
+                            .setContentText("Error: ${error.message}")
+                            .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        notificationManager.notify(1, builder.build())
+                        snackString("Update failed: ${error.message}")
+                    },
+                    {
+                        val builder = NotificationCompat.Builder(
+                            context,
+                            Notifications.CHANNEL_DOWNLOADER_PROGRESS
+                        )
+                            .setSmallIcon(R.drawable.ic_circle_check)
+                            .setContentTitle("Update complete")
+                            .setContentText("The extension has been successfully updated.")
+                            .setPriority(NotificationCompat.PRIORITY_LOW)
+                        notificationManager.notify(1, builder.build())
+                        snackString("Extension updated")
+                    }
+                )
+        } else {
+            snackString("No update available")
+        }
+    }
+
+    private fun AnimeExtension.Installed.versionText(): String {
+        val nsfw = if (isNsfw) "(18+)" else ""
+        val lang = getLanguageName(lang)
+        val majorLib = libVersion.toInt()
+        val displayVersion =
+            if (versionName.startsWith("$majorLib.") || versionName.startsWith("$majorLib")) {
+                versionName
+            } else {
+                "$majorLib.$versionName"
+            }
+        return "$lang $displayVersion $nsfw".trim()
+    }
+
+    private fun NuvioScraper.versionText(): String = buildString {
+        append("v$version")
+        if (supportedTypes.isNotEmpty()) {
+            append(" • ")
+            append(supportedTypes.joinToString("/"))
+        }
+        if (contentLanguage.isNotEmpty()) {
+            append(" • ")
+            append(contentLanguage.joinToString(",").uppercase(Locale.ROOT))
+        }
+    }
+
+    private fun StremioAddon.versionText(): String = buildString {
+        append("v${manifest.version}")
+        if (manifest.types.isNotEmpty()) {
+            append(" • ")
+            append(manifest.types.joinToString("/"))
+        }
     }
 
     override fun onDestroyView() {
-        super.onDestroyView();_binding = null
+        rowLoadJob?.cancel()
+        rowLoadJob = null
+        super.onDestroyView()
+        _binding = null
     }
 
     override fun updateContentBasedOnQuery(query: String?) {
-        extensionsAdapter.filter(
-            query ?: "",
-            sortToAnimeSourcesList(animeExtensionManager.installedExtensionsFlow.value)
-        )
+        this.query = query.orEmpty()
+        applyFilter()
     }
 
     override fun notifyDataChanged() {
+        refreshRows()
     }
 
     private class AnimeExtensionsAdapter(
-        private val onSettingsClicked: (AnimeExtension.Installed) -> Unit,
-        private val onUninstallClicked: (AnimeExtension.Installed) -> Unit,
-        private val onUpdateClicked: (AnimeExtension.Installed) -> Unit,
+        private val onUpdateClicked: (InstalledRow) -> Unit,
+        private val onOverflowClicked: (View, InstalledRow) -> Unit,
         val skipIcons: Boolean
-    ) : ListAdapter<AnimeExtension.Installed, AnimeExtensionsAdapter.ViewHolder>(
+    ) : ListAdapter<InstalledRow, AnimeExtensionsAdapter.ViewHolder>(
         DIFF_CALLBACK_INSTALLED
     ) {
         var dragActivePosition: Int? = null
@@ -291,12 +567,12 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
         var itemTouchHelper: ItemTouchHelper? = null
         var onDragModeChanged: ((Boolean) -> Unit)? = null
 
-        fun updateData(newExtensions: List<AnimeExtension.Installed>) {
-            submitList(newExtensions)
+        fun updateData(newRows: List<InstalledRow>) {
+            submitList(newRows)
         }
 
         fun updatePref() {
-            val map = currentList.map { it.name }
+            val map = currentList.map { it.name }.distinct()
             PrefManager.setVal(PrefName.AnimeSourcesOrder, map)
             AnimeSources.pinnedAnimeSources = map
             AnimeSources.performReorderAnimeSources()
@@ -322,39 +598,34 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_extension, parent, false)
+                .inflate(R.layout.item_installed_anime_source, parent, false)
             return ViewHolder(view)
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val extension = getItem(position)
-            val nsfw = if (extension.isNsfw) "(18+)" else ""
-            val lang = getLanguageName(extension.lang)
-            holder.extensionNameTextView.text = extension.name
-            val majorLib = extension.libVersion.toInt()
-            val displayVersion = if (extension.versionName.startsWith("$majorLib.") || extension.versionName.startsWith("$majorLib")) {
-                extension.versionName
+            val row = getItem(position)
+            holder.extensionNameTextView.text = row.name
+            holder.extensionVersionTextView.text = row.meta
+            holder.bridgeIcon.isVisible = row.bridged
+            Glide.with(holder.extensionIconImageView).clear(holder.extensionIconImageView)
+            if (skipIcons) {
+                holder.extensionIconImageView.setImageDrawable(null)
+            } else if (row.iconUrl != null) {
+                SvgImageLoader.load(
+                    holder.extensionIconImageView,
+                    row.iconUrl,
+                    R.drawable.ic_extension,
+                    R.drawable.ic_extension
+                )
             } else {
-                "$majorLib.${extension.versionName}"
+                holder.extensionIconImageView.setImageDrawable(row.icon)
             }
-            val versionText = "$lang $displayVersion $nsfw".trim()
-            holder.extensionVersionTextView.text = versionText
-            if (!skipIcons) {
-                holder.extensionIconImageView.setImageDrawable(extension.icon)
-            }
-            if (extension.hasUpdate) {
-                holder.updateView.isVisible = true
-            } else {
-                holder.updateView.isVisible = false
-            }
-            holder.deleteView.setOnClickListener {
-                onUninstallClicked(extension)
-            }
+            holder.updateView.isVisible = row.hasUpdate
             holder.updateView.setOnClickListener {
-                onUpdateClicked(extension)
+                onUpdateClicked(row)
             }
-            holder.settingsImageView.setOnClickListener {
-                onSettingsClicked(extension)
+            holder.overflowView.setOnClickListener { anchor ->
+                onOverflowClicked(anchor, row)
             }
 
             val isDragging = dragActivePosition == position
@@ -437,32 +708,20 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
 
             FocusEffectUtil.applyFocusListener(holder.itemView)
             FocusEffectUtil.applyFocusListener(holder.dragHandle)
-            FocusEffectUtil.applyFocusListener(holder.settingsImageView)
-            FocusEffectUtil.applyFocusListener(holder.deleteView)
-            if (extension.hasUpdate) {
+            FocusEffectUtil.applyFocusListener(holder.overflowView)
+            if (row.hasUpdate) {
                 FocusEffectUtil.applyFocusListener(holder.updateView)
             }
-        }
-
-        fun filter(query: String, currentList: List<AnimeExtension.Installed>) {
-            val filteredList = ArrayList<AnimeExtension.Installed>()
-            for (extension in currentList) {
-                if (extension.name.lowercase(Locale.ROOT).contains(query.lowercase(Locale.ROOT))) {
-                    filteredList.add(extension)
-                }
-            }
-            if (filteredList != currentList)
-                submitList(filteredList)
         }
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val extensionNameTextView: TextView = view.findViewById(R.id.extensionNameTextView)
             val extensionVersionTextView: TextView =
                 view.findViewById(R.id.extensionVersionTextView)
-            val settingsImageView: ImageView = view.findViewById(R.id.settingsImageView)
+            val bridgeIcon: ImageView = view.findViewById(R.id.bridgeIconImageView)
             val extensionIconImageView: ImageView = view.findViewById(R.id.extensionIconImageView)
-            val deleteView: ImageView = view.findViewById(R.id.deleteTextView)
             val updateView: ImageView = view.findViewById(R.id.updateTextView)
+            val overflowView: ImageView = view.findViewById(R.id.overflowImageView)
             val dragHandle: LinearLayout = view.findViewById(R.id.dragHandle)
             val dragUpArrow: ImageView = view.findViewById(R.id.dragUpArrow)
             val dragDownArrow: ImageView = view.findViewById(R.id.dragDownArrow)
@@ -470,22 +729,74 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
 
         companion object {
             val DIFF_CALLBACK_INSTALLED =
-                object : DiffUtil.ItemCallback<AnimeExtension.Installed>() {
-                    override fun areItemsTheSame(
-                        oldItem: AnimeExtension.Installed,
-                        newItem: AnimeExtension.Installed
-                    ): Boolean {
-                        return oldItem.pkgName == newItem.pkgName
-                    }
+                object : DiffUtil.ItemCallback<InstalledRow>() {
+                    override fun areItemsTheSame(oldItem: InstalledRow, newItem: InstalledRow) =
+                        oldItem.key == newItem.key
 
-                    override fun areContentsTheSame(
-                        oldItem: AnimeExtension.Installed,
-                        newItem: AnimeExtension.Installed
-                    ): Boolean {
-                        return oldItem == newItem
-                    }
+                    override fun areContentsTheSame(oldItem: InstalledRow, newItem: InstalledRow) =
+                        oldItem == newItem
                 }
         }
     }
 
+    companion object {
+        private const val MENU_SETTINGS = 1
+        private const val MENU_UNINSTALL = 2
+        private const val MENU_REMOVE_BRIDGE = 3
+    }
 }
+
+private data class InstalledRow(
+    val key: String,
+    val name: String,
+    val meta: String,
+    val icon: Drawable?,
+    val iconUrl: String?,
+    val extension: AnimeExtension.Installed? = null,
+    val cloudStream: CsInstalledSource? = null,
+    val nuvio: NuvioScraper? = null,
+    val stremio: StremioAddon? = null,
+) {
+    val bridged: Boolean
+        get() = cloudStream != null || nuvio != null || stremio != null
+
+    val hasUpdate: Boolean
+        get() = extension?.hasUpdate == true
+
+    val bridgeKind: String?
+        get() = when {
+            cloudStream != null -> AnimeBridgeStore.CLOUDSTREAM
+            nuvio != null -> AnimeBridgeStore.NUVIO
+            stremio != null -> AnimeBridgeStore.STREMIO
+            else -> null
+        }
+
+    val bridgeId: String?
+        get() = cloudStream?.id
+            ?: nuvio?.let { NuvioSources.sourceId(it) }
+            ?: stremio?.transportUrl
+
+    fun matches(query: String): Boolean {
+        if (query.isBlank()) return true
+        val needle = query.lowercase(Locale.ROOT)
+        return name.lowercase(Locale.ROOT).contains(needle) ||
+            meta.lowercase(Locale.ROOT).contains(needle)
+    }
+}
+
+private fun NuvioScraper.toStored() = NuvioStoredScraper(
+    id = id,
+    repositoryUrl = repositoryUrl,
+    name = name,
+    description = description,
+    author = author,
+    version = version,
+    filename = filename,
+    supportedTypes = supportedTypes,
+    enabled = enabled,
+    manifestEnabled = manifestEnabled,
+    hasSettings = hasSettings,
+    logo = logo,
+    contentLanguage = contentLanguage,
+    formats = formats,
+)
