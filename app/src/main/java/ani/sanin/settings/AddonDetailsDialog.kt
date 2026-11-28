@@ -104,7 +104,7 @@ fun showAddonDetailsDialog(context: Context, card: RepoUi, availableTab: Boolean
                         )
                     )
                     contentDescription =
-                        if (bridged) "Remove from anime mode" else "Bridge to anime mode"
+                        if (bridged) "Destroy Aniyomi bridge" else "Bridge to Aniyomi"
                 }
 
                 tintBridge(AnimeBridgeStore.isBridged(AnimeBridgeStore.STREMIO, card.url))

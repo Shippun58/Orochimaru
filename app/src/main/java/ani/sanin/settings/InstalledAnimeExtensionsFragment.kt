@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
-import android.view.Menu
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -18,7 +17,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.NotificationCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
@@ -53,8 +51,10 @@ import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.snackString
 import ani.sanin.util.FocusEffectUtil
+import ani.sanin.util.OverflowMenuItem
 import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
+import ani.sanin.util.showOverflowMenu
 import com.bumptech.glide.Glide
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputLayout
@@ -272,26 +272,25 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
     }
 
     private fun showRowMenu(anchor: View, row: InstalledRow) {
-        val popup = PopupMenu(anchor.context, anchor)
-        popup.setForceShowIcon(true)
-        popup.menu.add(Menu.NONE, MENU_SETTINGS, 0, "Settings")
-            .setIcon(R.drawable.ic_round_settings_24)
-        popup.menu.add(Menu.NONE, MENU_UNINSTALL, 1, "Uninstall")
-            .setIcon(R.drawable.ic_round_delete_24)
+        val items = mutableListOf<OverflowMenuItem>()
         if (row.bridged) {
-            popup.menu.add(Menu.NONE, MENU_REMOVE_BRIDGE, 2, "Remove bridge")
-                .setIcon(R.drawable.ic_places_bridge)
+            items.add(
+                OverflowMenuItem("Destroy bridge", R.drawable.ic_places_bridge) {
+                    removeBridge(row)
+                }
+            )
         }
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_SETTINGS -> openSettings(row)
-                MENU_UNINSTALL -> uninstall(row)
-                MENU_REMOVE_BRIDGE -> removeBridge(row)
-                else -> return@setOnMenuItemClickListener false
+        items.add(
+            OverflowMenuItem("Settings", R.drawable.ic_round_settings_24) {
+                openSettings(row)
             }
-            true
-        }
-        popup.show()
+        )
+        items.add(
+            OverflowMenuItem("Uninstall", R.drawable.ic_round_delete_24) {
+                uninstall(row)
+            }
+        )
+        showOverflowMenu(anchor, items)
     }
 
     private fun openSettings(row: InstalledRow) {
@@ -740,11 +739,6 @@ class InstalledAnimeExtensionsFragment : Fragment(), SearchQueryHandler {
         }
     }
 
-    companion object {
-        private const val MENU_SETTINGS = 1
-        private const val MENU_UNINSTALL = 2
-        private const val MENU_REMOVE_BRIDGE = 3
-    }
 }
 
 private data class InstalledRow(
