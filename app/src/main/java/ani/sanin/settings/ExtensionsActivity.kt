@@ -201,7 +201,13 @@ class ExtensionsActivity : AppCompatActivity() {
 
         TvKeyboardUtil.setupTvInput(binding.searchViewText)
 
-        if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.searchIconButton)
+        if (TvKeyboardUtil.isTv(this)) {
+            FocusEffectUtil.applyFocusListener(
+                binding.searchIconButton,
+                binding.searchLens,
+                isCircular = true,
+            )
+        }
         LensButtonBackground.apply(
             binding.searchLens,
             cornerRadiusPx = 20f * resources.displayMetrics.density,
@@ -227,9 +233,7 @@ class ExtensionsActivity : AppCompatActivity() {
     }
 
     private fun updateSearchUiForTab(tabPosition: Int) {
-        val showSearch = stremioMode || nuvioMode || tabPosition == 0
-        binding.searchIconButton.visibility = if (showSearch) View.VISIBLE else View.GONE
-        if (!showSearch) collapseSearchBar()
+        binding.searchIconButton.visibility = View.VISIBLE
     }
 
     private fun selectTab(position: Int) {
@@ -405,7 +409,13 @@ class ExtensionsActivity : AppCompatActivity() {
                 cloudStreamMode
             ).show(supportFragmentManager, "add_repo")
         }
-        if (TvKeyboardUtil.isTv(this)) FocusEffectUtil.applyFocusListener(binding.openSettingsButton)
+        if (TvKeyboardUtil.isTv(this)) {
+            FocusEffectUtil.applyFocusListener(
+                binding.openSettingsButton,
+                binding.openSettingsLens,
+                isCircular = true,
+            )
+        }
         LensButtonBackground.apply(
             binding.openSettingsLens,
             cornerRadiusPx = 20f * resources.displayMetrics.density,

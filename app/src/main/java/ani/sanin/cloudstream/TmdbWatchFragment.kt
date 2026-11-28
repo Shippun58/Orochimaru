@@ -1129,6 +1129,7 @@ class TmdbWatchFragment : Fragment() {
     private fun refreshChips(group: com.google.android.material.chip.ChipGroup) {
         group.post {
             val sourceTag = if (selectedStremioIndex >= 0) "st:$selectedStremioIndex"
+                else if (selectedNuvioIndex >= 0) "nuvio:$selectedNuvioIndex"
                 else if (selectedSourceIndex >= 0) "cs:$selectedSourceIndex" else null
             for (i in 0 until group.childCount) {
                 val chip = group.getChildAt(i) as Chip

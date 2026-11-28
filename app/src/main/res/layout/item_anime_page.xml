@@ -37,7 +37,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:textAppearance="@style/SeasonChipLabel"
-                app:chipStrokeColor="@color/chip_stroke_dim" />
+                app:chipStrokeColor="@color/chip_stroke_dim"
+                app:chipMinTouchTargetSize="0dp" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/animeThisSeason"
@@ -45,7 +46,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:textAppearance="@style/SeasonChipLabel"
-                app:chipStrokeColor="@color/chip_stroke_dim" />
+                app:chipStrokeColor="@color/chip_stroke_dim"
+                app:chipMinTouchTargetSize="0dp" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/animeNextSeason"
@@ -53,7 +55,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
                 android:textAppearance="@style/SeasonChipLabel"
-                app:chipStrokeColor="@color/chip_stroke_dim" />
+                app:chipStrokeColor="@color/chip_stroke_dim"
+                app:chipMinTouchTargetSize="0dp" />
         </LinearLayout>
 
     </HorizontalScrollView>

@@ -3,9 +3,11 @@ package ani.sanin.settings
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
-import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -55,15 +57,84 @@ fun showAddonDetailsDialog(context: Context, card: RepoUi, availableTab: Boolean
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = (14 * density).toInt() }
         }
+        val primary = context.getThemeColor(com.google.android.material.R.attr.colorPrimary)
+        val onPrimary = context.getThemeColor(com.google.android.material.R.attr.colorOnPrimary)
+        val borderWidth = (3f * density).toInt()
+        fun styleAction(view: View, focused: Boolean) {
+            view.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(if (focused) primary else Color.WHITE)
+                cornerRadius = 24f * density
+            }
+            view.foreground = if (focused) {
+                GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    setColor(Color.TRANSPARENT)
+                    cornerRadius = 24f * density
+                    setStroke(borderWidth, onPrimary)
+                }
+            } else null
+        }
+
+        if (!availableTab) {
+            val bridgeButton = ImageButton(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    (48 * density).toInt(),
+                    (48 * density).toInt(),
+                ).apply { marginEnd = (8 * density).toInt() }
+                isFocusable = true
+                setImageResource(R.drawable.ic_places_bridge)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setPadding(
+                    (12 * density).toInt(),
+                    (12 * density).toInt(),
+                    (12 * density).toInt(),
+                    (12 * density).toInt(),
+                )
+                var focused = false
+                fun refresh() {
+                    styleAction(this@apply, focused)
+                    val bridged = AnimeBridgeStore.isBridged(AnimeBridgeStore.STREMIO, card.url)
+                    imageTintList = ColorStateList.valueOf(
+                        if (focused) onPrimary else if (bridged) primary else Color.BLACK
+                    )
+                    contentDescription =
+                        if (bridged) "Destroy Aniyomi bridge" else "Bridge to Aniyomi"
+                }
+                refresh()
+                setOnFocusChangeListener { _, hasFocus ->
+                    focused = hasFocus
+                    refresh()
+                }
+                setOnClickListener {
+                    AnimeBridgeUi.confirm(
+                        context,
+                        AnimeBridgeStore.STREMIO,
+                        card.url,
+                        card.name,
+                    ) { refresh() }
+                }
+            }
+            actions.addView(bridgeButton)
+        }
+
         actions.addView(
             MaterialButton(context).apply {
                 text = "Copy manifest URL"
                 isAllCaps = false
+                isFocusable = true
+                backgroundTintList = null
                 layoutParams = LinearLayout.LayoutParams(
                     0,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     1f,
                 )
+                fun styleCopy(focused: Boolean) {
+                    styleAction(this@apply, focused)
+                    setTextColor(if (focused) onPrimary else Color.BLACK)
+                }
+                styleCopy(false)
+                setOnFocusChangeListener { _, hasFocus -> styleCopy(hasFocus) }
                 setOnClickListener {
                     val clipboard =
                         context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -74,51 +145,6 @@ fun showAddonDetailsDialog(context: Context, card: RepoUi, availableTab: Boolean
                 }
             }
         )
-        if (!availableTab) {
-            val bridgeButton = ImageButton(context).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    (48 * density).toInt(),
-                    (48 * density).toInt(),
-                ).apply { marginStart = (8 * density).toInt() }
-                setImageResource(R.drawable.ic_places_bridge)
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
-                setPadding(
-                    (12 * density).toInt(),
-                    (12 * density).toInt(),
-                    (12 * density).toInt(),
-                    (12 * density).toInt(),
-                )
-                val ripple = TypedValue()
-                context.theme.resolveAttribute(
-                    android.R.attr.selectableItemBackgroundBorderless,
-                    ripple,
-                    true,
-                )
-                setBackgroundResource(ripple.resourceId)
-
-                fun tintBridge(bridged: Boolean) {
-                    imageTintList = ColorStateList.valueOf(
-                        context.getThemeColor(
-                            if (bridged) android.R.attr.colorPrimary
-                            else com.google.android.material.R.attr.colorOnSurface
-                        )
-                    )
-                    contentDescription =
-                        if (bridged) "Destroy Aniyomi bridge" else "Bridge to Aniyomi"
-                }
-
-                tintBridge(AnimeBridgeStore.isBridged(AnimeBridgeStore.STREMIO, card.url))
-                setOnClickListener {
-                    AnimeBridgeUi.confirm(
-                        context,
-                        AnimeBridgeStore.STREMIO,
-                        card.url,
-                        card.name,
-                    ) { tintBridge(it) }
-                }
-            }
-            actions.addView(bridgeButton)
-        }
         container.addView(actions)
     }
 
