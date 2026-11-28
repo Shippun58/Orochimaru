@@ -256,7 +256,7 @@ class BridgedNuvioAnimeParser(
     private val context: Context,
     private val scraper: NuvioScraper,
 ) : TmdbBridgedAnimeParser() {
-    override val name: String = "${scraper.name} (Nuvio)"
+    override val name: String = "${scraper.name} (nv)"
     override val saveName: String = "bridge_nuvio_${stableKey(scraper.repositoryUrl + scraper.id)}"
     override val iconUrl: String? = scraper.logo
 
@@ -271,7 +271,7 @@ class BridgedNuvioAnimeParser(
 class BridgedStremioAnimeParser(
     private val addon: StremioAddon,
 ) : TmdbBridgedAnimeParser() {
-    override val name: String = "${addon.manifest.name} (Stremio)"
+    override val name: String = "${addon.manifest.name} (st)"
     override val saveName: String = "bridge_stremio_${stableKey(addon.transportUrl)}"
     override val iconUrl: String? = addon.manifest.logo
 

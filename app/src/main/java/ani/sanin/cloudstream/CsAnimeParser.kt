@@ -29,9 +29,9 @@ class CsAnimeParser(
     val sourceId: String get() = source.id
 
     override val name: String = if (api.name.isBlank() || api.name == source.name) {
-        source.name
+        "${source.name} (cs)"
     } else {
-        "${source.name} · ${api.name}"
+        "${source.name} · ${api.name} (cs)"
     }
 
     override val saveName: String = "cs3_${CsRuntime.sourceKey(source.id, apiIndex)}"

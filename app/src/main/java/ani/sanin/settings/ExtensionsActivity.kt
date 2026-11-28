@@ -3,6 +3,7 @@ package ani.sanin.settings
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -25,6 +26,7 @@ import kotlinx.coroutines.launch
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import ani.sanin.R
+import ani.sanin.getThemeColor
 import ani.sanin.cloudstream.CloudStreamAvailableFragment
 import ani.sanin.cloudstream.CloudStreamInstalledFragment
 import ani.sanin.cloudstream.CsRepos
@@ -52,10 +54,10 @@ class ExtensionsActivity : AppCompatActivity() {
     lateinit var binding: ActivityExtensionsBinding
 
     private enum class ExtensionMode(val label: String, val logoRes: Int) {
-        ANIYOMI("Aniyomi", R.drawable.ic_toggle_aniyomi),
-        CLOUDSTREAM("CloudStream", R.drawable.ic_toggle_cloudstream),
+        ANIYOMI("Aniyomi", R.drawable.ic_toggle_aniyomi_mono),
+        CLOUDSTREAM("CloudStream", R.drawable.ic_toggle_cloudstream_mono),
         STREMIO("Stremio", R.drawable.ic_stremio_watermark),
-        NUVIO("Nuvio", R.drawable.ic_nuvio_logo),
+        NUVIO("Nuvio", R.drawable.ic_nuvio_logo_mono),
     }
 
     private var extensionMode = ExtensionMode.ANIYOMI
@@ -142,6 +144,9 @@ class ExtensionsActivity : AppCompatActivity() {
 
         binding.systemNameLabel.text = extensionMode.label
         binding.systemNameLogo.setImageResource(extensionMode.logoRes)
+        binding.systemNameLogo.imageTintList = ColorStateList.valueOf(
+            getThemeColor(com.google.android.material.R.attr.colorOnSurface)
+        )
 
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         viewPager.offscreenPageLimit = 1

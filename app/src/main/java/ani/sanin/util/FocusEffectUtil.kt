@@ -247,15 +247,18 @@ object FocusEffectUtil {
         borderWidthPx: Int,
         color: Int,
     ): Drawable {
+        val inset = (chip.chipStrokeWidth / 2f).toInt().coerceAtLeast(0)
+        val chipRadius = chip.chipCornerRadius.takeIf { it > 0f }
+            ?: TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 8f, chip.resources.displayMetrics
+            )
         val shape = GradientDrawable().apply {
             setShape(GradientDrawable.RECTANGLE)
             setColor(Color.TRANSPARENT)
             setStroke(borderWidthPx, color)
-
-            cornerRadius = 100000f
+            cornerRadius = (chipRadius - inset).coerceAtLeast(0f)
         }
 
-        val inset = (chip.chipStrokeWidth / 2f).toInt().coerceAtLeast(0)
         return InsetDrawable(shape, inset, inset, inset, inset)
     }
 

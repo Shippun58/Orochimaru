@@ -80,9 +80,9 @@ class PluginSystemsActivity : AppCompatActivity() {
                 SystemEntry.Card(
                     SystemCard(
                         title = "Aniyomi Extensions",
-                        iconRes = R.drawable.ic_toggle_aniyomi,
+                        iconRes = R.drawable.ic_toggle_aniyomi_mono,
                         meta = "${count(animeRepos, "repo")} · ${count(animeExtensions, "extension")}",
-                        tintRes = null,
+                        tintRes = com.google.android.material.R.attr.colorOnSurface,
                         onClick = { openExtensions(null) },
                     ),
                 ),
@@ -90,18 +90,18 @@ class PluginSystemsActivity : AppCompatActivity() {
                 SystemEntry.Card(
                     SystemCard(
                         title = "CloudStream Plugins",
-                        iconRes = R.drawable.ic_toggle_cloudstream,
+                        iconRes = R.drawable.ic_toggle_cloudstream_mono,
                         meta = "${count(cloudStreamRepos, "repo")} · ${count(cloudStreamPlugins, "plugin")}",
-                        tintRes = null,
+                        tintRes = com.google.android.material.R.attr.colorOnSurface,
                         onClick = { openExtensions(ExtensionsActivity.EXTRA_CLOUDSTREAM_MODE) },
                     ),
                 ),
                 SystemEntry.Card(
                     SystemCard(
                         title = "Nuvio Plugins",
-                        iconRes = R.drawable.ic_nuvio_logo,
+                        iconRes = R.drawable.ic_nuvio_logo_mono,
                         meta = "${count(nuvioRepos, "repo")} · ${count(nuvioPlugins, "plugin")}",
-                        tintRes = null,
+                        tintRes = com.google.android.material.R.attr.colorOnSurface,
                         onClick = { openExtensions(ExtensionsActivity.EXTRA_NUVIO_MODE) },
                     ),
                 ),
