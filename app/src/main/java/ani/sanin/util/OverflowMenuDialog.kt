@@ -112,7 +112,7 @@ fun showOverflowMenu(anchor: View, items: List<OverflowMenuItem>) {
     }
     val firstRow = rows.first()
 
-    customAlertDialog()
+    context.customAlertDialog()
         .setCustomView(container)
         .setCancelable(true)
         .setWidthPx((280 * density).toInt())
