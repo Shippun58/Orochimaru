@@ -19,6 +19,7 @@ import ani.sanin.others.svg.SvgImageLoader
 import ani.sanin.ui.GlassPill
 import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
+import ani.sanin.util.Logger
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
@@ -375,8 +376,57 @@ class RepoCardAdapter(
             }
         }
 
+        wireFocus(holder)
         holder.binding.repoCardRoot.isFocusable = false
         holder.binding.repoCardRoot.setOnLongClickListener { onLongClick(item); true }
+    }
+
+    private fun wireFocus(holder: VH) {
+        val b = holder.binding
+        val top = buildList<View> {
+            if (b.repoEnableToggle.visibility == View.VISIBLE) add(b.repoEnableToggle)
+            if (b.repoInfoButton.visibility == View.VISIBLE) add(b.repoInfoButton)
+            if (b.repoDragHandle.visibility == View.VISIBLE) add(b.repoDragHandle)
+        }
+        val bottom = buildList<View> {
+            if (b.repoSettingsButton.visibility == View.VISIBLE) add(b.repoSettingsButton)
+            add(b.repoBrowseButton)
+        }
+
+        top.forEachIndexed { index, view ->
+            view.nextFocusLeftId = if (index > 0) top[index - 1].id else View.NO_ID
+            view.nextFocusRightId = if (index < top.lastIndex) top[index + 1].id else View.NO_ID
+            view.nextFocusUpId = View.NO_ID
+            view.nextFocusDownId = bottom.first().id
+        }
+        bottom.forEachIndexed { index, view ->
+            val selector: (VH) -> View = if (view.id == R.id.repoSettingsButton) {
+                { h -> h.binding.repoSettingsButton }
+            } else {
+                { h -> h.binding.repoBrowseButton }
+            }
+            view.nextFocusLeftId = if (index > 0) bottom[index - 1].id else View.NO_ID
+            view.nextFocusRightId = if (index < bottom.lastIndex) bottom[index + 1].id else View.NO_ID
+            view.nextFocusUpId = top.lastOrNull()?.id ?: View.NO_ID
+            view.nextFocusDownId = View.NO_ID
+            view.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        Logger.log("REPO_FOCUS: down from ${view.id} pos=${holder.absoluteAdapterPosition}")
+                        moveBrowseFocus(holder, 1, selector)
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (top.isNotEmpty()) return@setOnKeyListener false
+                        Logger.log("REPO_FOCUS: up from ${view.id} pos=${holder.absoluteAdapterPosition}")
+                        moveBrowseFocus(holder, -1, selector)
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
     }
 
     private fun moveBrowseFocus(
@@ -390,8 +440,18 @@ class RepoCardAdapter(
         val target = current + delta
         if (target < 0) return onExitTop?.invoke() ?: false
         if (target >= itemCount) return false
-        val vh = rv.findViewHolderForAdapterPosition(target) as? VH ?: return false
-        if (vh.itemView.parent == null) return false
+        val vh = rv.findViewHolderForAdapterPosition(target) as? VH
+        if (vh == null || vh.itemView.parent == null) {
+            rv.scrollToPosition(target)
+            rv.post {
+                (rv.findViewHolderForAdapterPosition(target) as? VH)?.let { next ->
+                    Logger.log("REPO_FOCUS: deferred focus pos=$target view=${request(next).id}")
+                    request(next).requestFocus()
+                }
+            }
+            return true
+        }
+        Logger.log("REPO_FOCUS: focus pos=$target view=${request(vh).id}")
         return request(vh).requestFocus()
     }
 

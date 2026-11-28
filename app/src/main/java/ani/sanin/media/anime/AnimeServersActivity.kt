@@ -19,6 +19,7 @@ import ani.sanin.bridge.AnimeBridgeServerMapper
 import ani.sanin.download.DownloadManager
 import ani.sanin.download.enqueue
 import ani.sanin.ui.GlassPill
+import ani.sanin.util.failedLabel
 import ani.sanin.util.FocusEffectUtil
 import ani.sanin.themes.ThemeManager
 import ani.sanin.databinding.ActivityTmdbServersBinding
@@ -539,7 +540,7 @@ class AnimeServersActivity : AppCompatActivity() {
             chip.isChecked = index == selectedIndex
             chip.text = when (val state = group.state) {
                 is GroupState.Loading -> "${group.name} ·"
-                is GroupState.Failed -> "${group.name} (failed)"
+                is GroupState.Failed -> failedLabel(group.name)
                 is GroupState.Ready ->
                     if (state.servers.isEmpty()) "${group.name} (empty)" else group.name
             }

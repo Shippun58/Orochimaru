@@ -36,7 +36,7 @@
                 android:layout_marginEnd="8dp"
                 android:text="Movie"
                 android:textAppearance="@style/SeasonChipLabel"
-                app:chipStrokeColor="?attr/colorPrimaryContainer" />
+                app:chipStrokeColor="@color/chip_stroke_dim" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/tmdbExploreChipTv"
@@ -45,7 +45,7 @@
                 android:layout_marginEnd="8dp"
                 android:text="TV show"
                 android:textAppearance="@style/SeasonChipLabel"
-                app:chipStrokeColor="?attr/colorPrimaryContainer" />
+                app:chipStrokeColor="@color/chip_stroke_dim" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/tmdbExploreChipAnimation"
@@ -53,7 +53,7 @@
                 android:layout_height="wrap_content"
                 android:text="Animation"
                 android:textAppearance="@style/SeasonChipLabel"
-                app:chipStrokeColor="?attr/colorPrimaryContainer" />
+                app:chipStrokeColor="@color/chip_stroke_dim" />
         </LinearLayout>
     </HorizontalScrollView>
 

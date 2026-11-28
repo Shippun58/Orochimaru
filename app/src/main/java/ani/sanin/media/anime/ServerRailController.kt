@@ -52,6 +52,7 @@ import ani.sanin.settings.saving.PrefManager
 import ani.sanin.settings.saving.PrefName
 import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
+import ani.sanin.util.failedLabel
 import ani.sanin.util.Logger
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -517,7 +518,7 @@ class ServerRailController(
     private var launching = false
 
     private sealed class Row {
-        data class Header(val name: String, val tag: String?) : Row()
+        data class Header(val name: String, val tag: String?, val failed: Boolean = false) : Row()
         data class TrackHeader(val name: String, val iconRes: Int? = null) : Row()
         data class Track(val entry: TrackEntry, val active: Boolean) : Row()
         data class Video(
@@ -926,6 +927,17 @@ class ServerRailController(
 
     fun isOpen(): Boolean = content.visibility == View.VISIBLE
 
+    private fun railUpTargetId(): Int {
+        val target = if (currentTab == Tab.TRACKS) {
+            tabs.getTabAt(1)?.view?.id ?: R.id.railTabs
+        } else {
+            val selected = if (tmdbSession != null) tmdbSelectedIndex else selectedIndex
+            chipByIndex.getOrNull(selected)?.id ?: R.id.railTabs
+        }
+        Logger.log("RAIL_FOCUS: up target=$target tab=$currentTab")
+        return target
+    }
+
     fun focusFirst() {
         val focusable = rows.indexOfFirst { isFocusableRow(it) }
         if (focusable >= 0) {
@@ -1192,7 +1204,7 @@ class ServerRailController(
                 rows.add(Row.Header("Loading ${group.name}…", null))
             }
             is AnimeGroupState.Failed -> {
-                rows.add(Row.Header("${group.name} failed", null))
+                rows.add(Row.Header(group.name, null, failed = true))
             }
             is AnimeGroupState.Ready -> {
                 if (state.servers.isEmpty()) {
@@ -1506,7 +1518,7 @@ class ServerRailController(
                 rows.add(Row.Header("Loading ${group.name}…", null))
             }
             is TmdbGroupState.Failed -> {
-                rows.add(Row.Header("${group.name} failed", null))
+                rows.add(Row.Header(group.name, null, failed = true))
             }
             is TmdbGroupState.Ready -> {
                 val playable = state.links.filter { it.url.isNotBlank() }
@@ -1652,7 +1664,7 @@ class ServerRailController(
                 val group = tmdbGroups.getOrNull(index) ?: return@forEachIndexed
                 chip.text = when (val st = group.state) {
                     is TmdbGroupState.Loading -> "${group.name} ·"
-                    is TmdbGroupState.Failed -> "${group.name} (failed)"
+                    is TmdbGroupState.Failed -> failedLabel(group.name)
                     is TmdbGroupState.Ready -> {
                         val playable = st.links.count { it.url.isNotBlank() } +
                             st.recommendations.size + st.infos.size
@@ -1663,7 +1675,7 @@ class ServerRailController(
                 val group = groups.getOrNull(index) ?: return@forEachIndexed
                 chip.text = when (val st = group.state) {
                     is AnimeGroupState.Loading -> "${group.name} ·"
-                    is AnimeGroupState.Failed -> "${group.name} (failed)"
+                    is AnimeGroupState.Failed -> failedLabel(group.name)
                     is AnimeGroupState.Ready -> if (st.servers.isNotEmpty()) group.name else "${group.name} ·"
                 }
             }
@@ -1948,6 +1960,8 @@ class ServerRailController(
 
         override fun onBindViewHolder(holder: RailViewHolder, position: Int) {
             holder.clearStartIcon()
+            val firstFocusable = adapterRows.indexOfFirst { isFocusableRow(it) }
+            holder.itemView.nextFocusUpId = if (position == firstFocusable) railUpTargetId() else View.NO_ID
             when (val row = adapterRows[position]) {
                 is Row.Header -> holder.bindHeader(row)
                 is Row.TrackHeader -> holder.bindTrackHeader(row)
@@ -2019,7 +2033,7 @@ class ServerRailController(
         fun bindHeader(row: Row.Header) {
             val b = rowB ?: return
             b.root.background = null
-            b.urlQuality.text = row.name
+            b.urlQuality.text = if (row.failed) failedLabel(row.name) else row.name
             b.urlQuality.textSize = 14f
             b.urlQuality.alpha = 0.6f
             b.urlQuality.setTypeface(null, android.graphics.Typeface.NORMAL)

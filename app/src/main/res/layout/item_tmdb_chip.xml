@@ -11,5 +11,5 @@
     android:textAppearance="@style/Suffix"
     android:textSize="14sp"
     app:chipBackgroundColor="@color/chip_background_color"
-    app:chipStrokeColor="?attr/colorPrimaryContainer">
+    app:chipStrokeColor="@color/chip_stroke_dim">
 </com.google.android.material.chip.Chip>

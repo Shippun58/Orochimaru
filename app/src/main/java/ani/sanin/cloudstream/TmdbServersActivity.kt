@@ -32,6 +32,7 @@ import ani.sanin.snackString
 import ani.sanin.themes.ThemeManager
 import ani.sanin.ui.GlassPill
 import ani.sanin.util.FocusEffectUtil
+import ani.sanin.util.failedLabel
 import ani.sanin.util.Logger
 import ani.sanin.util.customAlertDialog
 import androidx.core.view.doOnNextLayout
@@ -645,7 +646,7 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             chip.isChecked = index == selectedIndex
             chip.text = when (val state = group.state) {
                 is GroupState.Loading -> "${group.name} ·"
-                is GroupState.Failed -> "${group.name} (failed)"
+                is GroupState.Failed -> failedLabel(group.name)
                 is GroupState.Ready -> {
                     val hasContent = state.links.any { it.url.isNotBlank() } ||
                         state.recommendations.isNotEmpty() || state.infos.isNotEmpty()

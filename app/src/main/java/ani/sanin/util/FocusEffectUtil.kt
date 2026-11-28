@@ -247,7 +247,7 @@ object FocusEffectUtil {
         borderWidthPx: Int,
         color: Int,
     ): Drawable {
-        val inset = (chip.chipStrokeWidth / 2f).toInt().coerceAtLeast(0)
+        val inset = ((borderWidthPx - chip.chipStrokeWidth) / 2f).toInt().coerceAtLeast(0)
         val chipRadius = chip.chipCornerRadius.takeIf { it > 0f }
             ?: TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 8f, chip.resources.displayMetrics
