@@ -758,27 +758,29 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private suspend fun resolveAll() {
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-        val targets = if (mode == 1) {
-            listOf(selectedIndex)
-        } else {
-            groups.indices.sortedBy { if (it == selectedIndex) 0 else 1 }
-        }
         if (mode == 1) {
             groups.forEachIndexed { i, g ->
-                if (i != selectedIndex) {
+                if (i != selectedIndex && g.state !is GroupState.Ready) {
                     groupJobs.remove(g.key)?.cancel()
-                    markLoading(g)
                 }
             }
-            if (groups.getOrNull(selectedIndex)?.state is GroupState.Failed) {
-                groups.getOrNull(selectedIndex)?.let { markLoading(it) }
+            val selected = groups.getOrNull(selectedIndex)
+            if (selected != null && selected.state !is GroupState.Ready &&
+                groupJobs[selected.key]?.isActive != true
+            ) {
+                launchGroupResolution(selected)
             }
-            renderChipStates()
-            refreshRows()
+            Logger.log("TMDB_SERVERS: resolveAll mode=1 target=$selectedIndex")
+            return
         }
-        Logger.log("TMDB_SERVERS: resolveAll mode=$mode targets=$targets")
-        targets.forEach { launchGroupResolution(it) }
-        groupJobs.values.toList().forEach { it.join() }
+        val targets = groups.indices
+            .sortedBy { if (it == selectedIndex) 0 else 1 }
+            .filter {
+                groups[it].state !is GroupState.Ready &&
+                    groupJobs[groups[it].key]?.isActive != true
+            }
+        Logger.log("TMDB_SERVERS: resolveAll mode=0 targets=$targets")
+        targets.forEach { launchGroupResolution(groups[it]) }
     }
 
     private fun markLoading(group: Group) {
@@ -806,16 +808,37 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
             .show()
     }
 
-    private fun launchGroupResolution(index: Int) {
-        val group = groups.getOrNull(index) ?: return
+    private fun launchGroupResolution(group: Group) {
         val d = detail ?: return
+        if (group.state is GroupState.Ready) return
         groupJobs.remove(group.key)?.cancel()
+        markLoading(group)
+        renderChipStates()
+        if (groups.getOrNull(selectedIndex) === group) refreshRows()
         groupJobs[group.key] = lifecycleScope.launch(Dispatchers.IO) {
-            when {
-                group.pluginLoad != null -> resolvePluginGroup(group)
-                group.addon != null -> resolveStremioGroup(group, d)
-                group.nuvioScraper != null -> resolveNuvioGroup(group)
-                else -> resolveCsGroup(group)
+            var attempt = 0
+            while (true) {
+                try {
+                    when {
+                        group.pluginLoad != null -> resolvePluginGroup(group)
+                        group.addon != null -> resolveStremioGroup(group, d)
+                        group.nuvioScraper != null -> resolveNuvioGroup(group)
+                        else -> resolveCsGroup(group)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    group.state = GroupState.Failed(e.message ?: "Failed")
+                }
+                if (group.state !is GroupState.Failed || attempt >= 1) break
+                attempt++
+                Logger.log(
+                    android.util.Log.WARN,
+                    "TMDB_SERVERS: '${group.name}' failed; retrying once"
+                )
+                markLoading(group)
+                onResolved(group)
+                delay(500)
             }
         }
     }
@@ -843,20 +866,28 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         val changed = selectedIndex != index
         selectedIndex = index
         if (PrefManager.getVal<Boolean>(PrefName.MakeDefault)) saveDefaultSelection(index)
-        renderChipStates()
-        refreshRows()
-        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 && changed) {
-            groups.forEachIndexed { i, g ->
-                if (i != index) {
-                    groupJobs.remove(g.key)?.cancel()
-                    markLoading(g)
+        val group = groups[index]
+        val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        if (mode == 1) {
+            if (group.state is GroupState.Failed) {
+                group.state = GroupState.Loading
+                group.rank = 1
+                group.arrivalSeq = Int.MAX_VALUE
+            }
+            if (changed) {
+                groups.forEachIndexed { i, g ->
+                    if (i != index && g.state !is GroupState.Ready) {
+                        groupJobs.remove(g.key)?.cancel()
+                    }
                 }
             }
-            if (groups[index].state is GroupState.Failed) markLoading(groups[index])
-            renderChipStates()
-            launchGroupResolution(index)
-        } else if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
-            if (groups[index].state is GroupState.Loading) launchGroupResolution(index)
+        }
+        renderChipStates()
+        refreshRows()
+        if (mode == 1 && group.state !is GroupState.Ready &&
+            groupJobs[group.key]?.isActive != true
+        ) {
+            launchGroupResolution(group)
         }
     }
 
@@ -878,8 +909,8 @@ class TmdbServersActivity : androidx.appcompat.app.AppCompatActivity() {
         TmdbStreamResolver.invalidateLinks(mediaId, group.name)
         markLoading(group)
         renderChipStates()
-        if (selectedIndex == index) refreshRows()
-        lifecycleScope.launch { launchGroupResolution(index) }
+        if (groups.getOrNull(selectedIndex) === group) refreshRows()
+        lifecycleScope.launch { launchGroupResolution(group) }
     }
 
     private suspend fun resolveCsGroup(group: Group) {

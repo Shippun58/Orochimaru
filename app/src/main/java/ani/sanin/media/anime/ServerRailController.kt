@@ -60,6 +60,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -156,6 +157,22 @@ private object RailRepo {
         }
     }
 
+    fun cancelAnime(key: String) {
+        synchronized(lock) {
+            animeJobTokens.remove(key)
+            animeJobs.remove(key)?.cancel()
+            animeWaiters.remove(key)
+        }
+    }
+
+    fun cancelTmdb(key: String) {
+        synchronized(lock) {
+            tmdbJobTokens.remove(key)
+            tmdbJobs.remove(key)?.cancel()
+            tmdbWaiters.remove(key)
+        }
+    }
+
     fun refreshTmdb(mediaId: Int, season: Int?, ep: Int?) {
         synchronized(lock) {
             val prefix = "T:$mediaId|$season|$ep|"
@@ -226,16 +243,26 @@ private object RailRepo {
             val token = Any()
             animeJobTokens[key] = token
             animeJobs[key] = scope.launch {
-                val entry = resolveAnime(
-                    key, token, media, epKey, sourceIndex, currentSourceIndex, parser, sources,
-                )
-                synchronized(lock) {
-                    if (animeJobTokens[key] !== token) return@synchronized
-                    animeJobTokens.remove(key)
-                    animeJobs.remove(key)
-                    if (entry.failedReason == null) animeCache[key] = entry
-                    val waiters = animeWaiters.remove(key) ?: emptyList()
-                    waiters.forEach { it(entry) }
+                var entry: AnimeEntry? = null
+                try {
+                    entry = resolveAnime(
+                        key, token, media, epKey, sourceIndex, currentSourceIndex, parser, sources,
+                    )
+                } finally {
+                    val result = entry
+                    synchronized(lock) {
+                        if (animeJobTokens[key] === token) {
+                            animeJobTokens.remove(key)
+                            animeJobs.remove(key)
+                            if (result != null) {
+                                if (result.failedReason == null) animeCache[key] = result
+                                val waiters = animeWaiters.remove(key) ?: emptyList()
+                                waiters.forEach { it(result) }
+                            } else {
+                                animeWaiters.remove(key)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -260,58 +287,80 @@ private object RailRepo {
         }
         var target: Episode? = null
         var servers: List<VideoServer> = emptyList()
-        val extractors = mutableListOf<VideoExtractor>()
+        var extractors = mutableListOf<VideoExtractor>()
         var failed: String? = null
-        try {
-            val ep = media.anime?.episodes?.getEpisode(epKey)
-            val t: Episode = if (
-                sourceIndex == currentSourceIndex &&
-                ep?.link != null && ep.sEpisode != null
-            ) {
-                ep
-            } else {
-                val map = withTimeoutOrNull(45_000) {
-                    sources.loadEpisodesFromMedia(sourceIndex, media)
+        var attempt = 0
+        while (true) {
+            try {
+                val ep = media.anime?.episodes?.getEpisode(epKey)
+                val t: Episode = if (
+                    sourceIndex == currentSourceIndex &&
+                    ep?.link != null && ep.sEpisode != null
+                ) {
+                    ep
+                } else {
+                    val map = withTimeoutOrNull(45_000) {
+                        sources.loadEpisodesFromMedia(sourceIndex, media)
+                    }.orEmpty()
+                    val num = ep?.number?.toFloatOrNull()
+                    map.entries.firstOrNull { it.key.toFloatOrNull() == num }?.value
+                        ?: map.entries.firstOrNull { it.key.equals(epKey, true) }?.value
+                        ?: throw Exception("Episode not found in ${parser.name}")
+                }
+                target = t
+                val preferDub = media.selected?.preferDub ?: PrefManager.getVal(PrefName.PreferDub)
+                if (parser.isDubAvailableSeparately()) {
+                    parser.selectDub = preferDub
+                }
+                servers = withTimeoutOrNull(60_000) {
+                    t.link?.let { link ->
+                        t.sEpisode?.let { sEp ->
+                            parser.loadVideoServers(link, t.extra, sEp)
+                        }
+                    }
                 }.orEmpty()
-                val num = ep?.number?.toFloatOrNull()
-                map.entries.firstOrNull { it.key.toFloatOrNull() == num }?.value
-                    ?: map.entries.firstOrNull { it.key.equals(epKey, true) }?.value
-                    ?: throw Exception("Episode not found in ${parser.name}")
-            }
-            target = t
-            val preferDub = media.selected?.preferDub ?: PrefManager.getVal(PrefName.PreferDub)
-            if (parser.isDubAvailableSeparately()) {
-                parser.selectDub = preferDub
-            }
-            servers = withTimeoutOrNull(60_000) {
-                t.link?.let { link ->
-                    t.sEpisode?.let { sEp ->
-                        parser.loadVideoServers(link, t.extra, sEp)
+                notify(AnimeEntry(servers, emptyList(), null, false, t))
+                Logger.log("SERVER_RAIL: '${parser.name}' ok ${servers.size} servers")
+                if (servers.isNotEmpty()) {
+                    val link = t.link
+                    val sEp = t.sEpisode
+                    if (link != null && sEp != null) {
+                        try {
+                            parser.loadByVideoServers(link, t.extra, sEp, { extractor ->
+                                extractors.add(extractor)
+                                notify(AnimeEntry(servers, extractors.toList(), null, false, t))
+                            }, servers)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Logger.log(
+                                android.util.Log.ERROR,
+                                "SERVER_RAIL: '${parser.name}' extractor load failed: ${e.message}",
+                            )
+                        }
                     }
                 }
-            }.orEmpty()
-            notify(AnimeEntry(servers, emptyList(), null, false, t))
-            Logger.log("SERVER_RAIL: '${parser.name}' ok ${servers.size} servers")
-            if (servers.isNotEmpty()) {
-                val link = t.link
-                val sEp = t.sEpisode
-                if (link != null && sEp != null) {
-                    runCatching {
-                        parser.loadByVideoServers(link, t.extra, sEp, { extractor ->
-                            extractors.add(extractor)
-                            notify(AnimeEntry(servers, extractors.toList(), null, false, t))
-                        }, servers)
-                    }.onFailure {
-                        Logger.log(
-                            android.util.Log.ERROR,
-                            "SERVER_RAIL: '${parser.name}' extractor load failed: ${it.message}",
-                        )
-                    }
+                failed = null
+                break
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (attempt == 0) {
+                    attempt++
+                    Logger.log(
+                        android.util.Log.WARN,
+                        "SERVER_RAIL: '${parser.name}' failed (${e.message}); retrying once",
+                    )
+                    target = null
+                    servers = emptyList()
+                    extractors = mutableListOf()
+                    delay(500)
+                    continue
                 }
+                Logger.log(android.util.Log.ERROR, "SERVER_RAIL: '${parser.name}' failed: ${e.message}")
+                failed = e.message ?: "Failed"
+                break
             }
-        } catch (e: Exception) {
-            Logger.log(android.util.Log.ERROR, "SERVER_RAIL: '${parser.name}' failed: ${e.message}")
-            failed = e.message ?: "Failed"
         }
         return AnimeEntry(servers, extractors.toList(), failed, true, target)
     }
@@ -329,7 +378,7 @@ private object RailRepo {
         onUpdate: (TmdbEntry) -> Unit,
     ) {
         synchronized(lock) {
-            tmdbCache[key]?.let {
+            tmdbCache[key]?.takeIf { it.state !is TmdbGroupState.Failed }?.let {
                 onUpdate(it)
                 return
             }
@@ -338,14 +387,37 @@ private object RailRepo {
             val token = Any()
             tmdbJobTokens[key] = token
             tmdbJobs[key] = scope.launch {
-                val entry = resolveTmdb(context, session, season, ep, source, addon)
-                synchronized(lock) {
-                    if (tmdbJobTokens[key] !== token) return@synchronized
-                    tmdbJobTokens.remove(key)
-                    tmdbJobs.remove(key)
-                    tmdbCache[key] = entry
-                    val waiters = tmdbWaiters.remove(key) ?: emptyList()
-                    waiters.forEach { it(entry) }
+                var entry: TmdbEntry? = null
+                try {
+                    var attempt = 0
+                    while (true) {
+                        entry = resolveTmdb(context, session, season, ep, source, addon)
+                        if (entry.state !is TmdbGroupState.Failed || attempt >= 1) break
+                        attempt++
+                        Logger.log(
+                            android.util.Log.WARN,
+                            "SERVER_RAIL: '${source.name}' tmdb failed; retrying once",
+                        )
+                        delay(500)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    entry = TmdbEntry(TmdbGroupState.Failed(e.message ?: "Failed"), true)
+                } finally {
+                    val result = entry
+                    synchronized(lock) {
+                        if (tmdbJobTokens[key] !== token) return@synchronized
+                        tmdbJobTokens.remove(key)
+                        tmdbJobs.remove(key)
+                        if (result != null) {
+                            if (result.state !is TmdbGroupState.Failed) tmdbCache[key] = result
+                            val waiters = tmdbWaiters.remove(key) ?: emptyList()
+                            waiters.forEach { it(result) }
+                        } else {
+                            tmdbWaiters.remove(key)
+                        }
+                    }
                 }
             }
         }
@@ -1075,24 +1147,33 @@ class ServerRailController(
         targetServer = null
         targetNotified = false
         val m = media
+        val currentSourceIndex = m.selected?.sourceIndex ?: -1
         if (PrefManager.getVal<Boolean>(PrefName.MakeDefault)) {
             m.selected?.sourceIndex = groups[index].index
             model.saveSelected(m.id, m.selected!!)
+        }
+        val group = groups[index]
+        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 &&
+            group.state is AnimeGroupState.Failed
+        ) {
+            group.state = AnimeGroupState.Loading
         }
         buildChips()
         refreshRows()
         if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
             if (changed) {
-                groups.forEachIndexed { i, g -> if (i != index) g.state = AnimeGroupState.Loading }
-                buildChips()
+                groups.forEachIndexed { i, g ->
+                    if (i != index && g.state !is AnimeGroupState.Ready) {
+                        RailRepo.cancelAnime(RailRepo.animeKey(m.id, activeEpisodeKey(), g.index))
+                    }
+                }
             }
-            val group = groups[index]
-            val epKey = activeEpisodeKey()
-            val key = RailRepo.animeKey(m.id, epKey, group.index)
-            if (group.state is AnimeGroupState.Loading) {
+            if (group.state !is AnimeGroupState.Ready) {
+                val epKey = activeEpisodeKey()
+                val key = RailRepo.animeKey(m.id, epKey, group.index)
                 RailRepo.startAnime(
                     key, m, epKey, group.index,
-                    m.selected?.sourceIndex ?: -1, group.parser, sources,
+                    currentSourceIndex, group.parser, sources,
                 ) { entry ->
                     activity.runOnUiThread {
                         if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
@@ -1155,8 +1236,9 @@ class ServerRailController(
                     } else null
                     if (byHost != null && byHost.size > 1) {
                         byHost.forEach { (host, servers) ->
-                            rows.add(Row.Header(host, null))
+                            val start = rows.size
                             servers.forEach { addStream(it) }
+                            if (rows.size > start) rows.add(start, Row.Header(host, null))
                         }
                     } else {
                         playables.forEach { addStream(it) }
@@ -1273,7 +1355,7 @@ class ServerRailController(
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
         tmdbGroups.forEachIndexed { i, group ->
             val key = RailRepo.tmdbKey(session.mediaId, season, epNum, group.key)
-            val cached = RailRepo.getTmdb(key)
+            val cached = RailRepo.getTmdb(key)?.takeIf { it.state is TmdbGroupState.Ready }
             if (cached != null) {
                 group.state = cached.state
                 group.rank = when (cached.state) {
@@ -1393,18 +1475,27 @@ class ServerRailController(
         if (PrefManager.getVal<Boolean>(PrefName.MakeDefault) && session != null) {
             PrefManager.setCustomVal("tmdb_source_${session.mediaId}", tmdbGroups[index].key)
         }
+        val group = tmdbGroups[index]
+        val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
+        if (mode == 1) {
+            if (group.state is TmdbGroupState.Failed) {
+                group.state = TmdbGroupState.Loading
+                group.rank = 1
+                group.arrivalSeq = Int.MAX_VALUE
+            }
+            if (changed && session != null) {
+                val (season, epNum) = tmdbSeasonEp()
+                tmdbGroups.forEachIndexed { i, g ->
+                    if (i != index && g.state !is TmdbGroupState.Ready) {
+                        RailRepo.cancelTmdb(RailRepo.tmdbKey(session.mediaId, season, epNum, g.key))
+                    }
+                }
+            }
+        }
         buildChips()
         refreshRows()
-        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
-            if (changed) {
-                tmdbGroups.forEachIndexed { i, g ->
-                    if (i != index) g.state = TmdbGroupState.Loading
-                }
-                buildChips()
-            }
-            if (tmdbGroups[index].state is TmdbGroupState.Loading) {
-                startTmdbGroup(index)
-            }
+        if (mode == 1 && group.state !is TmdbGroupState.Ready) {
+            startTmdbGroup(index)
         }
     }
 

@@ -75,6 +75,7 @@ class AnimeServersActivity : AppCompatActivity() {
     private var prevEp: String? = null
     private var savedServerArg: String? = null
     private var sources: WatchSources = AnimeSources
+    private var loadedEpisodesSource: Int? = null
 
     private sealed class Row {
         data class Head(val group: Group) : Row()
@@ -195,6 +196,7 @@ class AnimeServersActivity : AppCompatActivity() {
             finish()
             return
         }
+        loadedEpisodesSource = media?.selected?.sourceIndex
 
         serversBinding = ActivityTmdbServersBinding.inflate(layoutInflater)
         setContentView(serversBinding.root)
@@ -657,8 +659,9 @@ class AnimeServersActivity : AppCompatActivity() {
                             } else null
                             if (byHost != null && byHost.size > 1) {
                                 byHost.forEach { (host, servers) ->
-                                    rows.add(Row.Subhead(host))
+                                    val start = rows.size
                                     servers.forEach { addStream(it) }
+                                    if (rows.size > start) rows.add(start, Row.Subhead(host))
                                 }
                             } else {
                                 playables.forEach { addStream(it) }
@@ -758,27 +761,29 @@ class AnimeServersActivity : AppCompatActivity() {
 
     private suspend fun resolveAll() {
         val mode = PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode)
-        val targets = if (mode == 1) {
-            listOf(selectedIndex)
-        } else {
-            groups.indices.sortedBy { if (it == selectedIndex) 0 else 1 }
-        }
         if (mode == 1) {
             groups.forEachIndexed { i, g ->
-                if (i != selectedIndex) {
-                    groupJobs.remove(i)?.cancel()
-                    markLoading(g)
+                if (i != selectedIndex && g.state !is GroupState.Ready) {
+                    groupJobs.remove(g.index)?.cancel()
                 }
             }
-            if (groups.getOrNull(selectedIndex)?.state is GroupState.Failed) {
-                groups.getOrNull(selectedIndex)?.let { markLoading(it) }
+            val selected = groups.getOrNull(selectedIndex)
+            if (selected != null && selected.state !is GroupState.Ready &&
+                groupJobs[selected.index]?.isActive != true
+            ) {
+                launchGroupResolution(selected)
             }
-            renderChipStates()
-            refreshRows()
+            Logger.log("ANIME_SERVERS: resolveAll mode=1 target=$selectedIndex")
+            return
         }
-        Logger.log("ANIME_SERVERS: resolveAll mode=$mode targets=$targets")
-        targets.forEach { launchGroupResolution(it) }
-        groupJobs.values.toList().forEach { it.join() }
+        val targets = groups.indices
+            .sortedBy { if (it == selectedIndex) 0 else 1 }
+            .filter {
+                groups[it].state !is GroupState.Ready &&
+                    groupJobs[groups[it].index]?.isActive != true
+            }
+        Logger.log("ANIME_SERVERS: resolveAll mode=0 targets=$targets")
+        targets.forEach { launchGroupResolution(groups[it]) }
     }
 
     private fun markLoading(group: Group) {
@@ -806,101 +811,130 @@ class AnimeServersActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun launchGroupResolution(index: Int) {
-        val group = groups.getOrNull(index) ?: return
-        groupJobs.remove(index)?.cancel()
-        groupJobs[index] = lifecycleScope.launch(Dispatchers.IO) {
+    private fun launchGroupResolution(group: Group) {
+        if (group.state is GroupState.Ready) return
+        groupJobs.remove(group.index)?.cancel()
+        markLoading(group)
+        renderChipStates()
+        if (groups.getOrNull(selectedIndex) === group) refreshRows()
+        groupJobs[group.index] = lifecycleScope.launch(Dispatchers.IO) {
             resolveGroup(group)
         }
     }
 
     private suspend fun resolveGroup(group: Group) {
         val m = media ?: return
-        synchronized(group.extractorLock) { group.extractors.clear() }
-        val ep = m.anime?.episodes?.getEpisode(epKey)
-        try {
-            val target: Episode = if (
-                group.index == (m.selected?.sourceIndex ?: -1) &&
-                ep?.link != null && ep.sEpisode != null
-            ) {
-                ep
-            } else {
-                val map = withTimeoutOrNull(45_000) {
-                    sources.loadEpisodesFromMedia(group.index, m)
-                }.orEmpty()
-                val num = ep?.number?.toFloatOrNull()
-                map.entries.firstOrNull { it.key.toFloatOrNull() == num }?.value
-                    ?: map.entries.firstOrNull { it.key.equals(epKey, true) }?.value
-                    ?: throw Exception("Episode not found in ${group.name}")
-            }
-            group.episode = target
-            val preferDub = m.selected?.preferDub
-                ?: PrefManager.getVal(PrefName.PreferDub)
-            if (group.parser.isDubAvailableSeparately()) {
-                Logger.log("ANIME_SERVERS: '${group.name}' dub=$preferDub applied to parser")
-                group.parser.selectDub = preferDub
-            }
-            val servers = withTimeoutOrNull(60_000) {
-                target.link?.let { link ->
-                    target.sEpisode?.let { sEp ->
-                        group.parser.loadVideoServers(link, target.extra, sEp)
-                    }
-                }
-            }.orEmpty()
-            group.state = GroupState.Ready(servers)
-            group.extractionDone = false
-            Logger.log("ANIME_SERVERS: '${group.name}' ok ${servers.size} servers")
-            seedRailCache(group, done = false)
-            onResolved(group, refreshRows = false)
-            if (servers.isNotEmpty()) {
-                val link = target.link
-                val sEp = target.sEpisode
-                if (link != null && sEp != null) {
-                    runCatching {
-                        group.parser.loadByVideoServers(link, target.extra, sEp, { extractor ->
-                            synchronized(group.extractorLock) { group.extractors.add(extractor) }
-                            Logger.log(
-                                "ANIME_SERVERS: '${group.name}' extractor '${extractor.server.name}' " +
-                                    "${extractor.videos.size} videos"
-                            )
-                            seedRailCache(group, done = false)
-                            runOnUiThread {
-                                if (isFinishing || isDestroyed) return@runOnUiThread
-                                maybeAutoPlay(group, extractor)
-                                maybeAutoSelect(group, extractor)
-                                if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
-                            }
-                        }, servers)
-                    }.onFailure {
-                        Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' extractor load failed: ${it.message}")
-                    }
-                }
-            }
-            group.extractionDone = true
-            seedRailCache(group, done = true)
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
-                if (pendingAutoPlay && group.index == (m.selected?.sourceIndex ?: -1)) {
-                    pendingAutoPlay = false
-                    m.selected?.server = null
-                    model.saveSelected(m.id, m.selected!!)
-                    snackString("Saved server unavailable, pick another")
-                }
-                maybeAutoSelectFinalize()
-            }
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) {
-                seedRailCache(group, done = true)
+        var attempt = 0
+        while (true) {
+            val error = try {
+                resolveGroupOnce(group, m)
+                null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                seedRailCache(group, done = group.extractionDone)
                 throw e
+            } catch (e: Exception) {
+                e
             }
-            Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' failed: ${e.message}")
-            group.state = GroupState.Failed(e.message ?: "Failed")
+            if (error == null) break
+            if (attempt == 0) {
+                attempt++
+                Logger.log(
+                    android.util.Log.WARN,
+                    "ANIME_SERVERS: '${group.name}' failed (${error.message}); retrying once"
+                )
+                group.episode = null
+                group.extractionDone = false
+                synchronized(group.extractorLock) { group.extractors.clear() }
+                markLoading(group)
+                onResolved(group, refreshRows = true)
+                delay(500)
+                continue
+            }
+            Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' failed: ${error.message}")
+            group.state = GroupState.Failed(error.message ?: "Failed")
             m.anime?.selectedEpisode?.let { key ->
-                AnimeRailCache.fail(AnimeRailCache.key(m.id, key, group.index), e.message ?: "Failed")
+                AnimeRailCache.fail(AnimeRailCache.key(m.id, key, group.index), error.message ?: "Failed")
             }
+            break
         }
         onResolved(group)
+    }
+
+    private suspend fun resolveGroupOnce(group: Group, m: Media) {
+        synchronized(group.extractorLock) { group.extractors.clear() }
+        val ep = m.anime?.episodes?.getEpisode(epKey)
+        val target: Episode = if (
+            group.index == (loadedEpisodesSource ?: -1) &&
+            ep?.link != null && ep.sEpisode != null
+        ) {
+            ep
+        } else {
+            val map = withTimeoutOrNull(45_000) {
+                sources.loadEpisodesFromMedia(group.index, m)
+            }.orEmpty()
+            val num = ep?.number?.toFloatOrNull()
+            map.entries.firstOrNull { it.key.toFloatOrNull() == num }?.value
+                ?: map.entries.firstOrNull { it.key.equals(epKey, true) }?.value
+                ?: throw Exception("Episode not found in ${group.name}")
+        }
+        group.episode = target
+        val preferDub = m.selected?.preferDub
+            ?: PrefManager.getVal(PrefName.PreferDub)
+        if (group.parser.isDubAvailableSeparately()) {
+            Logger.log("ANIME_SERVERS: '${group.name}' dub=$preferDub applied to parser")
+            group.parser.selectDub = preferDub
+        }
+        val servers = withTimeoutOrNull(60_000) {
+            target.link?.let { link ->
+                target.sEpisode?.let { sEp ->
+                    group.parser.loadVideoServers(link, target.extra, sEp)
+                }
+            }
+        }.orEmpty()
+        group.state = GroupState.Ready(servers)
+        group.extractionDone = false
+        Logger.log("ANIME_SERVERS: '${group.name}' ok ${servers.size} servers")
+        seedRailCache(group, done = false)
+        onResolved(group, refreshRows = false)
+        if (servers.isNotEmpty()) {
+            val link = target.link
+            val sEp = target.sEpisode
+            if (link != null && sEp != null) {
+                try {
+                    group.parser.loadByVideoServers(link, target.extra, sEp, { extractor ->
+                        synchronized(group.extractorLock) { group.extractors.add(extractor) }
+                        Logger.log(
+                            "ANIME_SERVERS: '${group.name}' extractor '${extractor.server.name}' " +
+                                "${extractor.videos.size} videos"
+                        )
+                        seedRailCache(group, done = false)
+                        runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+                            maybeAutoPlay(group, extractor)
+                            maybeAutoSelect(group, extractor)
+                            if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
+                        }
+                    }, servers)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Logger.log(android.util.Log.ERROR, "ANIME_SERVERS: '${group.name}' extractor load failed: ${e.message}")
+                }
+            }
+        }
+        group.extractionDone = true
+        seedRailCache(group, done = true)
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            if (groups.getOrNull(selectedIndex) === group) scheduleRowsRefresh()
+            if (pendingAutoPlay && group.index == (m.selected?.sourceIndex ?: -1)) {
+                pendingAutoPlay = false
+                m.selected?.server = null
+                model.saveSelected(m.id, m.selected!!)
+                snackString("Saved server unavailable, pick another")
+            }
+            maybeAutoSelectFinalize()
+        }
     }
 
     private fun seedRailCache(group: Group, done: Boolean) {
@@ -1197,18 +1231,18 @@ class AnimeServersActivity : AppCompatActivity() {
         }
         renderChipStates()
         refreshRows()
-        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1 && changed) {
-            groups.forEachIndexed { i, g ->
-                if (i != index) {
-                    groupJobs.remove(i)?.cancel()
-                    markLoading(g)
+        if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
+            if (changed) {
+                groups.forEachIndexed { i, g ->
+                    if (i != index && g.state !is GroupState.Ready) {
+                        groupJobs.remove(g.index)?.cancel()
+                    }
                 }
             }
-            if (groups[index].state is GroupState.Failed) markLoading(groups[index])
-            renderChipStates()
-            launchGroupResolution(index)
-        } else if (PrefManager.getVal<Int>(PrefName.TmdbServersLoadMode) == 1) {
-            if (groups[index].state is GroupState.Loading) launchGroupResolution(index)
+            val group = groups[index]
+            if (group.state !is GroupState.Ready && groupJobs[group.index]?.isActive != true) {
+                launchGroupResolution(group)
+            }
         }
     }
 
@@ -1228,8 +1262,8 @@ class AnimeServersActivity : AppCompatActivity() {
         Logger.log("ANIME_SERVERS: refresh group '${group.name}'")
         markLoading(group)
         renderChipStates()
-        if (selectedIndex == index) refreshRows()
-        lifecycleScope.launch { launchGroupResolution(index) }
+        if (groups.getOrNull(selectedIndex) === group) refreshRows()
+        lifecycleScope.launch { launchGroupResolution(group) }
     }
 
 
